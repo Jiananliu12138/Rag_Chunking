@@ -437,8 +437,10 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='文本分块质量评估工具')
-    parser.add_argument('--input', type=str, required=True, help='输入JSON文件路径')
-    parser.add_argument('--output', type=str, required=True, help='输出JSON文件路径')
+    parser.add_argument('--input', type=str, default='merge_data/db_qa_semantic_68.json',
+                       help='输入JSON文件路径')
+    parser.add_argument('--output', type=str, default='mergechunk_eval3/db_qa_semantic_68.json',
+                       help='输出JSON文件路径')
     parser.add_argument('--ppl-model', type=str, default='internlm3-8b-instruct', 
                        help='困惑度计算模型')
     parser.add_argument('--sim-model', type=str, default='BAAI/all-MiniLM-L6-v2',
