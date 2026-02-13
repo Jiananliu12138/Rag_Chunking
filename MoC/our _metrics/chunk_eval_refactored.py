@@ -437,15 +437,15 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='文本分块质量评估工具')
-    parser.add_argument('--input', type=str, default='merge_data/db_qa_semantic_68.json',
+    parser.add_argument('--input', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/Qwen3-4B_0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt.json',
                        help='输入JSON文件路径')
-    parser.add_argument('--output', type=str, default='mergechunk_eval3/db_qa_semantic_68.json',
+    parser.add_argument('--output', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/eval.json',
                        help='输出JSON文件路径')
-    parser.add_argument('--ppl-model', type=str, default='internlm3-8b-instruct', 
+    parser.add_argument('--ppl-model', type=str, default='/data/h50056789/Rag_chunk_bench/model/Qwen3-4B', 
                        help='困惑度计算模型')
-    parser.add_argument('--sim-model', type=str, default='BAAI/all-MiniLM-L6-v2',
+    parser.add_argument('--sim-model', type=str, default='/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5',
                        help='语义相似度模型')
-    parser.add_argument('--log-file', type=str, default=None, help='日志文件路径')
+    parser.add_argument('--log-file', type=str, default=None, help='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data')
     parser.add_argument('--disable-semantic', action='store_true', 
                        help='禁用语义相似度评估')
     parser.add_argument('--disable-bc', action='store_true',
