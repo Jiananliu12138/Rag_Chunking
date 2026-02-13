@@ -391,13 +391,38 @@ class ChunkEvaluator:
         # 解析输入格式
         if isinstance(data, list):
             # 格式1: 直接的文本块列表 ["块1", "块2", ...]
-            chunks = data
-        elif isinstance(data, dict) and 'splits' in data:
-            # 格式2: {"filepath": "...", "splits": [[text1, label1], [text2, label2], ...]}
-            chunks = [split[0] for split in data['splits']]
-            self.logger.info(f"检测到 splits 格式，文件路径: {data.get('filepath', 'N/A')}")
+            if len(data) > 0 and isinstance(data[0], str):
+                chunks = data
+            # 格式1b: 嵌套列表 [[chunk, label], ...]
+            elif len(data) > 0 and isinstance(data[0], list):
+                chunks = [item[0] for item in data]
+            # 格式1c: 对象数组 [{"name": "...", "final_chunks": [...]}, ...]
+            elif len(data) > 0 and isinstance(data[0], dict):
+                if 'final_chunks' in data[0]:
+                    # 只取第一个对象的chunks
+                    chunks = data[0]['final_chunks']
+                    if 'name' in data[0]:
+                        self.logger.info(f"数据名称: {data[0]['name']}")
+                else:
+                    raise ValueError(f"对象缺少 'final_chunks' 字段")
+            else:
+                raise ValueError(f"不支持的列表格式")
+        elif isinstance(data, dict):
+            # 格式2: {"filepath": "...", "splits": [[text, label], ...], "time_cost": ...}
+            if 'splits' in data:
+                chunks = [split[0] for split in data['splits']]
+                self.logger.info(f"文件路径: {data.get('filepath', 'N/A')}")
+                if 'time_cost' in data:
+                    self.logger.info(f"分块耗时: {data['time_cost']:.2f}秒")
+            # 格式3: {"name": "...", "final_chunks": [...]}
+            elif 'final_chunks' in data:
+                chunks = data['final_chunks']
+                if 'name' in data:
+                    self.logger.info(f"数据名称: {data['name']}")
+            else:
+                raise ValueError(f"字典格式缺少 'splits' 或 'final_chunks' 字段")
         else:
-            raise ValueError(f"不支持的输入格式，期望 list 或包含 'splits' 的 dict")
+            raise ValueError(f"不支持的输入格式，期望 list 或 dict")
         
         self.logger.info(f"成功读取 {len(chunks)} 个文本块")
         
@@ -416,8 +441,16 @@ class ChunkEvaluator:
             # 确保输出目录存在
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             
-            # 保存详细结果
-            output_data = [r.to_dict() for r in results.individual_results]
+            # 构造完整的输出数据（包含平均值）
+            output_data = {
+                "summary": {
+                    "num_pairs": results.num_pairs,
+                    "avg_semantic_dissimilarity": results.semantic_dissimilarity_avg,
+                    "avg_boundary_clarity": results.boundary_clarity_avg
+                },
+                "details": [r.to_dict() for r in results.individual_results]
+            }
+            
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(output_data, f, ensure_ascii=False, indent=4)
             
@@ -445,7 +478,7 @@ def main():
                        help='困惑度计算模型')
     parser.add_argument('--sim-model', type=str, default='/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5',
                        help='语义相似度模型')
-    parser.add_argument('--log-file', type=str, default=None, help='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data')
+    parser.add_argument('--log-file', type=str, default=None, help='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data.log')
     parser.add_argument('--disable-semantic', action='store_true', 
                        help='禁用语义相似度评估')
     parser.add_argument('--disable-bc', action='store_true',
