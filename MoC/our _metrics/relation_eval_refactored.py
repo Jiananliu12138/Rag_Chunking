@@ -370,11 +370,11 @@ class StickinessEvaluator:
             entropy_incomplete_list.append(result.structural_entropy_incomplete)
             
             # 保存每个文档的图
-            with open(f"{output_dir}/G1_doc{idx}.jsonl", 'a', encoding='utf-8') as f:
+            with open(f"{output_dir}/GC_doc{idx}.jsonl", 'a', encoding='utf-8') as f:
                 json.dump(result.graph_complete, f, ensure_ascii=False)
                 f.write('\n')
             
-            with open(f"{output_dir}/G3_doc{idx}.jsonl", 'a', encoding='utf-8') as f:
+            with open(f"{output_dir}/GIC_doc{idx}.jsonl", 'a', encoding='utf-8') as f:
                 json.dump(result.graph_incomplete, f, ensure_ascii=False)
                 f.write('\n')
         
@@ -415,9 +415,9 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='文本块黏连度评估工具')
-    parser.add_argument('--input', type=str, default='relation_data/chunk_original.json')
-    parser.add_argument('--output-dir', type=str, default='relation_data_eval1')
-    parser.add_argument('--model', type=str, default='model/internlm3-8b-instruct')
+    parser.add_argument('--input', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/test_star_structure.json')
+    parser.add_argument('--output-dir', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/eval_graph_dep.json')
+    parser.add_argument('--model', type=str, default='/data/h50056789/Rag_chunk_bench/model/Qwen3-4B')
     parser.add_argument('--threshold', type=float, default=0.8)
     parser.add_argument('--delta', type=float, default=0.0)
     

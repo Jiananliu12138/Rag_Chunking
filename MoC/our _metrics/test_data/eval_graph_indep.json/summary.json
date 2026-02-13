@@ -1,0 +1,12 @@
+{
+    "num_documents": 1,
+    "avg_structural_entropy_complete": 2.3000834314513106,
+    "avg_structural_entropy_incomplete": 2.2806390622295662,
+    "individual_results": [
+        {
+            "doc_id": 0,
+            "entropy_complete": 2.3000834314513106,
+            "entropy_incomplete": 2.2806390622295662
+        }
+    ]
+}
