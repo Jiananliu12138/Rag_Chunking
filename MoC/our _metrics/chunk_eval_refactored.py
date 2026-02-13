@@ -374,7 +374,7 @@ class ChunkEvaluator:
         从文件读取文本块并评估
         
         Args:
-            input_file: 输入文件路径（JSON数组）
+            input_file: 输入文件路径（JSON数组或包含splits的JSON对象）
             output_file: 输出文件路径
         
         Returns:
@@ -386,7 +386,18 @@ class ChunkEvaluator:
         # 读取输入文件
         self.logger.info(f"读取输入文件: {input_file}")
         with open(input_file, 'r', encoding='utf-8') as f:
-            chunks = json.load(f)
+            data = json.load(f)
+        
+        # 解析输入格式
+        if isinstance(data, list):
+            # 格式1: 直接的文本块列表 ["块1", "块2", ...]
+            chunks = data
+        elif isinstance(data, dict) and 'splits' in data:
+            # 格式2: {"filepath": "...", "splits": [[text1, label1], [text2, label2], ...]}
+            chunks = [split[0] for split in data['splits']]
+            self.logger.info(f"检测到 splits 格式，文件路径: {data.get('filepath', 'N/A')}")
+        else:
+            raise ValueError(f"不支持的输入格式，期望 list 或包含 'splits' 的 dict")
         
         self.logger.info(f"成功读取 {len(chunks)} 个文本块")
         
