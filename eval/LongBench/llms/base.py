@@ -1,7 +1,9 @@
 import copy
 from abc import ABC, abstractmethod
+import logging
 
-from loguru import logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class BaseLLM(ABC):
     def __init__(
