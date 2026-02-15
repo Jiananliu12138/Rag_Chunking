@@ -18,14 +18,8 @@ from typing import List
 import numpy as np
 from pydantic.dataclasses import dataclass
 
-# LangChain 导入（兼容新旧版本）
-try:
-    from langchain_core.embeddings import Embeddings
-except ImportError:
-    try:
-        from langchain.schema.embeddings import Embeddings
-    except ImportError:
-        from langchain.embeddings.base import Embeddings
+# LangChain 导入
+from langchain_core.embeddings import Embeddings
 
 # Transformers 和 SentenceTransformers
 import sentence_transformers

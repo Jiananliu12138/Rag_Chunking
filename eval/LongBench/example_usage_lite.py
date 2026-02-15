@@ -4,6 +4,7 @@ Milvus Lite 使用示例
 """
 
 import json
+import asyncio
 from base_lite import BaseRetrieverLite
 from embeddings.base import HuggingfaceEmbeddings
 
@@ -29,9 +30,8 @@ def example_1_construct_index():
         construct_index=True,  # 构建新索引
         collection_name='test_chunks',
         similarity_top_k=5,
-        milvus_data_dir='./milvus_data'  # 本地存储目录
-    )
-    
+        # milvus_data_dir='./milvus_data' 
+    ) 
     # 3. 查看存储信息
     storage_info = retriever.get_storage_info()
     print(f"\n存储信息:")
@@ -56,24 +56,24 @@ def example_2_load_existing_index():
     
     # 1. 初始化嵌入模型（必须与构建时相同）
     embed_model = HuggingfaceEmbeddings(
-        model_name='BAAI/bge-large-en-v1.5'
+        model_name='F:/thesis/models/bge-base-en-v1.5'
     )
     
-    # 2. 加载已有索引
+    # 2. 创建检索器并构建索引
     retriever = BaseRetrieverLite(
-        docs_directory='chunk_result.json',  # 这个参数在加载时不重要
+        docs_directory=r'F:\thesis\Meta-Chunking\MoC\our_metrics\test_data\Qwen3-4B_0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt.json',  # 使用原始字符串
         embed_model=embed_model,
-        embed_dim=1024,
-        construct_index=False,  # 不重新构建
-        collection_name='qasper_chunks',  # 必须与构建时相同
-        similarity_top_k=5,
-        milvus_data_dir='./milvus_data'
-    )
+        embed_dim=768,  # bge-base-en-v1.5 是 768 维
+        construct_index=False,  # 构建新索引
+        collection_name='test_chunks',
+        similarity_top_k=1,
+        # milvus_data_dir='./milvus_data' 
+    ) 
     
     print("✅ 索引加载成功！")
     
     # 3. 直接使用检索
-    query = "How does machine learning work?"
+    query = "Roman Smishko (Ukrainian: Роман Володимирович Смішко)"
     results = retriever.search_docs(query)
     print(f"\n检索结果:\n{results}")
 
@@ -229,27 +229,95 @@ def example_6_check_storage():
     print(f"总大小: {total_size:.2f} MB")
 
 
-if __name__ == "__main__":
-    # 运行示例
-    
-    # 首次使用：构建索引
-    example_1_construct_index()
-    
-    # 后续使用：加载已有索引
-    # example_2_load_existing_index()
-    
-    # 中文数据处理
-    # example_3_chinese_data()
-    
-    # 批量查询
-    # example_4_batch_queries()
-    
-    # 多数据集管理
-    # example_5_multiple_collections()
-    
-    # 检查存储
-    # example_6_check_storage()
-    
+def example_7_inspect_data():
+    """
+    示例7：直接查看 Milvus 中的数据内容
+    """
     print("\n" + "=" * 60)
-    print("✅ 示例完成！")
+    print("示例7：查看 Milvus 数据内容")
     print("=" * 60)
+    
+    try:
+        from pymilvus import MilvusClient
+    except ImportError:
+        print("请先安装 pymilvus: pip install pymilvus")
+        return
+    
+    # 连接到本地 Docker Milvus
+    client = MilvusClient(uri="http://localhost:19530")
+    
+    collection_name = 'test_chunks'
+    
+    if not client.has_collection(collection_name):
+        print(f"集合 {collection_name} 不存在")
+        return
+
+    # 获取集合统计信息
+    # 注意：get_collection_stats 在新版 SDK 可能有变化，这里直接用 query count 或者 describe_collection
+    desc = client.describe_collection(collection_name)
+    print(f"集合名称: {desc['collection_name']}")
+    
+    # 查询前 3 条数据
+    # filter expression is required for query in some versions, "" means all? No, usually "id >= 0" or similar if int64
+    # For string IDs (LlamaIndex uses string IDs), we can use a limit with empty filter if supported, or iterator
+    
+    res = client.query(
+        collection_name=collection_name,
+        filter="", # 空字符串在 MilvusClient 中通常意味着无过滤
+        output_fields=["*"],
+        limit=3
+    )
+    
+    print(f"\n前 3 条数据示例:")
+    for i, item in enumerate(res, 1):
+        print(f"\n[记录 {i}]")
+        for k, v in item.items():
+            if k == 'vector' or k == 'embedding': # LlamaIndex 默认字段可能是 embedding 或 vector
+                # 向量太长，只显示维度
+                dim = len(v)
+                print(f"  {k}: <向量, 维度 {dim}>")
+            elif isinstance(v, str) and len(v) > 100:
+                # 文本太长，截断显示
+                print(f"  {k}: {v[:100]}...")
+            else:
+                print(f"  {k}: {v}")
+
+
+if __name__ == "__main__":
+    # 尝试应用 nest_asyncio 以允许嵌套事件循环
+    try:
+        import nest_asyncio
+        nest_asyncio.apply()
+    except ImportError:
+        print("提示: 未安装 nest_asyncio，如果遇到事件循环错误，请尝试 pip install nest_asyncio")
+
+    async def main():
+        # 运行示例
+        
+        # 首次使用：构建索引
+        # example_1_construct_index()
+        
+        # 后续使用：加载已有索引
+        # example_2_load_existing_index()
+        
+        # 中文数据处理
+        # example_3_chinese_data()
+        
+        # 批量查询
+        # example_4_batch_queries()
+        
+        # 多数据集管理
+        # example_5_multiple_collections()
+        
+        # 检查存储
+        # example_6_check_storage()
+
+        # 查看数据内容
+        example_7_inspect_data()
+        
+        print("\n" + "=" * 60)
+        print("✅ 示例完成！")
+        print("=" * 60)
+
+    # 在事件循环中运行
+    asyncio.run(main())

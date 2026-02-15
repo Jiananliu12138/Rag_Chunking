@@ -1,8 +1,6 @@
 """
-Milvus Lite 版本的检索器
-适用于 Linux/MacOS 离线环境，无需启动 Milvus 服务器
-
-注意：Milvus Lite 仅支持 Linux (Ubuntu >= 20.04) 和 MacOS (>= 11.0)
+Milvus 服务器版本的检索器
+连接到 Docker 启动的 Milvus 服务器 (localhost:19530)
 """
 
 # ============================================================
@@ -11,65 +9,23 @@ Milvus Lite 版本的检索器
 from abc import ABC
 import os
 import json
+import asyncio
 from pathlib import Path
 
 # ============================================================
-# LlamaIndex 导入（兼容新旧版本）
+# LlamaIndex 导入
 # ============================================================
-try:
-    # 尝试新版本导入 (llama-index >= 0.10.0)
-    from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, get_response_synthesizer
-    from llama_index.core.retrievers import VectorIndexRetriever
-    from llama_index.core.query_engine import RetrieverQueryEngine
-    from llama_index.core.postprocessor import SimilarityPostprocessor
-    from llama_index.core.node_parser import SimpleNodeParser
-    from llama_index.core import download_loader
-    from llama_index.core import StorageContext, Settings
-    from llama_index.core.schema import TextNode as Node
-    from llama_index.vector_stores.milvus import MilvusVectorStore
-    from llama_index.embeddings.langchain import LangchainEmbedding
-    
-    GPTVectorStoreIndex = VectorStoreIndex  # 兼容旧代码
-    print("[Info] 使用新版 llama-index (>= 0.10.0)")
-    
-except ImportError:
-    # 回退到旧版本导入 (llama-index < 0.10.0)
-    try:
-        from llama_index import GPTVectorStoreIndex, SimpleDirectoryReader, get_response_synthesizer
-        from llama_index.retrievers import VectorIndexRetriever
-        from llama_index.query_engine import RetrieverQueryEngine
-        from llama_index.postprocessor import SimilarityPostprocessor
-        from llama_index.node_parser import SimpleNodeParser
-        from llama_index import download_loader
-        from llama_index.embeddings import LangchainEmbedding
-        from llama_index import StorageContext
-        from llama_index.vector_stores import MilvusVectorStore
-        from llama_index.data_structs import Node
-        print("[Info] 使用旧版 llama-index (< 0.10.0)")
-        Settings = None  # 旧版本没有 Settings
-    except ImportError:
-        print("\n" + "="*60)
-        print("❌ llama-index 导入失败！")
-        print("="*60)
-        print("\n请安装正确的依赖包：")
-        print("  pip install llama-index-core")
-        print("  pip install llama-index-vector-stores-milvus")
-        print("  pip install llama-index-embeddings-langchain")
-        print("\n或者重新安装：")
-        print("  pip install -r requirements.txt --upgrade")
-        print("="*60 + "\n")
-        raise
+from llama_index.core import VectorStoreIndex, StorageContext, Settings
+from llama_index.core.retrievers import VectorIndexRetriever
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.schema import TextNode as Node
+from llama_index.vector_stores.milvus import MilvusVectorStore
+from llama_index.embeddings.langchain import LangchainEmbedding
 
 # ============================================================
-# LangChain 导入（兼容新旧版本）
+# LangChain 导入
 # ============================================================
-try:
-    from langchain_core.embeddings import Embeddings
-except ImportError:
-    try:
-        from langchain.schema.embeddings import Embeddings
-    except ImportError:
-        from langchain.embeddings.base import Embeddings
+from langchain_core.embeddings import Embeddings
 
 
 # ============================================================
@@ -77,20 +33,12 @@ except ImportError:
 # ============================================================
 class BaseRetrieverLite(ABC):
     """
-    基于 Milvus Lite 的离线检索器
+    基于 Milvus 服务器的检索器
     
-    特点：
-    1. 使用本地文件存储，无需 Milvus 服务器
-    2. 数据存储在 ./milvus_data/ 目录下
-    3. 完全离线运行
+    连接到 Docker 启动的 Milvus 服务器
+    默认连接: localhost:19530
     
-    注意：
-    - Milvus Lite 仅支持 Linux (Ubuntu >= 20.04) 和 MacOS (>= 11.0)
-    - Windows 用户请在 Linux 服务器上运行
-    
-    与原版的主要区别：
-    - 使用 uri 参数指定本地文件路径（如 "./milvus_data/collection.db"）
-    - 不需要启动 Milvus 服务器
+    支持多种 JSON 格式的分块数据输入
     """
     
     def __init__(
@@ -104,7 +52,9 @@ class BaseRetrieverLite(ABC):
             construct_index: bool = False,
             add_index: bool = False,
             similarity_top_k: int = 2,
-            milvus_data_dir: str = "./milvus_data",
+            host: str = "localhost",
+            port: int = 19530,
+            milvus_data_dir: str = None,
         ):
         self.docs_directory = docs_directory
         self.embed_model = embed_model
@@ -113,15 +63,19 @@ class BaseRetrieverLite(ABC):
         self.chunk_overlap = chunk_overlap
         self.collection_name = collection_name
         self.similarity_top_k = similarity_top_k
-        self.milvus_data_dir = milvus_data_dir
+        self.host = host
+        self.port = port
         
-        # 确保数据目录存在
-        Path(self.milvus_data_dir).mkdir(parents=True, exist_ok=True)
+        if milvus_data_dir:
+            if not os.path.exists(milvus_data_dir):
+                os.makedirs(milvus_data_dir)
+            self.milvus_uri = os.path.join(milvus_data_dir, f"{collection_name}.db")
+            print(f"[Milvus] 使用 Milvus Lite, 数据文件: {self.milvus_uri}")
+        else:
+            self.milvus_uri = f"http://{self.host}:{self.port}"
+            print(f"[Milvus] 连接到服务器: {self.milvus_uri}")
         
-        # Milvus Lite 使用本地文件路径作为 URI
-        self.milvus_uri = os.path.join(self.milvus_data_dir, f"{collection_name}.db")
-        
-        print(f"[Milvus Lite] 数据存储位置: {self.milvus_uri}")
+        print(f"[Milvus] 连接到服务器: {self.milvus_uri}")
 
         if construct_index:
             self.construct_index()
@@ -158,12 +112,12 @@ class BaseRetrieverLite(ABC):
         # 格式1: 简单列表 ["chunk1", "chunk2", ...]
         if isinstance(data, list) and len(data) > 0 and isinstance(data[0], str):
             chunks = data
-            print(f"[Milvus Lite] 检测到格式: 简单列表")
+            print(f"[Milvus] 检测到格式: 简单列表")
         
         # 格式2: 列表嵌套 [["chunk1", label1], ["chunk2", label2], ...]
         elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
             chunks = [item[0] if isinstance(item, list) and len(item) > 0 else item for item in data]
-            print(f"[Milvus Lite] 检测到格式: 列表嵌套（提取第一个元素）")
+            print(f"[Milvus] 检测到格式: 列表嵌套（提取第一个元素）")
         
         # 格式3: 字典格式 {"filepath": "...", "splits": [...], ...}
         elif isinstance(data, dict):
@@ -173,26 +127,26 @@ class BaseRetrieverLite(ABC):
                     if isinstance(splits[0], list):
                         # splits 是 [["chunk", label], ...]
                         chunks = [item[0] if isinstance(item, list) and len(item) > 0 else item for item in splits]
-                        print(f"[Milvus Lite] 检测到格式: 字典+splits（列表嵌套）")
+                        print(f"[Milvus] 检测到格式: 字典+splits（列表嵌套）")
                     elif isinstance(splits[0], str):
                         # splits 是 ["chunk1", "chunk2", ...]
                         chunks = splits
-                        print(f"[Milvus Lite] 检测到格式: 字典+splits（简单列表）")
+                        print(f"[Milvus] 检测到格式: 字典+splits（简单列表）")
             
             # 格式4: {"final_chunks": ["chunk1", ...]}
             elif "final_chunks" in data:
                 chunks = data["final_chunks"]
-                print(f"[Milvus Lite] 检测到格式: 字典+final_chunks")
+                print(f"[Milvus] 检测到格式: 字典+final_chunks")
         
         # 格式5: [{"name": "...", "final_chunks": [...]}, ...]
         elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
             for item in data:
                 if "final_chunks" in item:
                     chunks.extend(item["final_chunks"])
-            print(f"[Milvus Lite] 检测到格式: 列表+字典+final_chunks")
+            print(f"[Milvus] 检测到格式: 列表+字典+final_chunks")
         
         else:
-            raise ValueError(f"[Milvus Lite] 不支持的JSON格式: {type(data)}")
+            raise ValueError(f"[Milvus] 不支持的JSON格式: {type(data)}")
         
         return chunks
 
@@ -201,7 +155,7 @@ class BaseRetrieverLite(ABC):
         从 JSON 文件构建向量索引
         支持多种 JSON 格式
         """
-        print(f"[Milvus Lite] 开始构建索引: {self.collection_name}")
+        print(f"[Milvus] 开始构建索引: {self.collection_name}")
         
         # 读取分块数据
         folder_path = self.docs_directory  
@@ -213,11 +167,11 @@ class BaseRetrieverLite(ABC):
         # 解析不同格式的 JSON
         chunks = self._parse_chunks_from_json(raw_data)
         
-        print(f"[Milvus Lite] 读取到 {len(chunks)} 个文本块")
+        print(f"[Milvus] 读取到 {len(chunks)} 个文本块")
         
         # 打印前3个示例块
         print(f"\n{'='*60}")
-        print(f"📝 示例文本块（前3个）:")
+        print(f"示例文本块（前3个）:")
         print(f"{'='*60}")
         for idx, chunk_text in enumerate(chunks[:3], 1):
             preview = chunk_text[:200] if len(chunk_text) > 200 else chunk_text
@@ -235,28 +189,22 @@ class BaseRetrieverLite(ABC):
             if len(chunk_text.split(' ')) < 10:
                 continue
             
-            # 兼容新旧版本的 Node 创建方式
-            try:
-                node1 = Node(text=chunk_text)
-            except TypeError:
-                # 新版本可能需要不同的参数
-                node1 = Node(text=chunk_text, id_=f"node_{len(nodes)}")
+            node1 = Node(text=chunk_text)
             nodes.append(node1)
         
-        print(f"\n[Milvus Lite] 过滤后剩余 {len(nodes)} 个有效文本块")
+        print(f"\n[Milvus] 过滤后剩余 {len(nodes)} 个有效文本块")
         
         # 包装嵌入模型
         self.embed_model = LangchainEmbedding(self.embed_model)
         
-        # 新版使用 Settings 替代 ServiceContext
-        if Settings is not None:
-            Settings.embed_model = self.embed_model
-            Settings.llm = None  # 不使用 LLM
+        # 使用 Settings 配置
+        Settings.embed_model = self.embed_model
+        Settings.llm = None  # 不使用 LLM
         
-        # 创建 Milvus Lite 向量存储
-        # 关键：使用 uri 参数指定本地文件路径
+        # 创建 Milvus 向量存储（连接到 Docker 服务器）
+        # 使用 http:// 格式的 URI 连接到服务器
         vector_store = MilvusVectorStore(
-            uri=self.milvus_uri,  # 使用本地文件 URI
+            uri=self.milvus_uri,
             dim=self.embed_dim,
             overwrite=True,  # 首次创建时覆盖
             collection_name=self.collection_name
@@ -267,21 +215,21 @@ class BaseRetrieverLite(ABC):
         batch_size = 100  # 英语：100，汉语：1000
         total_batches = (len(nodes) + batch_size - 1) // batch_size
         
-        print(f"[Milvus Lite] 开始分批写入，共 {total_batches} 批")
+        print(f"[Milvus] 开始分批写入，共 {total_batches} 批")
         
         for spilt_ids in range(0, len(nodes), batch_size):
             batch_num = spilt_ids // batch_size + 1
             batch_nodes = nodes[spilt_ids:spilt_ids+batch_size]
             
-            print(f"[Milvus Lite] 处理第 {batch_num}/{total_batches} 批 ({len(batch_nodes)} 个节点)...")
+            print(f"[Milvus] 处理第 {batch_num}/{total_batches} 批 ({len(batch_nodes)} 个节点)...")
             
-            self.vector_index = GPTVectorStoreIndex(
+            self.vector_index = VectorStoreIndex(
                 batch_nodes,
                 storage_context=storage_context,
                 show_progress=True
             )
             
-            print(f"[Milvus Lite] 第 {batch_num} 批索引完成！")
+            print(f"[Milvus] 第 {batch_num} 批索引完成！")
 
             # 后续批次使用追加模式
             vector_store = MilvusVectorStore(
@@ -291,34 +239,36 @@ class BaseRetrieverLite(ABC):
             )
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-        print(f"[Milvus Lite] ✅ 索引构建完成！数据已保存到 {self.milvus_uri}")
+        print(f"[Milvus] 索引构建完成！集合名称: {self.collection_name}")
 
     def add_index(self):
         """
         向已有索引中追加数据（可选功能）
         """
-        print(f"[Milvus Lite] 开始追加数据到索引: {self.collection_name}")
+        print(f"[Milvus] 开始追加数据到索引: {self.collection_name}")
         
         if hasattr(self, 'docs_type') and self.docs_type == 'json':
+            from llama_index.core import download_loader
             JSONReader = download_loader("JSONReader")
             documents = JSONReader().load_data(self.docs_directory)
         else:
+            from llama_index.core import SimpleDirectoryReader
             documents = SimpleDirectoryReader(self.docs_directory).load_data()
         
+        from llama_index.core.node_parser import SimpleNodeParser
         node_parser = SimpleNodeParser.from_defaults(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap
         )
         nodes = node_parser.get_nodes_from_documents(documents, show_progress=True)
         
-        print(f"[Milvus Lite] 解析得到 {len(nodes)} 个新节点")
+        print(f"[Milvus] 解析得到 {len(nodes)} 个新节点")
         
         self.embed_model = LangchainEmbedding(self.embed_model)
         
-        # 新版使用 Settings
-        if Settings is not None:
-            Settings.embed_model = self.embed_model
-            Settings.llm = None
+        # 使用 Settings 配置
+        Settings.embed_model = self.embed_model
+        Settings.llm = None
         
         # 追加模式
         vector_store = MilvusVectorStore(
@@ -331,29 +281,22 @@ class BaseRetrieverLite(ABC):
         # 分批追加
         batch_size = 8000
         for spilt_ids in range(0, len(nodes), batch_size):
-            self.vector_index = GPTVectorStoreIndex(
+            self.vector_index = VectorStoreIndex(
                 nodes[spilt_ids:spilt_ids+batch_size],
                 storage_context=storage_context,
                 show_progress=True
             )
-            print(f"[Milvus Lite] 追加第 {spilt_ids} 批完成！")
+            print(f"[Milvus] 追加第 {spilt_ids} 批完成！")
 
-        print(f"[Milvus Lite] ✅ 数据追加完成！")
+        print(f"[Milvus] 数据追加完成！")
 
     def load_index_from_milvus(self):
         """
-        从本地 Milvus Lite 数据库加载已有索引
+        从 Milvus 服务器加载已有索引
         """
-        print(f"[Milvus Lite] 加载已有索引: {self.milvus_uri}")
+        print(f"[Milvus] 加载已有索引: {self.collection_name}")
         
-        # 检查数据文件是否存在
-        if not os.path.exists(self.milvus_uri):
-            raise FileNotFoundError(
-                f"[Milvus Lite] 错误：未找到索引文件 {self.milvus_uri}\n"
-                f"请先使用 construct_index=True 创建索引"
-            )
-        
-        # 连接到已有的 Milvus Lite 数据库
+        # 连接到 Milvus 服务器
         vector_store = MilvusVectorStore(
             uri=self.milvus_uri,
             overwrite=False,
@@ -366,18 +309,17 @@ class BaseRetrieverLite(ABC):
         if not isinstance(self.embed_model, LangchainEmbedding):
             self.embed_model = LangchainEmbedding(self.embed_model)
         
-        # 新版使用 Settings
-        if Settings is not None:
-            Settings.embed_model = self.embed_model
-            Settings.llm = None
+        # 使用 Settings 配置
+        Settings.embed_model = self.embed_model
+        Settings.llm = None
         
-        # 创建空索引（数据已在 Milvus Lite 中）
-        self.vector_index = GPTVectorStoreIndex(
+        # 创建空索引（数据已在 Milvus 中）
+        self.vector_index = VectorStoreIndex(
             [],  # 空列表
             storage_context=storage_context,
         )
         
-        print(f"[Milvus Lite] ✅ 索引加载成功！")
+        print(f"[Milvus] 索引加载成功！")
 
     def search_docs(self, query_text: str):
         """
@@ -392,23 +334,26 @@ class BaseRetrieverLite(ABC):
         response_vector = self.query_engine.query(query_text)
         return response_vector.response
     
+    def get_collection_info(self):
+        """
+        获取集合信息（用于调试）
+        """
+        return {
+            'host': self.host,
+            'port': self.port,
+            'collection_name': self.collection_name,
+            'embed_dim': self.embed_dim
+        }
+
     def get_storage_info(self):
         """
-        获取存储信息（用于调试）
+        获取存储信息（兼容性接口）
         """
-        if os.path.exists(self.milvus_uri):
-            size_mb = os.path.getsize(self.milvus_uri) / (1024 * 1024)
-            return {
-                'uri': self.milvus_uri,
-                'size_mb': round(size_mb, 2),
-                'exists': True
-            }
-        else:
-            return {
-                'uri': self.milvus_uri,
-                'size_mb': 0,
-                'exists': False
-            }
+        return {
+            'uri': self.milvus_uri,
+            'size_mb': 0,  # Milvus Server 模式下无法直接获取文件大小
+            'exists': True
+        }
 
 
 # ============================================================

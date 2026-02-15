@@ -10,8 +10,8 @@ pydantic>=2.0.0
 # Milvus Lite 相关依赖（Linux/MacOS 离线向量检索）
 # 注意：Milvus Lite 不支持 Windows，请在 Linux/MacOS 服务器上使用
 # 中括号内使用连字符 milvus-lite，不是下划线
-pymilvus[milvus-lite]>=2.3.0
-llama-index-core>=0.10.0
+pymilvus>=2.4.2
+llama-index>=0.10.0
 llama-index-vector-stores-milvus>=0.1.0
 llama-index-embeddings-langchain>=0.1.0
 
