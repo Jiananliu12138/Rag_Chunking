@@ -332,7 +332,7 @@ class BaseRetrieverLite(ABC):
             检索结果（包含相关文档）
         """
         response_vector = self.query_engine.query(query_text)
-        return response_vector.response
+        return response_vector
     
     def get_collection_info(self):
         """

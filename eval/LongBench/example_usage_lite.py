@@ -44,7 +44,12 @@ def example_1_construct_index():
     print(f"\n测试检索: {query}")
     results = retriever.search_docs(query)
     print(f"检索结果:\n{results}")
-
+    print(f"\n检索到的文档数量: {len(results.source_nodes)}")
+    for i, node_with_score in enumerate(results.source_nodes, 1):
+        print(f"\n[文档 {i}]")
+        print(f"  分数: {node_with_score.score}")
+        print(f"  内容: {node_with_score.node.get_content()[:100]}...") # 只显示前100字符
+        print(f"  元数据: {node_with_score.node.metadata}")
 
 def example_2_load_existing_index():
     """
@@ -76,6 +81,12 @@ def example_2_load_existing_index():
     query = "Roman Smishko (Ukrainian: Роман Володимирович Смішко)"
     results = retriever.search_docs(query)
     print(f"\n检索结果:\n{results}")
+    print(f"\n检索到的文档数量: {len(results.source_nodes)}")
+    for i, node_with_score in enumerate(results.source_nodes, 1):
+        print(f"\n[文档 {i}]")
+        print(f"  分数: {node_with_score.score}")
+        print(f"  内容: {node_with_score.node.get_content()[:100]}...") # 只显示前100字符
+        print(f"  元数据: {node_with_score.node.metadata}")
 
 
 def example_3_chinese_data():
@@ -298,7 +309,7 @@ if __name__ == "__main__":
         # example_1_construct_index()
         
         # 后续使用：加载已有索引
-        # example_2_load_existing_index()
+        example_2_load_existing_index()
         
         # 中文数据处理
         # example_3_chinese_data()
@@ -313,7 +324,7 @@ if __name__ == "__main__":
         # example_6_check_storage()
 
         # 查看数据内容
-        example_7_inspect_data()
+        # example_7_inspect_data()
         
         print("\n" + "=" * 60)
         print("✅ 示例完成！")
