@@ -1,28 +1,30 @@
-# 基础依赖
-torch>=2.0.0
-transformers>=4.40.0
-sentence-transformers>=3.0.0
-accelerate>=0.30.0
-tqdm>=4.66.0
-numpy>=1.24.0
-pydantic>=2.0.0
+# 核心计算库
+torch
+numpy
+transformers
+sentence-transformers
+accelerate
+tqdm
 
-# Milvus Lite 相关依赖
-pymilvus>=2.4.2
-llama-index>=0.10.0
-llama-index-vector-stores-milvus>=0.1.0
-llama-index-embeddings-langchain>=0.1.0
+# 向量数据库与索引
+pymilvus
+llama-index
+llama-index-vector-stores-milvus
+llama-index-embeddings-langchain
 
-# LangChain 依赖 (放宽版本限制以解决冲突)
+# LangChain 生态 (不指定版本，让 pip 自动解决)
 langchain
 langchain-core
 langchain-community
-
-# 评估相关依赖
-ragas
 langchain-huggingface
-bert-score>=0.3.13
-rouge>=1.0.1
-datasets>=2.14.0
-nest-asyncio>=1.5.0
-nltk>=3.8.1
+
+# 评估指标库
+ragas
+bert-score
+rouge
+datasets
+nltk
+
+# 工具库
+nest-asyncio
+pydantic
