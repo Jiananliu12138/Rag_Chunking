@@ -6,19 +6,16 @@ import asyncio
 from typing import List, Dict, Any
 from datasets import Dataset 
 from ragas import evaluate
-from ragas.metrics import (
+from ragas.metrics.collections import (
     context_precision,
     context_recall,
     context_entity_recall,
-    # noise_sensitivity_relevant,
-    # noise_sensitivity_irrelevant,
     answer_relevancy,
     faithfulness,
 )
-# from ragas.llms import LangchainLLM # 旧版导入
-# from ragas.embeddings import LangchainEmbeddings # 旧版导入
-from langchain_community.llms import HuggingFacePipeline
-from langchain_community.embeddings import HuggingFaceEmbeddings
+# from langchain_community.llms import HuggingFacePipeline # 已弃用
+# from langchain_community.embeddings import HuggingFaceEmbeddings # 已弃用
+from langchain_huggingface import HuggingFacePipeline, HuggingFaceEmbeddings
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from bert_score import score as bert_score
 from rouge import Rouge
@@ -44,8 +41,6 @@ class Config:
         context_precision,
         context_recall,
         context_entity_recall,
-        # noise_sensitivity_relevant,
-        # noise_sensitivity_irrelevant,
         answer_relevancy,
         faithfulness
     ]
@@ -81,12 +76,15 @@ class Evaluator:
             
             # RAGAS v0.1+ 直接接受 LangChain 的 BaseLLM 和 BaseEmbeddings
             # 不需要再用 LangchainLLM 包装
-            self.llm = HuggingFacePipeline(pipeline=pipe)
+            # 显式传入 batch_size 以启用批量推理，消除 GPU 顺序执行警告
+            self.llm = HuggingFacePipeline(pipeline=pipe, batch_size=8)
             
             logger.info(f"Loading Embeddings from {self.config.EMBEDDING_PATH}...")
+            # 同样为 Embeddings 设置 batch_size (如果支持的话，通常通过 model_kwargs 或 encode_kwargs)
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=self.config.EMBEDDING_PATH,
-                model_kwargs={'device': 'cuda'}
+                model_kwargs={'device': 'cuda'},
+                encode_kwargs={'batch_size': 32} # 增加 embedding 的批处理大小
             )
             
         except Exception as e:
@@ -178,7 +176,7 @@ class Evaluator:
                 model_type=self.config.EMBEDDING_PATH,
                 num_layers=None,
                 verbose=False, 
-                device='cuda'
+                device='cuda' # 确保使用 CUDA
             )
             scores['bert_score_f1'] = F1.mean().item()
         except Exception as e:
