@@ -22,17 +22,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from bert_score import score as bert_score
 from rouge import Rouge
-from metrics import (
-    qa_f1_score,
-    rouge_zh_score,
-    qa_f1_zh_score,
-    rouge_score,
-    classification_score,
-    retrieval_score,
-    retrieval_zh_score,
-    count_score,
-    code_sim_score,
-)
+from metrics_lite import qa_f1_score
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 # 配置日志
