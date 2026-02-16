@@ -1,3 +1,5 @@
+import gc
+import torch
 import os
 import json
 import numpy as np
@@ -51,8 +53,9 @@ class Evaluator:
         self.llm = None
         self.embeddings = None
         
-        if self.config.ENABLE_RAGAS:
-            self._init_models()
+        # 延迟初始化，在 calculate_ragas_metrics 中按需调用
+        # if self.config.ENABLE_RAGAS:
+        #     self._init_models()
 
     def _init_models(self):
         """初始化本地 LLM 和 Embedding 模型用于 RAGAS"""
@@ -165,7 +168,8 @@ class Evaluator:
         try:
             # BERTScore 不支持直接的多参考答案取 max，需要手动处理
             # 策略：对每个样本，计算预测值与所有参考答案的 BERTScore，取 F1 最大的那个
-            
+            os.environ['HF_HOME'] = '/data/h50056789/Rag_Chunking/model/model_cache'
+
             all_f1_scores = []
             
             refs = [" ".join(gts) for gts in answers]
@@ -178,10 +182,17 @@ class Evaluator:
                 model_type="roberta-large",
                 num_layers=None,
                 verbose=True, 
-                device='cuda',
+                device='cuda:0',
                 batch_size=32 # 显式设置 batch size
             )
             scores['bert_score_f1'] = F1.mean().item()
+            
+            # 释放 BERTScore 显存
+            del P, R, F1
+            gc.collect()
+            torch.cuda.empty_cache()
+            logger.info("BERTScore memory cleared.")
+            
         except Exception as e:
             logger.warning(f"BERTScore calculation failed: {e}")
             scores['bert_score_f1'] = 0.0
@@ -245,8 +256,11 @@ class Evaluator:
         final_results = self.calculate_traditional_metrics(predictions, answers)
         
         # 3. 计算 RAGAS 指标
-        ragas_results = self.calculate_ragas_metrics(data)
-        final_results.update(ragas_results)
+        if self.config.ENABLE_RAGAS:
+            # 在这里初始化 RAGAS 模型，避免与 BERTScore 争抢显存
+            self._init_models()
+            ragas_results = self.calculate_ragas_metrics(data)
+            final_results.update(ragas_results)
         
         # 4. 输出结果
         logger.info("Final Evaluation Results:")
