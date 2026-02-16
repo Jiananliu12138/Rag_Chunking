@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 
 class Config:
     # 评估配置
-    PREDICTION_FILE = 'F:/thesis/Meta-Chunking/eval/LongBench/sample_results.json'
-    OUTPUT_FILE = 'F:/thesis/Meta-Chunking/eval/LongBench/eval_results.json'
+    PREDICTION_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json'
+    OUTPUT_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/eval_results.json'
     
     # 模型路径
     LLM_PATH = '/data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct'

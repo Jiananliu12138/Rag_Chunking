@@ -7,22 +7,20 @@ tqdm>=4.66.0
 numpy>=1.24.0
 pydantic>=2.0.0
 
-# Milvus Lite 相关依赖（Linux/MacOS 离线向量检索）
-# 注意：Milvus Lite 不支持 Windows，请在 Linux/MacOS 服务器上使用
-# 中括号内使用连字符 milvus-lite，不是下划线
+# Milvus Lite 相关依赖
 pymilvus>=2.4.2
 llama-index>=0.10.0
 llama-index-vector-stores-milvus>=0.1.0
 llama-index-embeddings-langchain>=0.1.0
 
-# LangChain 依赖
-langchain>=0.1.0
-langchain-core>=0.1.0
-langchain-community>=0.0.20
+# LangChain 依赖 (放宽版本限制以解决冲突)
+langchain
+langchain-core
+langchain-community
 
 # 评估相关依赖
-ragas>=0.1.0
-langchain-huggingface>=0.0.1
+ragas
+langchain-huggingface
 bert-score>=0.3.13
 rouge>=1.0.1
 datasets>=2.14.0
