@@ -29,3 +29,7 @@ langchain
 langchain-core
 langchain-community
 langchain-huggingface
+
+#add for ragas
+openai>=1.0.0
+vllm

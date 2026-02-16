@@ -79,6 +79,7 @@ chroma_db/
 
 model
 volumes
+ragas_cache/
 eval/LongBench/dataset/
 eval/LongBench/embeddings/__pycache__/base.cpython-310.pyc
 eval/LongBench/embeddings/__pycache__/base.cpython-310.pyc

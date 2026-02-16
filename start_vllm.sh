@@ -6,7 +6,7 @@ export CUDA_VISIBLE_DEVICES=1
 python -m vllm.entrypoints.openai.api_server \
     --model /data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct \
     --trust-remote-code \
-    --port 8001 \
+    --port 8005 \
     --gpu-memory-utilization 0.70 \
     --max-model-len 32768 \
     --dtype bfloat16

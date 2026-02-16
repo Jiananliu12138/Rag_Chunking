@@ -45,9 +45,9 @@ class RAGASEvaluator:
     
     def __init__(
         self,
-        vllm_api_base: str = "http://localhost:8001/v1",
+        vllm_api_base: str = "http://localhost:8005/v1",
         vllm_api_key: str = "EMPTY",
-        vllm_model_name: str = "Qwen/Qwen2-VL-7B-Instruct",
+        vllm_model_name: str = "/data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct",
         embedding_model_path: str = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5",
         device: str = "cuda:0",
         enable_cache: bool = True,
@@ -384,7 +384,7 @@ if __name__ == "__main__":
     # 配置参数
     INPUT_FILE = "/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json"
     OUTPUT_FILE = "/data/h50056789/Rag_Chunking/eval/LongBench/ragas_eval_results.json"
-    VLLM_API = "http://localhost:8001/v1"
+    VLLM_API = "http://localhost:8005/v1"
     EMBEDDING_MODEL = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
     DEVICE = "cuda:1"
     CACHE_DIR = "./ragas_cache"
