@@ -6,12 +6,12 @@ import asyncio
 from typing import List, Dict, Any
 from datasets import Dataset 
 from ragas import evaluate, RunConfig
-from ragas.metrics.collections import (
-    context_precision,
-    context_recall,
-    context_entity_recall,
-    answer_relevancy,
-    faithfulness,
+from ragas.metrics import (
+    Faithfulness,
+    AnswerRelevancy,
+    ContextRecall,
+    ContextPrecision,
+    ContextEntityRecall
 )
 # from langchain_community.llms import HuggingFacePipeline # 已弃用
 # from langchain_community.embeddings import HuggingFaceEmbeddings # 已弃用
@@ -34,15 +34,15 @@ class Config:
     # 模型路径
     LLM_PATH = '/data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct'
     EMBEDDING_PATH = '/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5'
-    
+    BERT_PATH = '/data/h50056789/Rag_Chunking/model/FacebookAI/roberta-large'
     # RAGAS 配置
     ENABLE_RAGAS = True
     RAGAS_METRICS = [
-        context_precision,
-        context_recall,
-        context_entity_recall,
-        answer_relevancy,
-        faithfulness
+        Faithfulness(),
+        AnswerRelevancy(),
+        ContextRecall(),
+        ContextPrecision(),
+        ContextEntityRecall()
     ]
 
 class Evaluator:
@@ -77,14 +77,14 @@ class Evaluator:
             # RAGAS v0.1+ 直接接受 LangChain 的 BaseLLM 和 BaseEmbeddings
             # 不需要再用 LangchainLLM 包装
             # 显式传入 batch_size 以启用批量推理，消除 GPU 顺序执行警告
-            self.llm = HuggingFacePipeline(pipeline=pipe, batch_size=8)
+            self.llm = HuggingFacePipeline(pipeline=pipe, batch_size=4)
             
             logger.info(f"Loading Embeddings from {self.config.EMBEDDING_PATH}...")
             # 同样为 Embeddings 设置 batch_size (如果支持的话，通常通过 model_kwargs 或 encode_kwargs)
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=self.config.EMBEDDING_PATH,
-                model_kwargs={'device': 'cuda'},
-                encode_kwargs={'batch_size': 32} # 增加 embedding 的批处理大小
+                model_kwargs={'device': 'cuda:0'},
+                encode_kwargs={'batch_size': 16} # 增加 embedding 的批处理大小
             )
             
         except Exception as e:
@@ -170,22 +170,14 @@ class Evaluator:
             
             refs = [" ".join(gts) for gts in answers]
             
-            # 加载 BERTScore 的本地模型
-            # 注意：bert_score 需要 transformer 模型路径，而不是 sentence-transformer 路径
-            # 如果 BGE 模型是基于 BERT 架构的，可以直接用
-            # 为了确保加载成功，我们使用 transformers 加载 tokenizer 和 model
-            
-            # 使用 lang="en" 让它使用默认模型，或者传入本地路径
-            # 如果传入路径失败，可能是因为 bert_score 内部对路径的处理问题
-            # 尝试直接传入模型路径，并确保路径正确
-            model_path = self.config.EMBEDDING_PATH
+            model_path = self.config.BERT_PATH
             
             P, R, F1 = bert_score(
                 predictions, 
                 refs, 
-                model_type=model_path,
+                model_type="roberta-large",
                 num_layers=None,
-                verbose=False, 
+                verbose=True, 
                 device='cuda',
                 batch_size=32 # 显式设置 batch size
             )
@@ -229,8 +221,6 @@ class Evaluator:
                 metrics=self.config.RAGAS_METRICS,
                 llm=self.llm,
                 embeddings=self.embeddings,
-                # 降低并发数，增加超时时间
-                run_config=RunConfig(max_workers=1, timeout=360) 
             )
             return results
         except Exception as e:
