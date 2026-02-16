@@ -62,9 +62,17 @@ class Evaluator:
         logger.info(f"Loading LLM from {self.config.LLM_PATH}...")
         try:
             tokenizer = AutoTokenizer.from_pretrained(self.config.LLM_PATH, trust_remote_code=True)
+            
+            # 配置显存分配：LLM 和 Embedding 放在 GPU 1 (Card 2)
+            # Card 1 (GPU 0) 留给 BERTScore
+            # 假设 GPU 1 显存充足，设置 max_memory 限制它只使用 GPU 1
+            max_memory_mapping = {0: "0GiB", 1: "30GiB"} 
+            
             model = AutoModelForCausalLM.from_pretrained(
                 self.config.LLM_PATH, 
                 device_map="auto", 
+                max_memory=max_memory_mapping,
+                torch_dtype="auto",
                 trust_remote_code=True
             )
             
@@ -86,7 +94,7 @@ class Evaluator:
             # 同样为 Embeddings 设置 batch_size (如果支持的话，通常通过 model_kwargs 或 encode_kwargs)
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=self.config.EMBEDDING_PATH,
-                model_kwargs={'device': 'cuda:0'},
+                model_kwargs={'device': 'cuda:1'}, # 放在 GPU 1
                 encode_kwargs={'batch_size': 16} # 增加 embedding 的批处理大小
             )
             
@@ -182,8 +190,8 @@ class Evaluator:
                 model_type="roberta-large",
                 num_layers=None,
                 verbose=True, 
-                device='cuda:0',
-                batch_size=32 # 显式设置 batch size
+                device='cuda:0', # 放在 GPU 0 (Card 1)
+                batch_size=16 # 显式设置 batch size
             )
             scores['bert_score_f1'] = F1.mean().item()
             
