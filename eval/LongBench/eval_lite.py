@@ -4,21 +4,6 @@ import os
 import json
 import numpy as np
 import logging
-import asyncio
-from typing import List, Dict, Any
-from datasets import Dataset 
-from ragas import evaluate, RunConfig
-from ragas.metrics import (
-    Faithfulness,
-    AnswerRelevancy,
-    ContextRecall,
-    ContextPrecision,
-    ContextEntityRecall
-)
-# from langchain_community.llms import HuggingFacePipeline # 已弃用
-# from langchain_community.embeddings import HuggingFaceEmbeddings # 已弃用
-from langchain_huggingface import HuggingFacePipeline, HuggingFaceEmbeddings
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from bert_score import score as bert_score
 from rouge import Rouge
 from metrics_lite import qa_f1_score
@@ -34,73 +19,11 @@ class Config:
     OUTPUT_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/eval_results.json'
     
     # 模型路径
-    LLM_PATH = '/data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct'
-    EMBEDDING_PATH = '/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5'
     BERT_PATH = '/data/h50056789/Rag_Chunking/model/FacebookAI/roberta-large'
-    # RAGAS 配置
-    ENABLE_RAGAS = True
-    RAGAS_METRICS = [
-        Faithfulness(),
-        AnswerRelevancy(),
-        ContextRecall(),
-        ContextPrecision(),
-        ContextEntityRecall()
-    ]
 
 class Evaluator:
     def __init__(self, config):
         self.config = config
-        self.llm = None
-        self.embeddings = None
-        
-        # 延迟初始化，在 calculate_ragas_metrics 中按需调用
-        # if self.config.ENABLE_RAGAS:
-        #     self._init_models()
-
-    def _init_models(self):
-        """初始化本地 LLM 和 Embedding 模型用于 RAGAS"""
-        logger.info(f"Loading LLM from {self.config.LLM_PATH}...")
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(self.config.LLM_PATH, trust_remote_code=True)
-            
-            # 配置显存分配：LLM 和 Embedding 放在 GPU 1 (Card 2)
-            # Card 1 (GPU 0) 留给 BERTScore
-            # 假设 GPU 1 显存充足，设置 max_memory 限制它只使用 GPU 1
-            max_memory_mapping = {0: "0GiB", 1: "30GiB"} 
-            
-            model = AutoModelForCausalLM.from_pretrained(
-                self.config.LLM_PATH, 
-                device_map="auto", 
-                max_memory=max_memory_mapping,
-                torch_dtype="auto",
-                trust_remote_code=True
-            )
-            
-            pipe = pipeline(
-                "text-generation",
-                model=model,
-                tokenizer=tokenizer,
-                max_new_tokens=512,
-                temperature=0.1,
-                repetition_penalty=1.1
-            )
-            
-            # RAGAS v0.1+ 直接接受 LangChain 的 BaseLLM 和 BaseEmbeddings
-            # 不需要再用 LangchainLLM 包装
-            # 显式传入 batch_size 以启用批量推理，消除 GPU 顺序执行警告
-            self.llm = HuggingFacePipeline(pipeline=pipe, batch_size=4)
-            
-            logger.info(f"Loading Embeddings from {self.config.EMBEDDING_PATH}...")
-            # 同样为 Embeddings 设置 batch_size (如果支持的话，通常通过 model_kwargs 或 encode_kwargs)
-            self.embeddings = HuggingFaceEmbeddings(
-                model_name=self.config.EMBEDDING_PATH,
-                model_kwargs={'device': 'cuda:1'}, # 放在 GPU 1
-                encode_kwargs={'batch_size': 16} # 增加 embedding 的批处理大小
-            )
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize models: {e}")
-            self.config.ENABLE_RAGAS = False
 
     def calculate_traditional_metrics(self, predictions, answers):
         """计算传统指标 (F1, ROUGE, BERTScore)"""
@@ -207,47 +130,6 @@ class Evaluator:
             
         return scores
 
-    def calculate_ragas_metrics(self, data):
-        """计算 RAGAS 指标"""
-        if not self.config.ENABLE_RAGAS:
-            return {}
-            
-        logger.info("Calculating RAGAS metrics...")
-        
-        # 准备 RAGAS 数据集格式
-        # RAGAS 需要: question, answer, contexts, ground_truth
-        ragas_data = {
-            "question": [],
-            "answer": [],
-            "contexts": [],
-            "ground_truth": []
-        }
-        
-        for item in data:
-            ragas_data["question"].append(item["input"])
-            ragas_data["answer"].append(item["llm_ans"])
-            # contexts 必须是 list[str]
-            ragas_data["contexts"].append(item.get("retrieval_list", []))
-            # ground_truth 必须是 str (RAGAS v0.1+)
-            # 将所有标准答案拼接，让 RAGAS 自己去判断
-            ragas_data["ground_truth"].append(" ".join(item["answers"])) 
-            
-        dataset = Dataset.from_dict(ragas_data)
-        
-        try:
-            results = evaluate(
-                dataset=dataset,
-                metrics=self.config.RAGAS_METRICS,
-                llm=self.llm,
-                embeddings=self.embeddings,
-            )
-            return results
-        except Exception as e:
-            logger.error(f"RAGAS evaluation failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return {}
-
     def run(self):
         # 1. 读取数据
         if not os.path.exists(self.config.PREDICTION_FILE):
@@ -263,18 +145,23 @@ class Evaluator:
         # 2. 计算传统指标
         final_results = self.calculate_traditional_metrics(predictions, answers)
         
-        # 3. 计算 RAGAS 指标
-        if self.config.ENABLE_RAGAS:
-            # 在这里初始化 RAGAS 模型，避免与 BERTScore 争抢显存
-            self._init_models()
-            ragas_results = self.calculate_ragas_metrics(data)
-            final_results.update(ragas_results)
-        
-        # 4. 输出结果
+        # 3. 输出结果
         logger.info("Final Evaluation Results:")
         print(json.dumps(final_results, indent=4))
         
         os.makedirs(os.path.dirname(self.config.OUTPUT_FILE), exist_ok=True)
+        
+        # 如果文件已存在，尝试读取并合并（保留 RAGAS 结果）
+        if os.path.exists(self.config.OUTPUT_FILE):
+            try:
+                with open(self.config.OUTPUT_FILE, 'r', encoding='utf-8') as f:
+                    existing_results = json.load(f)
+                    # 只更新传统指标，保留 RAGAS 指标
+                    existing_results.update(final_results)
+                    final_results = existing_results
+            except:
+                pass
+
         with open(self.config.OUTPUT_FILE, 'w', encoding='utf-8') as f:
             # 将 numpy 类型转换为 float
             def convert(o):
@@ -286,12 +173,5 @@ class Evaluator:
         logger.info(f"Results saved to {self.config.OUTPUT_FILE}")
 
 if __name__ == '__main__':
-    # 解决事件循环问题
-    try:
-        import nest_asyncio
-        nest_asyncio.apply()
-    except ImportError:
-        pass
-        
     evaluator = Evaluator(Config)
     evaluator.run()
