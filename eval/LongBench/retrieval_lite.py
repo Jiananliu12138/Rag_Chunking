@@ -78,8 +78,18 @@ class Qwen_7B_Chat(BaseLLM):
 
     def request(self, query: str) -> str:
         query = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n".format(query)
-        input_ids = self.tokenizer.encode(query, return_tensors="pt").cuda()
-        output = self.model.generate(input_ids, **self.gen_kwargs)[0]
+        # 显式生成 attention_mask
+        inputs = self.tokenizer(query, return_tensors="pt")
+        input_ids = inputs.input_ids.cuda()
+        attention_mask = inputs.attention_mask.cuda()
+        
+        output = self.model.generate(
+            input_ids, 
+            attention_mask=attention_mask, # 传入 attention_mask
+            pad_token_id=self.tokenizer.eos_token_id, # 显式设置 pad_token_id
+            **self.gen_kwargs
+        )[0]
+        
         response = self.tokenizer.decode(
             output[len(input_ids[0]) - len(output):], skip_special_tokens=True)
         return response

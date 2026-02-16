@@ -200,6 +200,20 @@ class BaseRetrieverLite(ABC):
         # 使用 Settings 配置
         Settings.embed_model = self.embed_model
         Settings.llm = None  # 不使用 LLM
+
+        # 显式设置分词器，避免 tiktoken 自动下载问题
+        # 如果您有本地的 tokenizer，可以在这里指定
+        # 或者使用简单的空格分词作为临时替代
+        try:
+            import tiktoken
+            # 尝试设置本地缓存路径（如果之前设置的环境变量没生效）
+            os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056787/workspaces/lightrag/tiktoken_cache"
+        except ImportError:
+            pass
+
+        # 强制设置全局分词器为一个简单的 lambda 函数，绕过 tiktoken
+        # 注意：这可能会影响基于 token 数量的分块准确性，但能解决联网报错
+        Settings.tokenizer = lambda text: text.split()
         
         # 创建 Milvus 向量存储（连接到 Docker 服务器）
         # 使用 http:// 格式的 URI 连接到服务器
