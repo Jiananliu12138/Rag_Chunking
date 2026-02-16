@@ -23,8 +23,9 @@ from ragas.metrics import (
 from ragas.metrics._context_entities_recall import ContextEntityRecall
 from ragas.metrics._noise_sensitivity import NoiseSensitivity
 from ragas.llms import llm_factory
-from ragas.embeddings.base import embedding_factory
+from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.cache import DiskCacheBackend
+from langchain_huggingface import HuggingFaceEmbeddings
 
 
 def _is_nan(value):
@@ -91,18 +92,20 @@ class RAGASEvaluator:
         print(f"  模型: {vllm_model_name}")
         
         # ========== Embeddings 配置 ==========
-        # 使用 embedding_factory 包装（新版 RAGAS API）
+        # 使用 LangChain HuggingFaceEmbeddings + RAGAS Wrapper
         print(f"\n初始化 Embeddings:")
         print(f"  模型: {embedding_model_path}")
         print(f"  设备: {device}")
         
-        self.eval_embeddings = embedding_factory(
-            provider="huggingface",      # HuggingFace 提供商
-            model=embedding_model_path,  # 本地模型路径
-            cache=cache,                 # 缓存（通过 **kwargs 传递）
-            device=device,               # 设备（通过 **kwargs 传递）
-            trust_remote_code=True,      # 信任远程代码（通过 **kwargs 传递给 SentenceTransformer）
+        # 创建 LangChain HuggingFaceEmbeddings
+        langchain_embeddings = HuggingFaceEmbeddings(
+            model_name=embedding_model_path,
+            model_kwargs={'device': device},
+            encode_kwargs={'batch_size': 16, 'normalize_embeddings': True}
         )
+        
+        # 使用 RAGAS 的 LangchainEmbeddingsWrapper 包装
+        self.eval_embeddings = LangchainEmbeddingsWrapper(langchain_embeddings)
         print("✅ Embeddings 初始化完成")
         
         if enable_cache:
