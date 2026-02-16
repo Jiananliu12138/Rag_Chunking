@@ -10,15 +10,15 @@ from ragas.metrics import (
     context_precision,
     context_recall,
     context_entity_recall,
-    noise_sensitivity_relevant,
-    noise_sensitivity_irrelevant,
+    # noise_sensitivity_relevant,
+    # noise_sensitivity_irrelevant,
     answer_relevancy,
     faithfulness,
 )
-from ragas.llms import LangchainLLM
-from ragas.embeddings import LangchainEmbeddings
-from langchain_huggingface import HuggingfaceEmbeddings
-from langchain_huggingface import HuggingFacePipeline
+# from ragas.llms import LangchainLLM # 旧版导入
+# from ragas.embeddings import LangchainEmbeddings # 旧版导入
+from langchain_community.llms import HuggingFacePipeline
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from bert_score import score as bert_score
 from rouge import Rouge
@@ -54,8 +54,8 @@ class Config:
         context_precision,
         context_recall,
         context_entity_recall,
-        noise_sensitivity_relevant,
-        noise_sensitivity_irrelevant,
+        # noise_sensitivity_relevant,
+        # noise_sensitivity_irrelevant,
         answer_relevancy,
         faithfulness
     ]
@@ -89,15 +89,15 @@ class Evaluator:
                 repetition_penalty=1.1
             )
             
-            # 包装为 RAGAS 可用的 LangchainLLM
-            self.llm = LangchainLLM(llm=HuggingFacePipeline(pipeline=pipe))
+            # RAGAS v0.1+ 直接接受 LangChain 的 BaseLLM 和 BaseEmbeddings
+            # 不需要再用 LangchainLLM 包装
+            self.llm = HuggingFacePipeline(pipeline=pipe)
             
             logger.info(f"Loading Embeddings from {self.config.EMBEDDING_PATH}...")
-            hf_embeddings = HuggingfaceEmbeddings(
+            self.embeddings = HuggingFaceEmbeddings(
                 model_name=self.config.EMBEDDING_PATH,
                 model_kwargs={'device': 'cuda'}
             )
-            self.embeddings = LangchainEmbeddings(embeddings=hf_embeddings)
             
         except Exception as e:
             logger.error(f"Failed to initialize models: {e}")
