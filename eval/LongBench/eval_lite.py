@@ -5,7 +5,7 @@ import logging
 import asyncio
 from typing import List, Dict, Any
 from datasets import Dataset 
-from ragas import evaluate
+from ragas import evaluate, RunConfig
 from ragas.metrics.collections import (
     context_precision,
     context_recall,
@@ -170,13 +170,24 @@ class Evaluator:
             
             refs = [" ".join(gts) for gts in answers]
             
+            # 加载 BERTScore 的本地模型
+            # 注意：bert_score 需要 transformer 模型路径，而不是 sentence-transformer 路径
+            # 如果 BGE 模型是基于 BERT 架构的，可以直接用
+            # 为了确保加载成功，我们使用 transformers 加载 tokenizer 和 model
+            
+            # 使用 lang="en" 让它使用默认模型，或者传入本地路径
+            # 如果传入路径失败，可能是因为 bert_score 内部对路径的处理问题
+            # 尝试直接传入模型路径，并确保路径正确
+            model_path = self.config.EMBEDDING_PATH
+            
             P, R, F1 = bert_score(
                 predictions, 
                 refs, 
-                model_type=self.config.EMBEDDING_PATH,
+                model_type=model_path,
                 num_layers=None,
                 verbose=False, 
-                device='cuda' # 确保使用 CUDA
+                device='cuda',
+                batch_size=32 # 显式设置 batch size
             )
             scores['bert_score_f1'] = F1.mean().item()
         except Exception as e:
@@ -217,7 +228,9 @@ class Evaluator:
                 dataset=dataset,
                 metrics=self.config.RAGAS_METRICS,
                 llm=self.llm,
-                embeddings=self.embeddings
+                embeddings=self.embeddings,
+                # 降低并发数，增加超时时间
+                run_config=RunConfig(max_workers=1, timeout=360) 
             )
             return results
         except Exception as e:
