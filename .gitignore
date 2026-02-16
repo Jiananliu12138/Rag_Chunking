@@ -1,4 +1,4 @@
-/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/*
+/data/h50056789/Rag_Chunking/MoC/our_metrics/test_data/*
 
 # 数据目录
 Data_summary_rewrite/Data_summary_rewrite/
@@ -10,6 +10,11 @@ __pycache__/
 *$py.class
 *.so
 .Python
+*.pyc
+*.pyo
+*.pyd
+.Python
+
 build/
 develop-eggs/
 dist/
@@ -74,3 +79,8 @@ chroma_db/
 
 model
 volumes
+eval/LongBench/dataset/
+eval/LongBench/embeddings/__pycache__/base.cpython-310.pyc
+eval/LongBench/embeddings/__pycache__/base.cpython-310.pyc
+**/__pycache__/
+**/*.pyc

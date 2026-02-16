@@ -2,7 +2,7 @@
 使用 Milvus 的检索脚本（适配 Docker 版本）
 有可能跟tiktok有关哦,报错可以研究一下tiktok
 """
-
+import os
 import json
 import asyncio
 import logging
@@ -15,22 +15,22 @@ import torch
 # 配置简单的日志输出
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
+os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056787/workspaces/lightrag/tiktoken_cache"
 # ============================================================
 # 配置区域 (替代命令行参数)
 # ============================================================
 class Config:
     # 数据集路径
-    DATA_PATH = 'F:/thesis/Meta-Chunking/eval/LongBench/sample_data.jsonl'
-    SAVE_FILE = 'F:/thesis/Meta-Chunking/eval/LongBench/sample_results.json'
+    DATA_PATH = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_data.jsonl'
+    SAVE_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json'
 
     # 嵌入模型配置
-    EMBEDDING_NAME = 'F:/thesis/models/bge-base-en-v1.5'
-    EMBEDDING_DIM = 768  # bge-large-en-v1.5: 1024, bge-base-zh-v1.5: 768
+    EMBEDDING_NAME = '/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5'
+    EMBEDDING_DIM = 1024  # bge-large-en-v1.5: 1024, bge-base-zh-v1.5: 768
 
     # 文档和索引配置
-    DOCS_PATH = 'F:/thesis/Meta-Chunking/MoC/our_metrics/test_data/Qwen3-4B_0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt.json'
-    CONSTRUCT_INDEX = False  # 是否构建新索引 (首次运行时设为 True)
+    DOCS_PATH = '/data/h50056789/Rag_Chunking/MoC/our_metrics/test_data/Qwen3-4B_0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt.json'
+    CONSTRUCT_INDEX = True  # 是否构建新索引 (首次运行时设为 True)
     ADD_INDEX = False       # 是否追加索引
     COLLECTION_NAME = "test_chunks"
     RETRIEVE_TOP_K = 5
@@ -38,7 +38,7 @@ class Config:
     # Milvus 配置
     # None 表示连接到 Docker 服务器 (localhost:19530)
     # 填写路径表示使用本地文件模式 (不推荐 Windows 使用)
-    MILVUS_DATA_DIR = None 
+    MILVUS_DATA_DIR = '/data/h50056789/Rag_Chunking/milvus_data'
 
 # ============================================================
 # LLM 类定义
@@ -151,7 +151,7 @@ async def main():
 
     # 1. 初始化 LLM
     # 根据需要取消注释对应的模型
-    llm = Qwen_7B_Chat(model_name='F:/thesis/models/Qwen2-0.5B-Instruct', temperature=0.1, max_new_tokens=1280)    
+    llm = Qwen_7B_Chat(model_name='/data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct', temperature=0.1, max_new_tokens=1280)    
     # llm = Baichuan2_7B_Chat(model_name='baichuan2_7b', temperature=0.1, max_new_tokens=1280)
     # llm = GLM4_9B_Chat(model_name='glm4_9b', temperature=0.1, max_new_tokens=1280)
     
