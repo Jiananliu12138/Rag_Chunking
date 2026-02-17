@@ -8,12 +8,12 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import Document
 
 # 配置
-INPUT_FILE = "f:/thesis/Meta-Chunking/meta-chunking-dataset/meta-chunking/Original_Dataset/LongBench-main/data/2wikimqa.jsonl"
-OUTPUT_DIR = "f:/thesis/Meta-Chunking/Chunk_Result"
+INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl"
+OUTPUT_DIR = "/data/h50056789/Rag_Chunking/Chunk_Result/Semantic_Chunk"
 EMBED_MODEL_PATH = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
 BUFFER_SIZE = 1
 BREAKPOINT_THRESHOLD = 74
-NUM_WORKERS = 4
+NUM_WORKERS = 1
 
 def create_directory(path):
     if not os.path.exists(path):

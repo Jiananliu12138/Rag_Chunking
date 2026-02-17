@@ -7,12 +7,12 @@ import multiprocessing
 from tqdm import tqdm
 
 # 配置
-INPUT_FILE = "f:/thesis/Meta-Chunking/meta-chunking-dataset/meta-chunking/Original_Dataset/LongBench-main/data/2wikimqa.jsonl"
-OUTPUT_DIR = "f:/thesis/Meta-Chunking/Chunk_Result"
-MODEL_TYPE = "Qwen3-4B"
-DS_BASE_URL = os.environ.get('DS_BASE_URL', 'http://localhost:8001')
+INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl"
+OUTPUT_DIR = "/data/h50056789/Rag_Chunking/Chunk_Result/Lumber_Chunk"
+MODEL_TYPE = "Qwen2.5-7B-Instruct"
+DS_BASE_URL = os.environ.get('DS_BASE_URL', 'http://localhost:8005')
 NUM_WORKERS = 4
-TEMPERATURE = 0.6
+TEMPERATURE = 0.2
 MAX_TOKENS = 3072
 
 
