@@ -17,9 +17,6 @@ class Config:
     # 评估配置
     PREDICTION_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json'
     OUTPUT_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/eval_results.json'
-    
-    # 模型路径
-    BERT_PATH = '/data/h50056789/Rag_Chunking/model/FacebookAI/roberta-large'
 
 class Evaluator:
     def __init__(self, config):
@@ -104,8 +101,6 @@ class Evaluator:
             all_f1_scores = []
             
             refs = [" ".join(gts) for gts in answers]
-            
-            model_path = self.config.BERT_PATH
             
             P, R, F1 = bert_score(
                 predictions, 
