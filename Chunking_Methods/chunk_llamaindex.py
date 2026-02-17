@@ -6,8 +6,8 @@ from tqdm import tqdm
 from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.core import Document
 
-INPUT_FILE = "f:/thesis/Meta-Chunking/meta-chunking-dataset/meta-chunking/Original_Dataset/LongBench-main/data/2wikimqa.jsonl"
-OUTPUT_DIR = "f:/thesis/Meta-Chunking/Chunk_Result"
+INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl" 
+OUTPUT_DIR = "/data/h50056789/Rag_Chunking/Chunk_Result/Llamaindex_Chunk"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
 NUM_WORKERS = 4
@@ -20,6 +20,8 @@ def create_directory(path):
 
 
 def init_parser():
+    cache_dir = "/data/h50056789/Rag_Chunking/tiktoken_cache" 
+    os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir
     return SimpleNodeParser.from_defaults(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP

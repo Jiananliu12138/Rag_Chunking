@@ -6,8 +6,8 @@ from typing import Any
 from tqdm import tqdm
 import tiktoken
 
-INPUT_FILE = "f:/thesis/Meta-Chunking/meta-chunking-dataset/meta-chunking/Original_Dataset/LongBench-main/data/2wikimqa.jsonl"
-OUTPUT_DIR = "f:/thesis/Meta-Chunking/Chunk_Result"
+INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl" 
+OUTPUT_DIR = "/data/h50056789/Rag_Chunking/Chunk_Result/Lightrag_Chunk"
 CHUNK_TOKEN_SIZE = 1200
 CHUNK_OVERLAP_TOKEN_SIZE = 100
 SPLIT_BY_CHARACTER = "\n\n"
@@ -22,7 +22,9 @@ def create_directory(path):
 
 
 def init_tokenizer():
-    return tiktoken.get_encoding("cl100k_base")
+    cache_dir = "/data/h50056787/workspaces/lightrag/tiktoken_cache" 
+    os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir 
+    return tiktoken.get_encoding("o200k_base")
 
 
 def chunking_by_token_size(
