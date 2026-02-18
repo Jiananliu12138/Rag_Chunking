@@ -68,6 +68,31 @@ def qw_prompt(user_prompt):
                 time.sleep(60)
 
 
+def qw_prompt_with_params(user_prompt, model_type=MODEL_TYPE, ds_base_url=DS_BASE_URL, temperature=TEMPERATURE, max_tokens=MAX_TOKENS):
+    while True:
+        try:
+            _prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
+            _post_data = {
+                "model": model_type,
+                "temperature": temperature,
+                "prompt": _prompt,
+                'max_tokens': max_tokens,
+            }
+            response = requests.post(f"{ds_base_url}/v1/completions", json=_post_data, timeout=600)
+            res = response.json()
+            return res['choices'][0]['text']
+        except KeyError as e:
+            print(f"KeyError: {e}. Full response: {res}")
+            time.sleep(60)
+        except Exception as e:
+            if str(e) == "list index out of range":
+                print("Model thinks prompt is unsafe")
+                return "content_flag_increment"
+            else:
+                print(f"An error occurred: {e}. Retrying in 1 minute...")
+                time.sleep(60)
+
+
 def build_prompt(chunk_number, id_chunks_without_title):
     word_count = 0
     i = 0
@@ -162,6 +187,70 @@ def process_context(context_text, doc_id):
     }
 
 
+def process_context_with_params(context_text, doc_id, model_type=MODEL_TYPE, ds_base_url=DS_BASE_URL, temperature=TEMPERATURE, max_tokens=MAX_TOKENS):
+    start_time = time.time()
+    
+    paragraph_chunks = context_text.strip().splitlines()
+    paragraph_chunks = [line.strip() for line in paragraph_chunks if line.strip()]
+    
+    current_id = 0
+    id_chunks = []
+    id_chunks_without_title = []
+    for c in paragraph_chunks:
+        id_chunks.append(add_ids_(c, current_id))
+        id_chunks_without_title.append(add_ids_(c.lstrip('# '), current_id))
+        current_id += 1
+
+    chunk_number = 0
+    new_id_list = []
+    word_count_aux = []
+    
+    while chunk_number < len(id_chunks_without_title) - 5:
+        question, word_count, chunk_number = build_prompt(chunk_number, id_chunks_without_title)
+        word_count_aux.append(word_count)
+
+        gpt_output = qw_prompt_with_params(user_prompt=question, model_type=model_type, ds_base_url=ds_base_url, temperature=temperature, max_tokens=max_tokens)
+
+        if gpt_output == "content_flag_increment":
+            chunk_number = chunk_number + 1
+            continue
+
+        pattern = r"Answer: ID \d+"
+        match = re.search(pattern, gpt_output)
+
+        if match is None:
+            print(gpt_output)
+            print("repeat this one")
+            continue
+
+        gpt_output1 = match.group(0)
+        print(gpt_output1)
+        pattern = r'\d+'
+        match = re.search(pattern, gpt_output1)
+        chunk_number = int(match.group())
+        new_id_list.append(chunk_number)
+        if new_id_list[-1] == chunk_number:
+            chunk_number = chunk_number + 1
+
+    new_id_list.append(len(id_chunks))
+
+    id_chunks = list(map(lambda c: re.sub(r'^ID \d+:\s*', '', c), id_chunks))
+
+    new_final_chunks = get_final_chunks(new_id_list, id_chunks)
+
+    end_time = time.time()
+    
+    if doc_id:
+        splits = [[chunk, doc_id] for chunk in new_final_chunks]
+    else:
+        splits = [[chunk] for chunk in new_final_chunks]
+    
+    return {
+        'splits': splits,
+        'time_cost': end_time - start_time
+    }
+
+
 def process_line(line_data):
     try:
         data = json.loads(line_data)
@@ -179,6 +268,118 @@ def process_line(line_data):
     except Exception as e:
         print(f"Error processing line: {e}")
         return None
+
+
+def chunk_file(input_file: str, output_dir: str, model_type: str = MODEL_TYPE, ds_base_url: str = DS_BASE_URL, temperature: float = TEMPERATURE, max_tokens: int = MAX_TOKENS, num_workers: int = NUM_WORKERS):
+    """
+    对文件进行基于LLM的语义分块处理
+    
+    Args:
+        input_file: 输入文件路径（必填）
+        output_dir: 输出目录路径（必填）
+        model_type: 模型类型（用户必填，默认使用全局MODEL_TYPE）
+        ds_base_url: 模型服务URL（用户必填，默认使用全局DS_BASE_URL）
+        temperature: 温度参数（可选，默认使用全局TEMPERATURE）
+        max_tokens: 最大Token数（可选，默认使用全局MAX_TOKENS）
+        num_workers: 工作进程数（可选，默认使用全局NUM_WORKERS）
+    
+    Returns:
+        dict: {"success": bool, "output_file": str, "message": str}
+    """
+    try:
+        create_directory(output_dir)
+        
+        with open(input_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        def process_line_with_params(line_data):
+            try:
+                data = json.loads(line_data)
+                doc_id = data.get('_id', '')
+                context = data.get('context', '')
+                
+                if not context:
+                    return None
+                
+                return process_context_with_params(context, doc_id, model_type, ds_base_url, temperature, max_tokens)
+            except Exception as e:
+                print(f"Error processing line: {e}")
+                return None
+        
+        with multiprocessing.Pool(processes=num_workers) as pool:
+            results = []
+            for result in tqdm(pool.imap_unordered(process_line_with_params, lines), total=len(lines)):
+                if result:
+                    results.append(result)
+        
+        all_splits = []
+        total_time = 0
+        for result in results:
+            all_splits.extend(result['splits'])
+            total_time += result['time_cost']
+        
+        output_data = {
+            "filepath": input_file,
+            "splits": all_splits,
+            "time_cost": total_time
+        }
+        
+        input_basename = os.path.basename(input_file).replace('.jsonl', '')
+        output_file = os.path.join(output_dir, f"{input_basename}_lumber_chunk_{model_type}.json")
+        with open(output_file, "w", encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"\nProcessed {len(results)} documents")
+        print(f"Total splits: {len(all_splits)}")
+        print(f"Results saved to: {output_file}")
+        
+        return {
+            "success": True,
+            "output_file": output_file,
+            "message": f"Successfully processed {len(results)} documents with {len(all_splits)} splits"
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "output_file": "",
+            "message": f"Error: {str(e)}"
+        }
+
+
+def chunk_text(text_input: str, model_type: str = MODEL_TYPE, ds_base_url: str = DS_BASE_URL, temperature: float = TEMPERATURE, max_tokens: int = MAX_TOKENS, num_workers: int = NUM_WORKERS):
+    """
+    对文本进行基于LLM的语义分块处理
+    
+    Args:
+        text_input: 输入文本内容（必填）
+        model_type: 模型类型（用户必填，默认使用全局MODEL_TYPE）
+        ds_base_url: 模型服务URL（用户必填，默认使用全局DS_BASE_URL）
+        temperature: 温度参数（可选，默认使用全局TEMPERATURE）
+        max_tokens: 最大Token数（可选，默认使用全局MAX_TOKENS）
+        num_workers: 工作进程数（对单个文本处理不使用，保留参数以保持接口一致性）
+    
+    Returns:
+        dict: {"success": bool, "splits": [[text], ...], "time_cost": float, "message": str}
+    """
+    try:
+        result = process_context_with_params(text_input, None, model_type, ds_base_url, temperature, max_tokens)
+        
+        return {
+            "success": True,
+            "splits": result['splits'],
+            "time_cost": result['time_cost'],
+            "message": f"Successfully chunked text into {len(result['splits'])} splits"
+        }
+    
+    except Exception as e:
+        print(f"Error processing text: {e}")
+        return {
+            "success": False,
+            "splits": [],
+            "time_cost": 0,
+            "message": f"Error: {str(e)}"
+        }
 
 
 def main():

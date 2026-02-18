@@ -19,12 +19,24 @@ def create_directory(path):
         print(f"Created directory: {path}")
 
 
-def init_parser():
-    cache_dir = "/data/h50056789/Rag_Chunking/tiktoken_cache" 
-    os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir
+def init_parser(chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP, cache_dir: str = None):
+    """
+    初始化解析器
+    
+    Args:
+        chunk_size: 分块大小（可选，默认使用全局CHUNK_SIZE）
+        chunk_overlap: 分块重叠大小（可选，默认使用全局CHUNK_OVERLAP）
+        cache_dir: tiktoken缓存目录（可选，默认不设置）
+    
+    Returns:
+        SimpleNodeParser: 配置好的解析器实例
+    """
+    if cache_dir is not None:
+        os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir
+    
     return SimpleNodeParser.from_defaults(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap
     )
 
 
@@ -37,7 +49,10 @@ def process_context(context_text, doc_id, parser):
     splits = []
     for node in nodes:
         node_text = node.text if hasattr(node, 'text') else node.get_content()
-        splits.append([node_text, doc_id])
+        if doc_id:
+            splits.append([node_text, doc_id])
+        else:
+            splits.append([node_text])
     
     end_time = time.time()
     
@@ -65,6 +80,115 @@ def process_line(line_data):
     except Exception as e:
         print(f"Error processing line: {e}")
         return None
+
+
+def chunk_file(input_file: str, output_dir: str, chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP, num_workers: int = NUM_WORKERS, cache_dir: str = None):
+    """
+    对文件进行分块处理
+    
+    Args:
+        input_file: 输入文件路径（必填）
+        output_dir: 输出目录路径（必填）
+        chunk_size: 分块大小（可选，默认使用全局CHUNK_SIZE）
+        chunk_overlap: 分块重叠大小（可选，默认使用全局CHUNK_OVERLAP）
+        num_workers: 工作进程数（可选，默认使用全局NUM_WORKERS）
+        cache_dir: tiktoken缓存目录（可选，默认不设置）
+    
+    Returns:
+        dict: {"success": bool, "output_file": str, "message": str}
+    """
+    try:
+        create_directory(output_dir)
+
+        with open(input_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        parser = init_parser(chunk_size=chunk_size, chunk_overlap=chunk_overlap, cache_dir=cache_dir)
+        
+        def process_line_with_parser(line_data):
+            try:
+                data = json.loads(line_data)
+                doc_id = data.get('_id', '')
+                context = data.get('context', '')
+                
+                if not context:
+                    return None
+                return process_context(context, doc_id, parser)
+            except Exception as e:
+                print(f"Error processing line: {e}")
+                return None
+        
+        with multiprocessing.Pool(processes=num_workers) as pool:
+            results = []
+            for result in tqdm(pool.imap_unordered(process_line_with_parser, lines), total=len(lines)):
+                if result:
+                    results.append(result)
+        
+        all_splits = []
+        total_time = 0
+        for result in results:
+            all_splits.extend(result['splits'])
+            total_time += result['time_cost']
+        
+        output_data = {
+            "filepath": input_file,
+            "splits": all_splits,
+            "time_cost": total_time
+        }
+        
+        input_basename = os.path.basename(input_file).replace('.jsonl', '')
+        output_file = os.path.join(output_dir, f"{input_basename}_llamaindex_chunk.json")
+        with open(output_file, "w", encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+
+        return {
+            "success": True,
+            "output_file": output_file,
+            "message": f"Successfully processed {len(results)} documents with {len(all_splits)} splits"
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "output_file": "",
+            "message": f"Error: {str(e)}"
+        }
+
+
+def chunk_text(text_input: str, chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP, num_workers: int = NUM_WORKERS, cache_dir: str = None):
+    """
+    对文本进行分块处理
+    
+    Args:
+        text_input: 输入文本内容（必填）
+        chunk_size: 分块大小（可选，默认使用全局CHUNK_SIZE）
+        chunk_overlap: 分块重叠大小（可选，默认使用全局CHUNK_OVERLAP）
+        num_workers: 工作进程数（对单个文本处理不使用，保留参数以保持接口一致性）
+        cache_dir: tiktoken缓存目录（可选，默认不设置）
+    
+    Returns:
+        dict: {"success": bool, "splits": [[text], ...], "time_cost": float, "message": str}
+    """
+    try:
+        parser = init_parser(chunk_size=chunk_size, chunk_overlap=chunk_overlap, cache_dir=cache_dir)
+        
+        result = process_context(text_input, None, parser)
+        
+        return {
+            "success": True,
+            "splits": result['splits'],
+            "time_cost": result['time_cost'],
+            "message": f"Successfully chunked text into {len(result['splits'])} splits"
+        }
+    
+    except Exception as e:
+        print(f"Error processing text: {e}")
+        return {
+            "success": False,
+            "splits": [],
+            "time_cost": 0,
+            "message": f"Error: {str(e)}"
+        }
 
 
 def main():

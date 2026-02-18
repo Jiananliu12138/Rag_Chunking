@@ -31,6 +31,16 @@ def init_splitter():
     return splitter
 
 
+def init_splitter_with_params(embed_model_path=EMBED_MODEL_PATH, buffer_size=BUFFER_SIZE, breakpoint_threshold=BREAKPOINT_THRESHOLD):
+    embed_model = HuggingFaceEmbedding(model_name=embed_model_path)
+    splitter = SemanticSplitterNodeParser(
+        buffer_size=buffer_size,
+        breakpoint_percentile_threshold=breakpoint_threshold,
+        embed_model=embed_model
+    )
+    return splitter
+
+
 def process_context(context_text, doc_id, splitter):
     start_time = time.time()
     
@@ -40,7 +50,10 @@ def process_context(context_text, doc_id, splitter):
     splits = []
     for node in nodes:
         node_text = node.text if hasattr(node, 'text') else node.get_content()
-        splits.append([node_text, doc_id])
+        if doc_id:
+            splits.append([node_text, doc_id])
+        else:
+            splits.append([node_text])
     
     end_time = time.time()
     
@@ -68,6 +81,120 @@ def process_line(line_data):
     except Exception as e:
         print(f"Error processing line: {e}")
         return None
+
+
+def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_MODEL_PATH, buffer_size: int = BUFFER_SIZE, breakpoint_threshold: int = BREAKPOINT_THRESHOLD, num_workers: int = NUM_WORKERS):
+    """
+    对文件进行语义分块处理
+    
+    Args:
+        input_file: 输入文件路径（必填）
+        output_dir: 输出目录路径（必填）
+        embed_model_path: 嵌入模型路径（可选，默认使用全局EMBED_MODEL_PATH）
+        buffer_size: 缓冲区大小（可选，默认使用全局BUFFER_SIZE）
+        breakpoint_threshold: 断点阈值（可选，默认使用全局BREAKPOINT_THRESHOLD）
+        num_workers: 工作进程数（可选，默认使用全局NUM_WORKERS）
+    
+    Returns:
+        dict: {"success": bool, "output_file": str, "message": str}
+    """
+    try:
+        create_directory(output_dir)
+        
+        with open(input_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        splitter = init_splitter_with_params(embed_model_path=embed_model_path, buffer_size=buffer_size, breakpoint_threshold=breakpoint_threshold)
+        
+        def process_line_with_params(line_data):
+            try:
+                data = json.loads(line_data)
+                doc_id = data.get('_id', '')
+                context = data.get('context', '')
+                
+                if not context:
+                    return None
+                
+                return process_context(context, doc_id, splitter)
+            except Exception as e:
+                print(f"Error processing line: {e}")
+                return None
+        
+        with multiprocessing.Pool(processes=num_workers) as pool:
+            results = []
+            for result in tqdm(pool.imap_unordered(process_line_with_params, lines), total=len(lines)):
+                if result:
+                    results.append(result)
+        
+        all_splits = []
+        total_time = 0
+        for result in results:
+            all_splits.extend(result['splits'])
+            total_time += result['time_cost']
+        
+        output_data = {
+            "filepath": input_file,
+            "splits": all_splits,
+            "time_cost": total_time
+        }
+        
+        input_basename = os.path.basename(input_file).replace('.jsonl', '')
+        output_file = os.path.join(output_dir, f"{input_basename}_semantic_chunk.json")
+        with open(output_file, "w", encoding='utf-8') as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"\nProcessed {len(results)} documents")
+        print(f"Total splits: {len(all_splits)}")
+        print(f"Results saved to: {output_file}")
+        
+        return {
+            "success": True,
+            "output_file": output_file,
+            "message": f"Successfully processed {len(results)} documents with {len(all_splits)} splits"
+        }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "output_file": "",
+            "message": f"Error: {str(e)}"
+        }
+
+
+def chunk_text(text_input: str, embed_model_path: str = EMBED_MODEL_PATH, buffer_size: int = BUFFER_SIZE, breakpoint_threshold: int = BREAKPOINT_THRESHOLD, num_workers: int = NUM_WORKERS):
+    """
+    对文本进行语义分块处理
+    
+    Args:
+        text_input: 输入文本内容（必填）
+        embed_model_path: 嵌入模型路径（可选，默认使用全局EMBED_MODEL_PATH）
+        buffer_size: 缓冲区大小（可选，默认使用全局BUFFER_SIZE）
+        breakpoint_threshold: 断点阈值（可选，默认使用全局BREAKPOINT_THRESHOLD）
+        num_workers: 工作进程数（对单个文本处理不使用，保留参数以保持接口一致性）
+    
+    Returns:
+        dict: {"success": bool, "splits": [[text], ...], "time_cost": float, "message": str}
+    """
+    try:
+        splitter = init_splitter_with_params(embed_model_path=embed_model_path, buffer_size=buffer_size, breakpoint_threshold=breakpoint_threshold)
+        
+        result = process_context(text_input, None, splitter)
+        
+        return {
+            "success": True,
+            "splits": result['splits'],
+            "time_cost": result['time_cost'],
+            "message": f"Successfully chunked text into {len(result['splits'])} splits"
+        }
+    
+    except Exception as e:
+        print(f"Error processing text: {e}")
+        return {
+            "success": False,
+            "splits": [],
+            "time_cost": 0,
+            "message": f"Error: {str(e)}"
+        }
 
 
 def main():
