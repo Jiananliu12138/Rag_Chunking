@@ -184,9 +184,9 @@ class BaseRetrieverLite(ABC):
                 filtered_labels.append(chunk_label)
                 continue
             
-            if len(chunk_text.split(' ')) < 10:
-                filtered_labels.append(chunk_label)
-                continue
+            # if len(chunk_text.split(' ')) < 10:
+            #     filtered_labels.append(chunk_label)
+            #     continue
             
             node1 = Node(text=chunk_text)
             nodes.append(node1)
