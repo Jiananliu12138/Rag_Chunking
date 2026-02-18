@@ -17,6 +17,8 @@ class TokenChunkParams(BaseModel):
     chunk_overlap_token_size: int = Field(100, ge=0, description="相邻块的重叠 token 数")
     split_by_character: Optional[str] = Field("\n\n", description="优先在该字符处切割")
     split_by_character_only: bool = Field(False, description="仅在指定字符处切割")
+    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
+    cache_dir: Optional[str] = Field(None, description="tiktoken 缓存目录")
 
 
 # ── Semantic 分块参数 ─────────────────────────────────────────────────────────
@@ -25,6 +27,7 @@ class SemanticChunkParams(BaseModel):
     embed_model_path: str = Field(..., description="HuggingFace 嵌入模型本地路径")
     buffer_size: int = Field(1, ge=1, description="SemanticSplitter 缓冲句子数")
     breakpoint_percentile_threshold: int = Field(74, ge=1, le=99, description="语义断点百分位阈值")
+    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
 
 
 # ── LlamaIndex 分块参数 ───────────────────────────────────────────────────────
@@ -32,6 +35,8 @@ class SemanticChunkParams(BaseModel):
 class LlamaIndexChunkParams(BaseModel):
     chunk_size: int = Field(512, ge=32, description="每个块的最大字符/token 数")
     chunk_overlap: int = Field(50, ge=0, description="相邻块重叠大小")
+    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
+    cache_dir: Optional[str] = Field(None, description="tiktoken 缓存目录")
 
 
 # ── Lumber 分块参数 ───────────────────────────────────────────────────────────
@@ -41,11 +46,12 @@ class LumberChunkParams(BaseModel):
     model_type: str = Field("Qwen2.5-7B-Instruct", description="模型名称")
     temperature: float = Field(0.2, ge=0.0, le=2.0)
     max_tokens: int = Field(3072, ge=128)
+    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
 
 
-# ── 请求 / 响应 ───────────────────────────────────────────────────────────────
+# ── 文本分块请求 ─────────────────────────────────────────────────────────────
 
-class ChunkRequest(BaseModel):
+class ChunkTextRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
@@ -106,12 +112,33 @@ class ChunkRequest(BaseModel):
     lumber_params: Optional[LumberChunkParams] = None
 
 
-class ChunkResult(BaseModel):
-    chunks: list[str] = Field(..., description="分块后的文本列表")
-    chunk_count: int = Field(..., description="分块数量")
-    method: ChunkMethod
+class ChunkTextResult(BaseModel):
+    """与 Chunking_Methods 各模块 chunk_text 返回格式一致。"""
+    success: bool = Field(..., description="是否成功")
+    splits: list[list[str]] = Field(..., description="分块结果，每项为 [text] 或 [text, doc_id]")
     time_cost: float = Field(..., description="耗时（秒）")
+    message: str = Field(..., description="结果说明")
 
+
+# ── 文件分块请求 / 响应 ───────────────────────────────────────────────────────
+
+class ChunkFileRequest(BaseModel):
+    method: ChunkMethod = Field(ChunkMethod.TOKEN, description="分块方法")
+    input_file: str = Field(..., description="输入文件路径（如 .jsonl）")
+    output_dir: str = Field(..., description="输出目录路径")
+    token_params: Optional[TokenChunkParams] = None
+    semantic_params: Optional[SemanticChunkParams] = None
+    llamaindex_params: Optional[LlamaIndexChunkParams] = None
+    lumber_params: Optional[LumberChunkParams] = None
+
+
+class ChunkFileResult(BaseModel):
+    success: bool = Field(..., description="是否成功")
+    output_file: str = Field(..., description="输出文件路径")
+    message: str = Field(..., description="结果说明")
+
+
+# ── 方法列表 ─────────────────────────────────────────────────────────────────
 
 class ChunkMethodInfo(BaseModel):
     name: ChunkMethod

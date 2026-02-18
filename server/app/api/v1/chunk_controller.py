@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.exceptions import ChunkingException, to_http_exception
 from app.schemas.chunk_schema import (
     ChunkMethod,
+    ChunkFileRequest,
+    ChunkFileResult,
     ChunkMethodInfo,
-    ChunkRequest,
-    ChunkResult,
+    ChunkTextRequest,
+    ChunkTextResult,
     LlamaIndexChunkParams,
     LumberChunkParams,
     SemanticChunkParams,
@@ -41,28 +43,54 @@ def _get_chunk_service() -> ChunkService:
 
 
 @router.post(
-    "/chunk",
-    response_model=BaseResponse[ChunkResult],
-    summary="对文本执行分块",
+    "/chunk-file",
+    response_model=BaseResponse[ChunkFileResult],
+    summary="对文件执行分块",
     description=(
-        "对输入文本执行指定的分块策略，返回分块结果。\n\n"
+        "对本地 jsonl 文件执行指定方法的分块，结果写入输出目录。\n\n"
         "支持四种方法：\n"
-        "- **token**：基于 tiktoken 的固定 Token 大小分块（默认），"
-        "支持 `split_by_character` 优先按字符切割、`chunk_overlap_token_size` 滑动窗口重叠\n"
-        "- **semantic**：基于 HuggingFace 嵌入模型计算句间语义相似度，在相似度骤降处切割\n"
-        "- **llamaindex**：LlamaIndex `SimpleNodeParser` 固定窗口分块\n"
-        "- **lumber**：调用 vLLM API，由 LLM 识别文档主题转换边界进行内容感知分块\n\n"
-        "**注意**：semantic 方法须提供 `semantic_params.embed_model_path`；"
-        "lumber 方法须提供 `lumber_params` 且对应 vLLM 服务已启动。"
+        "- **token**：基于 tiktoken 的固定 Token 大小分块（默认）\n"
+        "- **semantic**：基于 HuggingFace 嵌入模型语义相似度切割\n"
+        "- **llamaindex**：LlamaIndex SimpleNodeParser 固定窗口分块\n"
+        "- **lumber**：调用 vLLM API 识别主题转换边界分块\n\n"
+        "返回格式：success, output_file, message。"
     ),
     responses={422: _ERR_422, 500: _ERR_500},
 )
-def chunk_text(
-    request: ChunkRequest,
+def chunk_file_endpoint(
+    request: ChunkFileRequest,
     service: Annotated[ChunkService, Depends(_get_chunk_service)],
-) -> BaseResponse[ChunkResult]:
+) -> BaseResponse[ChunkFileResult]:
     try:
-        result = service.chunk(request)
+        result = service.chunk_file(request)
+        return BaseResponse.ok(result)
+    except ChunkingException as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/chunk-text",
+    response_model=BaseResponse[ChunkTextResult],
+    summary="对文本执行分块",
+    description=(
+        "对传入文本执行指定方法的分块。\n\n"
+        "支持四种方法：\n"
+        "- **token**：基于 tiktoken 的固定 Token 大小分块（默认）\n"
+        "- **semantic**：基于 HuggingFace 嵌入模型语义相似度切割\n"
+        "- **llamaindex**：LlamaIndex SimpleNodeParser 固定窗口分块\n"
+        "- **lumber**：调用 vLLM API 识别主题转换边界分块\n\n"
+        "返回格式与 Chunking_Methods 各模块一致：success, splits（每项 [text]）, time_cost, message。"
+    ),
+    responses={422: _ERR_422, 500: _ERR_500},
+)
+def chunk_text_endpoint(
+    request: ChunkTextRequest,
+    service: Annotated[ChunkService, Depends(_get_chunk_service)],
+) -> BaseResponse[ChunkTextResult]:
+    try:
+        result = service.chunk_text(request)
         return BaseResponse.ok(result)
     except ChunkingException as exc:
         raise to_http_exception(exc)
@@ -76,7 +104,7 @@ def chunk_text(
     summary="获取所有可用分块方法",
     description=(
         "返回当前支持的所有分块方法列表及其完整参数 JSON Schema。\n\n"
-        "可用于前端动态渲染表单，或在调用 `/chunk` 前确认各方法所需参数。"
+        "可用于前端动态渲染表单，或在调用分块接口前确认各方法所需参数。"
     ),
 )
 def list_methods() -> BaseResponse[list[ChunkMethodInfo]]:
