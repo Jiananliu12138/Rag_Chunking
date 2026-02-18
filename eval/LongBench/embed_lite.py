@@ -7,13 +7,13 @@ from embeddings.base import HuggingfaceEmbeddings
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056787/workspaces/lightrag/tiktoken_cache"
+os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache"
 
 class Config:
     EMBEDDING_NAME = '/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5'
     EMBEDDING_DIM = 1024
-    DOCS_PATH = '/data/h50056789/Rag_Chunking/MoC/our_metrics/test_data/Qwen3-4B_0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt.json'
-    COLLECTION_NAME = "test_chunks"
+    DOCS_PATH = '/data/h50056789/Rag_Chunking/Chunk_Result/Lumber_Chunk/2wikimqa_lumber_chunk_Qwen2.5-7B-Instruct.json'
+    COLLECTION_NAME = "lumber_chunk"
     MILVUS_DATA_DIR = '/data/h50056789/Rag_Chunking/milvus_data'
 
 async def main():

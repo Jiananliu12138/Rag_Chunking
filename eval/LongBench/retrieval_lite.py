@@ -14,16 +14,17 @@ import torch
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056787/workspaces/lightrag/tiktoken_cache"
+cache_dir = "/data/h50056789/Rag_Chunking/tiktoken_cache" 
+os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir
 
 class Config:
-    DATA_PATH = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_data.jsonl'
-    SAVE_DIR = '/data/h50056789/Rag_Chunking/eval/LongBench'
+    DATA_PATH = '/data/h50056789/Rag_Chunking/QA_corpus/2wikimqa_qa.jsonl'
+    SAVE_DIR = '/data/h50056789/Rag_Chunking/Retrival_Result'
 
     EMBEDDING_NAME = '/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5'
     EMBEDDING_DIM = 1024
 
-    COLLECTION_NAME = "test_chunks"
+    COLLECTION_NAME = "lumber_chunk"
     RETRIEVE_TOP_K = 5
     
     MILVUS_DATA_DIR = '/data/h50056789/Rag_Chunking/milvus_data'

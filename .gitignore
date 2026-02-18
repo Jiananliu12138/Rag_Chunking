@@ -82,6 +82,7 @@ volumes
 ragas_cache/
 Corpus/
 Chunk_Result/
+Retrival_Result/
 eval/LongBench/dataset/
 QA_corpus/*.json
 QA_corpus/*.jsonl
