@@ -18,7 +18,7 @@ os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056787/workspaces/lightrag/tiktoken
 
 class Config:
     DATA_PATH = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_data.jsonl'
-    SAVE_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json'
+    SAVE_DIR = '/data/h50056789/Rag_Chunking/eval/LongBench'
 
     EMBEDDING_NAME = '/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5'
     EMBEDDING_DIM = 1024
@@ -219,12 +219,16 @@ async def main():
         logger.error(f"找不到数据文件: {Config.DATA_PATH}")
         return
 
-    os.makedirs(os.path.dirname(Config.SAVE_FILE), exist_ok=True)
+    os.makedirs(Config.SAVE_DIR, exist_ok=True)
     
-    with open(Config.SAVE_FILE, 'w', encoding='utf-8') as json_file:
+    data_basename = os.path.basename(Config.DATA_PATH).replace('.jsonl', '')
+    save_filename = f"{data_basename}_{Config.COLLECTION_NAME}.json"
+    save_filepath = os.path.join(Config.SAVE_DIR, save_filename)
+    
+    with open(save_filepath, 'w', encoding='utf-8') as json_file:
         json.dump(retrieval_save_list, json_file, indent=4, ensure_ascii=False)
 
-    logger.info(f"\n✅ 评估完成！结果已保存到 {Config.SAVE_FILE}")
+    logger.info(f"\n✅ 评估完成！结果已保存到 {save_filepath}")
 
 if __name__ == "__main__":
     # 解决事件循环问题
