@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import logging
 from base_lite import BaseRetrieverLite
 from embeddings.base import HuggingfaceEmbeddings
@@ -15,7 +16,7 @@ class Config:
     COLLECTION_NAME = "test_chunks"
     MILVUS_DATA_DIR = '/data/h50056789/Rag_Chunking/milvus_data'
 
-def main():
+async def main():
     logger.info("开始构建向量索引...")
     logger.info(f"文档路径: {Config.DOCS_PATH}")
     logger.info(f"Collection: {Config.COLLECTION_NAME}")
@@ -46,4 +47,4 @@ if __name__ == "__main__":
     except ImportError:
         pass
 
-    main()
+    asyncio.run(main())

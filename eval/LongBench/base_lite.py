@@ -106,43 +106,38 @@ class BaseRetrieverLite(ABC):
         3. {"filepath": "...", "splits": [["chunk1", label1], ...], "time_cost": ...}
         4. {"final_chunks": ["chunk1", "chunk2", ...]}
         5. [{"name": "...", "final_chunks": ["chunk1", ...]}, ...]
+        
+        返回：[{"text": "chunk1", "label": label1}, ...]
         """
         chunks = []
         
-        # 格式1: 简单列表 ["chunk1", "chunk2", ...]
         if isinstance(data, list) and len(data) > 0 and isinstance(data[0], str):
-            chunks = data
+            chunks = [{"text": chunk, "label": None} for chunk in data]
             print(f"[Milvus] 检测到格式: 简单列表")
         
-        # 格式2: 列表嵌套 [["chunk1", label1], ["chunk2", label2], ...]
         elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
-            chunks = [item[0] if isinstance(item, list) and len(item) > 0 else item for item in data]
+            chunks = [{"text": item[0], "label": item[1] if len(item) > 1 else None} for item in data if isinstance(item, list) and len(item) > 0]
             print(f"[Milvus] 检测到格式: 列表嵌套（提取第一个元素）")
         
-        # 格式3: 字典格式 {"filepath": "...", "splits": [...], ...}
         elif isinstance(data, dict):
             if "splits" in data:
                 splits = data["splits"]
                 if isinstance(splits, list) and len(splits) > 0:
                     if isinstance(splits[0], list):
-                        # splits 是 [["chunk", label], ...]
-                        chunks = [item[0] if isinstance(item, list) and len(item) > 0 else item for item in splits]
+                        chunks = [{"text": item[0], "label": item[1] if len(item) > 1 else None} for item in splits if isinstance(item, list) and len(item) > 0]
                         print(f"[Milvus] 检测到格式: 字典+splits（列表嵌套）")
                     elif isinstance(splits[0], str):
-                        # splits 是 ["chunk1", "chunk2", ...]
-                        chunks = splits
+                        chunks = [{"text": chunk, "label": None} for chunk in splits]
                         print(f"[Milvus] 检测到格式: 字典+splits（简单列表）")
             
-            # 格式4: {"final_chunks": ["chunk1", ...]}
             elif "final_chunks" in data:
-                chunks = data["final_chunks"]
+                chunks = [{"text": chunk, "label": None} for chunk in data["final_chunks"]]
                 print(f"[Milvus] 检测到格式: 字典+final_chunks")
         
-        # 格式5: [{"name": "...", "final_chunks": [...]}, ...]
         elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
             for item in data:
                 if "final_chunks" in item:
-                    chunks.extend(item["final_chunks"])
+                    chunks.extend([{"text": chunk, "label": None} for chunk in item["final_chunks"]])
             print(f"[Milvus] 检测到格式: 列表+字典+final_chunks")
         
         else:
@@ -180,19 +175,25 @@ class BaseRetrieverLite(ABC):
             print(f"{'-'*60}")
         
         # 创建节点并过滤短文本
-        for chunk_text in chunks:
-            # 跳过非字符串类型
+        filtered_labels = []
+        for chunk_item in chunks:
+            chunk_text = chunk_item["text"]
+            chunk_label = chunk_item["label"]
+            
             if not isinstance(chunk_text, str):
+                filtered_labels.append(chunk_label)
                 continue
             
-            # 英语：按空格分词，汉语：len(chunk_text)<10
             if len(chunk_text.split(' ')) < 10:
+                filtered_labels.append(chunk_label)
                 continue
             
             node1 = Node(text=chunk_text)
             nodes.append(node1)
         
         print(f"\n[Milvus] 过滤后剩余 {len(nodes)} 个有效文本块")
+        if filtered_labels:
+            print(f"[Milvus] 过滤了，labels: {filtered_labels[:5]}{'...' if len(filtered_labels) > 5 else ''}")
         
         # 包装嵌入模型
         self.embed_model = LangchainEmbedding(self.embed_model)
