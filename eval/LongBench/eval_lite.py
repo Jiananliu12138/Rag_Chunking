@@ -14,9 +14,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class Config:
-    # 评估配置
     PREDICTION_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json'
-    OUTPUT_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/eval_results.json'
+    OUTPUT_DIR = '/data/h50056789/Rag_Chunking/eval/LongBench'
 
 class Evaluator:
     def __init__(self, config):
@@ -144,28 +143,29 @@ class Evaluator:
         logger.info("Final Evaluation Results:")
         print(json.dumps(final_results, indent=4))
         
-        os.makedirs(os.path.dirname(self.config.OUTPUT_FILE), exist_ok=True)
+        os.makedirs(self.config.OUTPUT_DIR, exist_ok=True)
         
-        # 如果文件已存在，尝试读取并合并（保留 RAGAS 结果）
-        if os.path.exists(self.config.OUTPUT_FILE):
+        pred_basename = os.path.basename(self.config.PREDICTION_FILE).replace('.json', '')
+        output_filename = f"{pred_basename}_traditional_eval.json"
+        output_filepath = os.path.join(self.config.OUTPUT_DIR, output_filename)
+        
+        if os.path.exists(output_filepath):
             try:
-                with open(self.config.OUTPUT_FILE, 'r', encoding='utf-8') as f:
+                with open(output_filepath, 'r', encoding='utf-8') as f:
                     existing_results = json.load(f)
-                    # 只更新传统指标，保留 RAGAS 指标
                     existing_results.update(final_results)
                     final_results = existing_results
             except:
                 pass
 
-        with open(self.config.OUTPUT_FILE, 'w', encoding='utf-8') as f:
-            # 将 numpy 类型转换为 float
+        with open(output_filepath, 'w', encoding='utf-8') as f:
             def convert(o):
                 if isinstance(o, np.float32) or isinstance(o, np.float64):
                     return float(o)
                 raise TypeError
             json.dump(final_results, f, indent=4, default=convert)
             
-        logger.info(f"Results saved to {self.config.OUTPUT_FILE}")
+        logger.info(f"Results saved to {output_filepath}")
 
 if __name__ == '__main__':
     evaluator = Evaluator(Config)

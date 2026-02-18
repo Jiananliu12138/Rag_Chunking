@@ -381,25 +381,26 @@ if __name__ == "__main__":
     except ImportError:
         print("⚠️ nest_asyncio 未安装，如果遇到事件循环问题请安装: pip install nest_asyncio")
     
-    # 配置参数
     INPUT_FILE = "/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json"
-    OUTPUT_FILE = "/data/h50056789/Rag_Chunking/eval/LongBench/ragas_eval_results.json"
+    OUTPUT_DIR = "/data/h50056789/Rag_Chunking/eval/LongBench"
     VLLM_API = "http://localhost:8005/v1"
     EMBEDDING_MODEL = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
     DEVICE = "cuda:1"
     CACHE_DIR = "./ragas_cache"
     
+    input_basename = os.path.basename(INPUT_FILE).replace('.json', '')
+    output_file = os.path.join(OUTPUT_DIR, f"{input_basename}_ragas_eval.json")
+    
     print("\n" + "="*70)
     print("RAGAS 评估器启动")
     print("="*70)
     print(f"输入文件: {INPUT_FILE}")
-    print(f"输出文件: {OUTPUT_FILE}")
+    print(f"输出文件: {output_file}")
     print(f"vLLM API: {VLLM_API}")
     print(f"Embedding 模型: {EMBEDDING_MODEL}")
     print(f"设备: {DEVICE}")
     print("="*70 + "\n")
     
-    # 初始化评估器
     evaluator = RAGASEvaluator(
         vllm_api_base=VLLM_API,
         embedding_model_path=EMBEDDING_MODEL,
@@ -408,10 +409,9 @@ if __name__ == "__main__":
         cache_dir=CACHE_DIR
     )
     
-    # 从文件评估
     results = evaluator.evaluate_from_file(
         input_json_path=INPUT_FILE,
-        output_json_path=OUTPUT_FILE
+        output_json_path=output_file
     )
     
     print("\n" + "="*70)

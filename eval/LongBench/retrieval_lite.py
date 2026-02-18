@@ -6,6 +6,7 @@ import os
 import json
 import asyncio
 import logging
+from tqdm import tqdm
 from base_lite import BaseRetrieverLite
 from embeddings.base import HuggingfaceEmbeddings
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -178,43 +179,48 @@ async def main():
     try:
         with open(Config.DATA_PATH, 'r', encoding='utf-8') as file:  
             lines = file.readlines()
-            
-        total_lines = len(lines)
-        for i, line in enumerate(lines, 1): 
-            data = json.loads(line) 
-            try:
-                print(f"处理进度: {i}/{total_lines}", end='\r')
-                
-                response_vector = retriever.search_docs(data['input'])
-                
-                source_nodes = response_vector.source_nodes
-                context_texts = [node.node.get_content() for node in source_nodes]
-                context_str = "\n\n".join(context_texts)
-                
-                prompt = (
-                    "Context information is below.\n"
-                    "---------------------\n"
-                    f"{context_str}\n"
-                    "---------------------\n"
-                    "Given the context information and not prior knowledge, answer the query.\n"
-                    f"Query: {data['input']}\n"
-                    "Answer:"
-                )
-                
-                llm_ans = llm.request(prompt)
-                save = {}
-                save['_id'] = data['_id']
-                save['input'] = data['input']   
-                save['llm_ans'] = llm_ans
-                save['answers'] = data['answers']
-                save['retrieval_list'] = context_texts 
-                retrieval_save_list.append(save)
-                
-            except Exception as e:
-                logger.error(f"\n处理单条数据失败 (ID: {data.get('_id', 'unknown')}): {e}")
-                import traceback
-                traceback.print_exc()
-                pass
+        
+        with tqdm(total=len(lines), desc="检索+生成", unit="问题") as pbar:
+            for line in lines: 
+                data = json.loads(line) 
+                try:
+                    pbar.set_postfix({
+                        "ID": data['_id'],
+                        "Query": data['input'][:10] + "..." if len(data['input']) > 30 else data['input']
+                    })
+                    
+                    response_vector = retriever.search_docs(data['input'])
+                    
+                    source_nodes = response_vector.source_nodes
+                    context_texts = [node.node.get_content() for node in source_nodes]
+                    context_str = "\n\n".join(context_texts)
+                    
+                    prompt = (
+                        "Context information is below.\n"
+                        "---------------------\n"
+                        f"{context_str}\n"
+                        "---------------------\n"
+                        "Given the context information and not prior knowledge, answer the query.\n"
+                        f"Query: {data['input']}\n"
+                        "Answer:"
+                    )
+                    
+                    llm_ans = llm.request(prompt)
+                    save = {}
+                    save['_id'] = data['_id']
+                    save['input'] = data['input']   
+                    save['llm_ans'] = llm_ans
+                    save['answers'] = data['answers']
+                    save['retrieval_list'] = context_texts
+                    retrieval_save_list.append(save)
+                    
+                    pbar.update(1)
+                    
+                except Exception as e:
+                    logger.error(f"\n处理单条数据失败 (ID: {data.get('_id', 'unknown')}): {e}")
+                    import traceback
+                    traceback.print_exc()
+                    pbar.update(1)
 
     except FileNotFoundError:
         logger.error(f"找不到数据文件: {Config.DATA_PATH}")
@@ -225,6 +231,8 @@ async def main():
     data_basename = os.path.basename(Config.DATA_PATH).replace('.jsonl', '')
     save_filename = f"{data_basename}_{Config.COLLECTION_NAME}.json"
     save_filepath = os.path.join(Config.SAVE_DIR, save_filename)
+    
+    logger.info(f"\n保存结果文件: {save_filename}")
     
     with open(save_filepath, 'w', encoding='utf-8') as json_file:
         json.dump(retrieval_save_list, json_file, indent=4, ensure_ascii=False)
