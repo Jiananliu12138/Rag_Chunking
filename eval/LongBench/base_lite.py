@@ -43,8 +43,8 @@ class BaseRetrieverLite(ABC):
     
     def __init__(
             self, 
-            docs_directory: str, 
-            embed_model: Embeddings,
+            docs_directory: str = "", 
+            embed_model: Embeddings = None,
             embed_dim: int = 768,
             chunk_size: int = 128,
             chunk_overlap: int = 0,
