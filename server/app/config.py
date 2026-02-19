@@ -44,7 +44,12 @@ class Settings(BaseSettings):
     # ── 检索默认配置 ─────────────────────────────────────────────
     DEFAULT_RETRIEVE_TOP_K: int = 5
 
-    # ── 分块默认配置 ─────────────────────────────────────────────
+    # ── 分块 / tiktoken 默认配置 ─────────────────────────────────
+    # 从环境变量中读取对应值（.env 中写 TIKTOKEN_CACHE_DIR / CHUNK_NUM_WORKERS 即可）
+    TIKTOKEN_CACHE_DIR: str = ""
+    CHUNK_NUM_WORKERS: int = 4
+
+    # ── 分块其他默认配置 ─────────────────────────────────────────
     DEFAULT_CHUNK_SIZE: int = 512
     DEFAULT_CHUNK_OVERLAP: int = 50
     DEFAULT_TOKEN_CHUNK_SIZE: int = 1200

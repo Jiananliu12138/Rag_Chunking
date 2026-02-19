@@ -31,8 +31,8 @@ class ChunkService:
         logger.info("开始文本分块，方法=%s，文本长度=%d", request.method, len(request.text))
 
         settings = get_settings()
-        default_workers = int(os.getenv("CHUNK_NUM_WORKERS", "4"))
-        cache_dir = os.getenv("TIKTOKEN_CACHE_DIR") or None
+        default_workers = settings.CHUNK_NUM_WORKERS
+        cache_dir = settings.TIKTOKEN_CACHE_DIR or None
 
         if request.method == ChunkMethod.TOKEN:
             from lightrag_token_chunk import chunk_text as _chunk_text
@@ -140,8 +140,8 @@ class ChunkService:
         logger.info("开始文件分块，方法=%s，输入=%s", request.method, request.input_file)
 
         settings = get_settings()
-        default_workers = int(os.getenv("CHUNK_NUM_WORKERS", "4"))
-        cache_dir = os.getenv("TIKTOKEN_CACHE_DIR") or None
+        default_workers = settings.CHUNK_NUM_WORKERS
+        cache_dir = settings.TIKTOKEN_CACHE_DIR or None
 
         if request.method == ChunkMethod.TOKEN:
             from lightrag_token_chunk import chunk_file as _chunk_file  # noqa: PLC0415
