@@ -64,7 +64,7 @@ def _get_index_service() -> IndexService:
     ),
     responses={422: _ERR_422, 500: _ERR_500},
 )
-def build_index(
+async def build_index(
     request: IndexBuildRequest,
     service: Annotated[IndexService, Depends(_get_index_service)],
 ) -> BaseResponse[IndexBuildResult]:
@@ -89,7 +89,7 @@ def build_index(
     ),
     responses={422: _ERR_422, 500: _ERR_500},
 )
-def add_index(
+async def add_index(
     request: IndexAddRequest,
     service: Annotated[IndexService, Depends(_get_index_service)],
 ) -> BaseResponse[IndexAddResult]:

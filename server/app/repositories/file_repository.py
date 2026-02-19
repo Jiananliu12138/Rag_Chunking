@@ -45,33 +45,50 @@ class FileRepository:
     def parse_chunks_from_json(data: Any) -> list[str]:
         """
         兼容现有流水线的多种 JSON 分块格式，统一返回字符串列表。
-        支持格式：
-          1. ["chunk1", "chunk2", ...]
-          2. [["chunk1", label], ...]
-          3. {"splits": [["chunk1", label], ...], ...}
-          4. {"final_chunks": ["chunk1", ...]}
-          5. [{"final_chunks": ["chunk1", ...]}, ...]
+        支持格式与 index_service 原 _parse_chunks_from_json 一致。
         """
-        if isinstance(data, list):
-            if data and isinstance(data[0], str):
-                return data
-            if data and isinstance(data[0], list):
-                return [item[0] for item in data if isinstance(item, list) and item]
-            if data and isinstance(data[0], dict):
-                chunks: list[str] = []
-                for item in data:
-                    if "final_chunks" in item:
-                        chunks.extend(item["final_chunks"])
-                return chunks
+        chunks: list[str] = []
 
-        if isinstance(data, dict):
+        # 1. ["chunk1", "chunk2", ...]
+        if isinstance(data, list) and data and isinstance(data[0], str):
+            chunks = [chunk for chunk in data if isinstance(chunk, str)]
+
+        # 2. [["chunk1", label1], ["chunk2", label2], ...]
+        elif isinstance(data, list) and data and isinstance(data[0], list):
+            for item in data:
+                if isinstance(item, list) and item:
+                    text = item[0]
+                    if isinstance(text, str):
+                        chunks.append(text)
+
+        # 3/4. {"splits": [...]} 或 {"final_chunks": [...]}
+        elif isinstance(data, dict):
             if "splits" in data:
                 splits = data["splits"]
-                if splits and isinstance(splits[0], list):
-                    return [s[0] for s in splits if s]
-                if splits and isinstance(splits[0], str):
-                    return splits
-            if "final_chunks" in data:
-                return data["final_chunks"]
+                if isinstance(splits, list) and splits:
+                    if isinstance(splits[0], list):
+                        for item in splits:
+                            if isinstance(item, list) and item:
+                                text = item[0]
+                                if isinstance(text, str):
+                                    chunks.append(text)
+                    elif isinstance(splits[0], str):
+                        chunks = [chunk for chunk in splits if isinstance(chunk, str)]
 
-        raise ValueError(f"不支持的分块 JSON 格式: {type(data)}")
+            elif "final_chunks" in data and isinstance(data["final_chunks"], list):
+                chunks = [
+                    chunk for chunk in data["final_chunks"] if isinstance(chunk, str)
+                ]
+
+        # 5. [{"name": "...", "final_chunks": [...]}, ...]
+        elif isinstance(data, list) and data and isinstance(data[0], dict):
+            for item in data:
+                if "final_chunks" in item and isinstance(item["final_chunks"], list):
+                    for chunk in item["final_chunks"]:
+                        if isinstance(chunk, str):
+                            chunks.append(chunk)
+
+        else:
+            raise ValueError(f"不支持的分块 JSON 格式: {type(data)}")
+
+        return chunks

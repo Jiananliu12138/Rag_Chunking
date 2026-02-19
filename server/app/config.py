@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent  # F:\thesis\Meta-Chunk
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file="F:\thesis\Meta-Chunking\.env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # ── 路径 ─────────────────────────────────────────────────────
     MILVUS_DATA_DIR: str = str(BASE_DIR / "milvus_data")
+    MILVUS_URI: str = ""
     CHUNKING_METHODS_DIR: str = str(BASE_DIR / "Chunking_Methods")
     EVAL_LONGBENCH_DIR: str = str(BASE_DIR / "eval" / "LongBench")
     MOC_METRICS_DIR: str = str(BASE_DIR / "MoC" / "our_metrics")

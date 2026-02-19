@@ -4,7 +4,6 @@
 """
 from functools import lru_cache
 
-from app.config import get_settings
 from app.repositories.milvus_repository import MilvusRepository
 from app.services.chunk_service import ChunkService
 from app.services.component_eval_service import ComponentEvalService
@@ -15,8 +14,7 @@ from app.services.retrieval_service import RetrievalService
 
 @lru_cache
 def get_milvus_repository() -> MilvusRepository:
-    settings = get_settings()
-    return MilvusRepository(milvus_data_dir=settings.MILVUS_DATA_DIR)
+    return MilvusRepository()
 
 
 def get_chunk_service() -> ChunkService:

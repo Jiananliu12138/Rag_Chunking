@@ -1,7 +1,3 @@
-"""
-分块服务层。
-将各种分块算法统一封装，对外暴露 chunk_text / chunk_file 接口。
-"""
 import os
 
 from app.config import get_settings
@@ -53,7 +49,7 @@ class ChunkService:
             raw = _chunk_text(**kwargs)
 
         elif request.method == ChunkMethod.SEMANTIC:
-            from semantic_chunk import chunk_text as _chunk_text  # noqa: PLC0415
+            from semantic_chunk import chunk_text as _chunk_text  
 
             p = request.semantic_params
             model_path = (
@@ -99,8 +95,6 @@ class ChunkService:
             model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_VLLM_MODEL_NAME
             if not model_type:
                 raise ChunkingException("DEFAULT_VLLM_MODEL_NAME 未配置，无法进行 Lumber 分块")
-
-            # DEFAULT_VLLM_API_BASE 通常形如 http://host:port/v1
             base = p.llm_api_base if p and p.llm_api_base else settings.DEFAULT_VLLM_API_BASE
             ds_base_url = base.rsplit("/v1", 1)[0] if base.endswith("/v1") else base
 
@@ -144,7 +138,7 @@ class ChunkService:
         cache_dir = settings.TIKTOKEN_CACHE_DIR or None
 
         if request.method == ChunkMethod.TOKEN:
-            from lightrag_token_chunk import chunk_file as _chunk_file  # noqa: PLC0415
+            from lightrag_token_chunk import chunk_file as _chunk_file  
 
             kwargs = {
                 "input_file": request.input_file,
@@ -163,7 +157,7 @@ class ChunkService:
             raw = _chunk_file(**kwargs)
 
         elif request.method == ChunkMethod.SEMANTIC:
-            from semantic_chunk import chunk_file as _chunk_file  # noqa: PLC0415
+            from semantic_chunk import chunk_file as _chunk_file  
 
             p = request.semantic_params
             model_path = (

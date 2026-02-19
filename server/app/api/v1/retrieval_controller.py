@@ -11,6 +11,8 @@ from app.core.exceptions import (
 from app.repositories.milvus_repository import MilvusRepository
 from app.schemas.common import BaseResponse
 from app.schemas.retrieval_schema import (
+    RAGGenerateFileRequest,
+    RAGGenerateFileResult,
     RAGRequest,
     RAGResult,
     SearchRequest,
@@ -92,6 +94,32 @@ def rag_generate(
     try:
         result = service.rag_generate(request)
         return BaseResponse.ok(result)
+    except (CollectionNotFoundException, ModelLoadException, RetrievalException) as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/generate-file",
+    response_model=BaseResponse[RAGGenerateFileResult],
+    summary="RAG 文件批处理（检索+生成）",
+    description=(
+        "仿照 eval/LongBench/retrieval_lite.py：从 **jsonl 文件** 读入问题列表，逐条执行检索与 vLLM 生成，"
+        "结果写入 **JSON 文件**。\n\n"
+        "**输入**：每行一个 JSON，需含 `input`（或 `query`）作为检索查询，以及 `_id`、`answers` 等。\n"
+        "**输出**：单个 JSON 数组，每项为 `{_id, input, llm_ans, answers, retrieval_list}`。\n\n"
+        "嵌入模型、vLLM 地址/模型名等未填时从配置（.env）读取。"
+    ),
+    responses={404: _ERR_404, 500: _ERR_500},
+)
+def rag_generate_file(
+    request: RAGGenerateFileRequest,
+    service: Annotated[RetrievalService, Depends(_get_retrieval_service)],
+) -> BaseResponse[RAGGenerateFileResult]:
+    try:
+        result = service.rag_generate_file(request)
+        return BaseResponse.ok(result, message="RAG 文件生成完成")
     except (CollectionNotFoundException, ModelLoadException, RetrievalException) as exc:
         raise to_http_exception(exc)
     except Exception as exc:

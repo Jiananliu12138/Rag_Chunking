@@ -67,3 +67,24 @@ class RAGResult(BaseModel):
     answer: str
     contexts: list[str] = Field(..., description="检索到的上下文文本列表")
     collection_name: str
+
+
+class RAGGenerateFileRequest(BaseModel):
+    """文件输入输出的 RAG 生成：读 jsonl，逐条检索+生成，结果写 json。"""
+    input_path: str = Field(..., description="输入 jsonl 路径，每行 JSON 含 input（查询）及 _id、answers 等")
+    output_path: str = Field(..., description="输出 JSON 文件路径，保存列表 [{_id, input, llm_ans, answers, retrieval_list}, ...]")
+    collection_name: str = Field(..., description="目标 collection 名称")
+    embed_model_path: Optional[str] = Field(None, description="嵌入模型路径，空则从配置读取")
+    embed_dim: Optional[int] = Field(None, ge=64, description="嵌入维度，空则从配置读取")
+    top_k: int = Field(5, ge=1, le=100, description="检索 top-k")
+    llm_api_base: Optional[str] = Field(None, description="vLLM API 地址，空则从配置读取")
+    llm_model_name: Optional[str] = Field(None, description="LLM 模型名，空则从配置读取")
+    temperature: float = Field(0.1, ge=0.0, le=2.0, description="生成温度")
+    max_new_tokens: int = Field(1280, ge=64, description="最大生成 token 数")
+
+
+class RAGGenerateFileResult(BaseModel):
+    output_file: str = Field(..., description="结果文件路径")
+    total_processed: int = Field(..., description="成功处理条数")
+    total_failed: int = Field(0, description="失败条数")
+    message: str = Field(..., description="说明")

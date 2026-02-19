@@ -2,11 +2,10 @@
 向量索引服务层。
 负责嵌入模型加载、向量索引构建与 collection 管理。
 """
-import json
-
 from app.config import get_settings
 from app.core.exceptions import IndexBuildException, ModelLoadException
 from app.core.logging_config import logger
+from app.repositories.file_repository import FileRepository
 from app.repositories.milvus_repository import MilvusRepository
 from app.schemas.index_schema import (
     CollectionInfo,
@@ -47,70 +46,18 @@ class IndexService:
 
     # ── 内部：从分块结果 JSON 中解析文本块 ─────────────────────────────────────
 
-    @staticmethod
-    def _parse_chunks_from_json(data: object) -> list[str]:
-        """
-        从不同格式的 JSON 中提取文本块。
-
-        逻辑对齐 eval/LongBench/base_lite.py::_parse_chunks_from_json，
-        但这里只返回纯文本 list[str]。
-        """
-        chunks: list[str] = []
-
-        # 1. ["chunk1", "chunk2", ...]
-        if isinstance(data, list) and data and isinstance(data[0], str):
-            chunks = [chunk for chunk in data if isinstance(chunk, str)]
-
-        # 2. [["chunk1", label1], ["chunk2", label2], ...]
-        elif isinstance(data, list) and data and isinstance(data[0], list):
-            for item in data:
-                if isinstance(item, list) and item:
-                    text = item[0]
-                    if isinstance(text, str):
-                        chunks.append(text)
-
-        # 3/4. {"splits": [...]} 或 {"final_chunks": [...]}
-        elif isinstance(data, dict):
-            if "splits" in data:
-                splits = data["splits"]
-                if isinstance(splits, list) and splits:
-                    if isinstance(splits[0], list):
-                        for item in splits:
-                            if isinstance(item, list) and item:
-                                text = item[0]
-                                if isinstance(text, str):
-                                    chunks.append(text)
-                    elif isinstance(splits[0], str):
-                        chunks = [chunk for chunk in splits if isinstance(chunk, str)]
-
-            elif "final_chunks" in data and isinstance(data["final_chunks"], list):
-                chunks = [
-                    chunk for chunk in data["final_chunks"] if isinstance(chunk, str)
-                ]
-
-        # 5. [{"name": "...", "final_chunks": [...]}, ...]
-        elif isinstance(data, list) and data and isinstance(data[0], dict):
-            for item in data:
-                if "final_chunks" in item and isinstance(item["final_chunks"], list):
-                    for chunk in item["final_chunks"]:
-                        if isinstance(chunk, str):
-                            chunks.append(chunk)
-
-        else:
-            raise IndexBuildException(f"不支持的分块 JSON 格式: {type(data)}")
-
-        return chunks
-
     @classmethod
     def _load_chunks_from_file(cls, docs_path: str) -> list[str]:
         """从分块结果 JSON 文件中加载文本块列表。"""
         try:
-            with open(docs_path, "r", encoding="utf-8") as f:
-                raw = json.load(f)
+            raw = FileRepository.read_json(docs_path)
         except Exception as exc:
             raise IndexBuildException(f"读取分块结果文件失败 ({docs_path}): {exc}") from exc
 
-        chunks = cls._parse_chunks_from_json(raw)
+        try:
+            chunks = FileRepository.parse_chunks_from_json(raw)
+        except ValueError as exc:
+            raise IndexBuildException(str(exc)) from exc
         if not chunks:
             raise IndexBuildException(f"分块结果文件中未解析到任何文本块: {docs_path}")
         logger.info("从分块文件解析到 %d 个文本块", len(chunks))
