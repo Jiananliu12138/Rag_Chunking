@@ -4,6 +4,7 @@ import re
 import requests
 import os
 import multiprocessing
+from functools import partial
 from tqdm import tqdm
 
 # 配置
@@ -270,6 +271,24 @@ def process_line(line_data):
         return None
 
 
+def _process_line_with_params(line_data, model_type, ds_base_url, temperature, max_tokens):
+    """
+    模块级函数，用于 multiprocessing，避免 pickle 局部函数的问题。
+    """
+    try:
+        data = json.loads(line_data)
+        doc_id = data.get('_id', '')
+        context = data.get('context', '')
+        
+        if not context:
+            return None
+        
+        return process_context_with_params(context, doc_id, model_type, ds_base_url, temperature, max_tokens)
+    except Exception as e:
+        print(f"Error processing line: {e}")
+        return None
+
+
 def chunk_file(input_file: str, output_dir: str, model_type: str = MODEL_TYPE, ds_base_url: str = DS_BASE_URL, temperature: float = TEMPERATURE, max_tokens: int = MAX_TOKENS, num_workers: int = NUM_WORKERS):
     """
     对文件进行基于LLM的语义分块处理
@@ -292,23 +311,18 @@ def chunk_file(input_file: str, output_dir: str, model_type: str = MODEL_TYPE, d
         with open(input_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
-        def process_line_with_params(line_data):
-            try:
-                data = json.loads(line_data)
-                doc_id = data.get('_id', '')
-                context = data.get('context', '')
-                
-                if not context:
-                    return None
-                
-                return process_context_with_params(context, doc_id, model_type, ds_base_url, temperature, max_tokens)
-            except Exception as e:
-                print(f"Error processing line: {e}")
-                return None
+        # 使用 functools.partial 绑定参数，避免 pickle 局部函数的问题
+        process_func = partial(
+            _process_line_with_params,
+            model_type=model_type,
+            ds_base_url=ds_base_url,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
         
         with multiprocessing.Pool(processes=num_workers) as pool:
             results = []
-            for result in tqdm(pool.imap_unordered(process_line_with_params, lines), total=len(lines)):
+            for result in tqdm(pool.imap_unordered(process_func, lines), total=len(lines)):
                 if result:
                     results.append(result)
         

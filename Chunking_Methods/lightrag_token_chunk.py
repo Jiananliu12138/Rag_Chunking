@@ -2,6 +2,7 @@ import json
 import time
 import os
 import multiprocessing
+from functools import partial
 from typing import Any
 from tqdm import tqdm
 import tiktoken
@@ -153,6 +154,24 @@ def process_line(line_data):
         return None
 
 
+def _process_line_with_params(line_data, tokenizer, split_by_character, split_by_character_only, chunk_overlap_token_size, chunk_token_size):
+    """
+    模块级函数，用于 multiprocessing，避免 pickle 局部函数的问题。
+    """
+    try:
+        data = json.loads(line_data)
+        doc_id = data.get('_id', '')
+        context = data.get('context', '')
+        
+        if not context:
+            return None
+        
+        return process_context_with_params(context, doc_id, tokenizer, split_by_character, split_by_character_only, chunk_overlap_token_size, chunk_token_size)
+    except Exception as e:
+        print(f"Error processing line: {e}")
+        return None
+
+
 def chunk_file(input_file: str, output_dir: str, chunk_token_size: int = CHUNK_TOKEN_SIZE, chunk_overlap_token_size: int = CHUNK_OVERLAP_TOKEN_SIZE, split_by_character: str = SPLIT_BY_CHARACTER, split_by_character_only: bool = SPLIT_BY_CHARACTER_ONLY, num_workers: int = NUM_WORKERS, cache_dir: str = None):
     """
     对文件进行基于Token的分块处理
@@ -178,23 +197,19 @@ def chunk_file(input_file: str, output_dir: str, chunk_token_size: int = CHUNK_T
         
         tokenizer = init_tokenizer_with_params(cache_dir=cache_dir)
         
-        def process_line_with_params(line_data):
-            try:
-                data = json.loads(line_data)
-                doc_id = data.get('_id', '')
-                context = data.get('context', '')
-                
-                if not context:
-                    return None
-                
-                return process_context_with_params(context, doc_id, tokenizer, split_by_character, split_by_character_only, chunk_overlap_token_size, chunk_token_size)
-            except Exception as e:
-                print(f"Error processing line: {e}")
-                return None
+        # 使用 functools.partial 绑定参数，避免 pickle 局部函数的问题
+        process_func = partial(
+            _process_line_with_params,
+            tokenizer=tokenizer,
+            split_by_character=split_by_character,
+            split_by_character_only=split_by_character_only,
+            chunk_overlap_token_size=chunk_overlap_token_size,
+            chunk_token_size=chunk_token_size
+        )
         
         with multiprocessing.Pool(processes=num_workers) as pool:
             results = []
-            for result in tqdm(pool.imap_unordered(process_line_with_params, lines), total=len(lines)):
+            for result in tqdm(pool.imap_unordered(process_func, lines), total=len(lines)):
                 if result:
                     results.append(result)
         

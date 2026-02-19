@@ -2,6 +2,7 @@ import json
 import time
 import os
 import multiprocessing
+from functools import partial
 from tqdm import tqdm
 from llama_index.core.node_parser import SemanticSplitterNodeParser
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -83,6 +84,24 @@ def process_line(line_data):
         return None
 
 
+def _process_line_with_params(line_data, splitter):
+    """
+    模块级函数，用于 multiprocessing，避免 pickle 局部函数的问题。
+    """
+    try:
+        data = json.loads(line_data)
+        doc_id = data.get('_id', '')
+        context = data.get('context', '')
+        
+        if not context:
+            return None
+        
+        return process_context(context, doc_id, splitter)
+    except Exception as e:
+        print(f"Error processing line: {e}")
+        return None
+
+
 def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_MODEL_PATH, buffer_size: int = BUFFER_SIZE, breakpoint_threshold: int = BREAKPOINT_THRESHOLD, num_workers: int = NUM_WORKERS):
     """
     对文件进行语义分块处理
@@ -106,23 +125,12 @@ def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_M
         
         splitter = init_splitter_with_params(embed_model_path=embed_model_path, buffer_size=buffer_size, breakpoint_threshold=breakpoint_threshold)
         
-        def process_line_with_params(line_data):
-            try:
-                data = json.loads(line_data)
-                doc_id = data.get('_id', '')
-                context = data.get('context', '')
-                
-                if not context:
-                    return None
-                
-                return process_context(context, doc_id, splitter)
-            except Exception as e:
-                print(f"Error processing line: {e}")
-                return None
+        # 使用 functools.partial 绑定 splitter，避免 pickle 局部函数的问题
+        process_func = partial(_process_line_with_params, splitter=splitter)
         
         with multiprocessing.Pool(processes=num_workers) as pool:
             results = []
-            for result in tqdm(pool.imap_unordered(process_line_with_params, lines), total=len(lines)):
+            for result in tqdm(pool.imap_unordered(process_func, lines), total=len(lines)):
                 if result:
                     results.append(result)
         
