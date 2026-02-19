@@ -14,6 +14,8 @@ from app.schemas.index_schema import (
     CollectionListResult,
     IndexBuildRequest,
     IndexBuildResult,
+    IndexAddRequest,
+    IndexAddResult,
 )
 from app.services.index_service import IndexService
 
@@ -31,7 +33,7 @@ _ERR_422 = {
     "description": "请求参数校验失败",
     "content": {
         "application/json": {
-            "example": {"success": False, "message": "chunks 列表不能为空", "data": None}
+            "example": {"success": False, "message": "docs_path 不能为空或文件格式不合法", "data": None}
         }
     },
 }
@@ -54,11 +56,9 @@ def _get_index_service() -> IndexService:
     response_model=BaseResponse[IndexBuildResult],
     summary="构建向量索引",
     description=(
-        "将文本块列表嵌入为向量并写入 Milvus Lite 本地数据库。\n\n"
+        "从分块结果 JSON 文件中加载文本块，嵌入为向量并写入 Milvus（本地 Lite 或在线）数据库。\n\n"
         "**存储规则**：每个 collection 对应 `milvus_data/<collection_name>.db` 文件。\n\n"
         "**参数说明**：\n"
-        "- `overwrite=true`：先清空旧数据再写入（默认），适合重建索引\n"
-        "- `overwrite=false`：追加写入，适合增量更新\n"
         "- `batch_size`：每批写入节点数，建议 100–500；过大可能导致内存问题\n\n"
         "**前置条件**：`embed_model_path` 指向本地 HuggingFace 嵌入模型目录（如 `bge-large-en-v1.5`）。"
     ),
@@ -71,6 +71,31 @@ def build_index(
     try:
         result = service.build_index(request)
         return BaseResponse.ok(result, message="索引构建成功")
+    except (IndexBuildException, ModelLoadException) as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/add",
+    response_model=BaseResponse[IndexAddResult],
+    summary="向已有索引追加数据",
+    description=(
+        "从分块结果 JSON 文件中加载文本块，并向已有 collection 追加向量数据。\n\n"
+        "**适用场景**：已存在初始索引，希望在不重建的情况下增量更新。\n\n"
+        "**注意**：collection 必须已通过 `/index/build` 构建；"
+        "追加的数据会与原有数据一起参与后续检索。"
+    ),
+    responses={422: _ERR_422, 500: _ERR_500},
+)
+def add_index(
+    request: IndexAddRequest,
+    service: Annotated[IndexService, Depends(_get_index_service)],
+) -> BaseResponse[IndexAddResult]:
+    try:
+        result = service.add_index(request)
+        return BaseResponse.ok(result, message="索引追加成功")
     except (IndexBuildException, ModelLoadException) as exc:
         raise to_http_exception(exc)
     except Exception as exc:

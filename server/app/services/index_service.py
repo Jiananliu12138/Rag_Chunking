@@ -2,6 +2,8 @@
 向量索引服务层。
 负责嵌入模型加载、向量索引构建与 collection 管理。
 """
+import json
+
 from app.core.exceptions import IndexBuildException, ModelLoadException
 from app.core.logging_config import logger
 from app.repositories.milvus_repository import MilvusRepository
@@ -10,6 +12,8 @@ from app.schemas.index_schema import (
     CollectionListResult,
     IndexBuildRequest,
     IndexBuildResult,
+    IndexAddRequest,
+    IndexAddResult,
 )
 
 
@@ -40,23 +44,125 @@ class IndexService:
         except Exception as exc:
             raise ModelLoadException(f"嵌入模型加载失败 ({embed_model_path}): {exc}") from exc
 
+    # ── 内部：从分块结果 JSON 中解析文本块 ─────────────────────────────────────
+
+    @staticmethod
+    def _parse_chunks_from_json(data: object) -> list[str]:
+        """
+        从不同格式的 JSON 中提取文本块。
+
+        逻辑对齐 eval/LongBench/base_lite.py::_parse_chunks_from_json，
+        但这里只返回纯文本 list[str]。
+        """
+        chunks: list[str] = []
+
+        # 1. ["chunk1", "chunk2", ...]
+        if isinstance(data, list) and data and isinstance(data[0], str):
+            chunks = [chunk for chunk in data if isinstance(chunk, str)]
+
+        # 2. [["chunk1", label1], ["chunk2", label2], ...]
+        elif isinstance(data, list) and data and isinstance(data[0], list):
+            for item in data:
+                if isinstance(item, list) and item:
+                    text = item[0]
+                    if isinstance(text, str):
+                        chunks.append(text)
+
+        # 3/4. {"splits": [...]} 或 {"final_chunks": [...]}
+        elif isinstance(data, dict):
+            if "splits" in data:
+                splits = data["splits"]
+                if isinstance(splits, list) and splits:
+                    if isinstance(splits[0], list):
+                        for item in splits:
+                            if isinstance(item, list) and item:
+                                text = item[0]
+                                if isinstance(text, str):
+                                    chunks.append(text)
+                    elif isinstance(splits[0], str):
+                        chunks = [chunk for chunk in splits if isinstance(chunk, str)]
+
+            elif "final_chunks" in data and isinstance(data["final_chunks"], list):
+                chunks = [
+                    chunk for chunk in data["final_chunks"] if isinstance(chunk, str)
+                ]
+
+        # 5. [{"name": "...", "final_chunks": [...]}, ...]
+        elif isinstance(data, list) and data and isinstance(data[0], dict):
+            for item in data:
+                if "final_chunks" in item and isinstance(item["final_chunks"], list):
+                    for chunk in item["final_chunks"]:
+                        if isinstance(chunk, str):
+                            chunks.append(chunk)
+
+        else:
+            raise IndexBuildException(f"不支持的分块 JSON 格式: {type(data)}")
+
+        return chunks
+
+    @classmethod
+    def _load_chunks_from_file(cls, docs_path: str) -> list[str]:
+        """从分块结果 JSON 文件中加载文本块列表。"""
+        try:
+            with open(docs_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+        except Exception as exc:
+            raise IndexBuildException(f"读取分块结果文件失败 ({docs_path}): {exc}") from exc
+
+        chunks = cls._parse_chunks_from_json(raw)
+        if not chunks:
+            raise IndexBuildException(f"分块结果文件中未解析到任何文本块: {docs_path}")
+        logger.info("从分块文件解析到 %d 个文本块", len(chunks))
+        return chunks
+
     # ── 公开接口 ──────────────────────────────────────────────────────────────
 
     def build_index(self, request: IndexBuildRequest) -> IndexBuildResult:
         logger.info(
-            "构建索引请求: collection=%s，块数=%d",
-            request.collection_name, len(request.chunks),
+            "构建索引请求: collection=%s，docs_path=%s",
+            request.collection_name,
+            request.docs_path,
         )
+        chunks = self._load_chunks_from_file(request.docs_path)
         embed_model = self._load_langchain_embed(request.embed_model_path)
         info = self._repo.build_index(
             collection_name=request.collection_name,
-            chunks=request.chunks,
+            chunks=chunks,
             langchain_embed=embed_model,
             embed_dim=request.embed_dim,
-            overwrite=request.overwrite,
+            # build_index 语义固定为“重建/首次构建”，总是覆盖已有 collection
+            overwrite=True,
             batch_size=request.batch_size,
         )
         return IndexBuildResult(**info)
+
+    def add_index(self, request: IndexAddRequest) -> IndexAddResult:
+        """
+        向已有索引中追加数据。
+
+        输入语义与 build_index 相同：使用 docs_path 指向分块结果 JSON，
+        但底层调用 MilvusRepository.add_index（overwrite 固定为 False）。
+        """
+        logger.info(
+            "追加索引请求: collection=%s，docs_path=%s",
+            request.collection_name,
+            request.docs_path,
+        )
+        chunks = self._load_chunks_from_file(request.docs_path)
+        embed_model = self._load_langchain_embed(request.embed_model_path)
+        info = self._repo.add_index(
+            collection_name=request.collection_name,
+            chunks=chunks,
+            langchain_embed=embed_model,
+            embed_dim=request.embed_dim,
+            batch_size=request.batch_size,
+        )
+        return IndexAddResult(
+            collection_name=info["collection_name"],
+            added_chunks=info["added_chunks"],
+            time_cost=info["time_cost"],
+            milvus_uri=info["milvus_uri"],
+        )
 
     def list_collections(self) -> CollectionListResult:
         raw = self._repo.list_collections()
