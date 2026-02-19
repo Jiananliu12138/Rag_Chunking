@@ -2,6 +2,9 @@
 分块服务层。
 将各种分块算法统一封装，对外暴露 chunk_text / chunk_file 接口。
 """
+import os
+
+from app.config import get_settings
 from app.core.path_setup import ensure_paths
 from app.core.exceptions import ChunkingException
 from app.core.logging_config import logger
@@ -27,10 +30,18 @@ class ChunkService:
         ensure_paths()
         logger.info("开始文本分块，方法=%s，文本长度=%d", request.method, len(request.text))
 
+        settings = get_settings()
+        default_workers = int(os.getenv("CHUNK_NUM_WORKERS", "4"))
+        cache_dir = os.getenv("TIKTOKEN_CACHE_DIR") or None
+
         if request.method == ChunkMethod.TOKEN:
             from lightrag_token_chunk import chunk_text as _chunk_text
 
-            kwargs = {"text_input": request.text}
+            kwargs = {
+                "text_input": request.text,
+                "num_workers": default_workers,
+                "cache_dir": cache_dir,
+            }
             if request.token_params:
                 p = request.token_params
                 kwargs.update(
@@ -38,49 +49,75 @@ class ChunkService:
                     chunk_overlap_token_size=p.chunk_overlap_token_size,
                     split_by_character=p.split_by_character,
                     split_by_character_only=p.split_by_character_only,
-                    cache_dir=p.cache_dir,
                 )
             raw = _chunk_text(**kwargs)
 
         elif request.method == ChunkMethod.SEMANTIC:
-            if not request.semantic_params:
-                raise ChunkingException("语义分块需要提供 semantic_params（含 embed_model_path）")
             from semantic_chunk import chunk_text as _chunk_text  # noqa: PLC0415
 
             p = request.semantic_params
+            model_path = (
+                (p.embed_model_path if p and p.embed_model_path else None)
+                or settings.DEFAULT_EMBEDDING_MODEL
+            )
+            if not model_path:
+                raise ChunkingException("DEFAULT_EMBEDDING_MODEL 未配置，无法进行语义分块")
+
+            buffer_size = p.buffer_size if p else 1
+            breakpoint_threshold = (
+                p.breakpoint_percentile_threshold if p else 74
+            )
             kwargs = {
                 "text_input": request.text,
-                "embed_model_path": p.embed_model_path,
-                "buffer_size": p.buffer_size,
-                "breakpoint_threshold": p.breakpoint_percentile_threshold,
+                "embed_model_path": model_path,
+                "buffer_size": buffer_size,
+                "breakpoint_threshold": breakpoint_threshold,
+                "num_workers": default_workers,
             }
             raw = _chunk_text(**kwargs)
 
         elif request.method == ChunkMethod.LLAMAINDEX:
             from chunk_llamaindex import chunk_text as _chunk_text  # noqa: PLC0415
 
-            kwargs = {"text_input": request.text}
+            kwargs = {
+                "text_input": request.text,
+                "num_workers": default_workers,
+                "cache_dir": cache_dir,
+            }
             if request.llamaindex_params:
                 p = request.llamaindex_params
                 kwargs.update(
                     chunk_size=p.chunk_size,
                     chunk_overlap=p.chunk_overlap,
-                    cache_dir=p.cache_dir,
                 )
             raw = _chunk_text(**kwargs)
 
         elif request.method == ChunkMethod.LUMBER:
-            if not request.lumber_params:
-                raise ChunkingException("Lumber 分块需要提供 lumber_params")
-            from lumber_chunk import chunk_text as _chunk_text  
+            from lumber_chunk import chunk_text as _chunk_text  # noqa: PLC0415
 
             p = request.lumber_params
+            model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_VLLM_MODEL_NAME
+            if not model_type:
+                raise ChunkingException("DEFAULT_VLLM_MODEL_NAME 未配置，无法进行 Lumber 分块")
+
+            # DEFAULT_VLLM_API_BASE 通常形如 http://host:port/v1
+            base = p.llm_api_base if p and p.llm_api_base else settings.DEFAULT_VLLM_API_BASE
+            ds_base_url = base.rsplit("/v1", 1)[0] if base.endswith("/v1") else base
+
+            temperature = (
+                p.temperature if p and p.temperature is not None else settings.DEFAULT_LLM_TEMPERATURE
+            )
+            max_tokens = (
+                p.max_tokens if p and p.max_tokens is not None else settings.DEFAULT_LLM_MAX_TOKENS
+            )
+
             kwargs = {
                 "text_input": request.text,
-                "model_type": p.model_type,
-                "ds_base_url": p.llm_api_base,
-                "temperature": p.temperature,
-                "max_tokens": p.max_tokens,
+                "model_type": model_type,
+                "ds_base_url": ds_base_url,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "num_workers": default_workers,
             }
             raw = _chunk_text(**kwargs)
 
@@ -102,12 +139,18 @@ class ChunkService:
         ensure_paths()
         logger.info("开始文件分块，方法=%s，输入=%s", request.method, request.input_file)
 
+        settings = get_settings()
+        default_workers = int(os.getenv("CHUNK_NUM_WORKERS", "4"))
+        cache_dir = os.getenv("TIKTOKEN_CACHE_DIR") or None
+
         if request.method == ChunkMethod.TOKEN:
             from lightrag_token_chunk import chunk_file as _chunk_file  # noqa: PLC0415
 
             kwargs = {
                 "input_file": request.input_file,
                 "output_dir": request.output_dir,
+                "num_workers": default_workers,
+                "cache_dir": cache_dir,
             }
             if request.token_params:
                 p = request.token_params
@@ -116,26 +159,32 @@ class ChunkService:
                     chunk_overlap_token_size=p.chunk_overlap_token_size,
                     split_by_character=p.split_by_character,
                     split_by_character_only=p.split_by_character_only,
-                    num_workers=p.num_workers,
-                    cache_dir=p.cache_dir,
                 )
             raw = _chunk_file(**kwargs)
 
         elif request.method == ChunkMethod.SEMANTIC:
             from semantic_chunk import chunk_file as _chunk_file  # noqa: PLC0415
 
+            p = request.semantic_params
+            model_path = (
+                (p.embed_model_path if p and p.embed_model_path else None)
+                or settings.DEFAULT_EMBEDDING_MODEL
+            )
+            if not model_path:
+                raise ChunkingException("DEFAULT_EMBEDDING_MODEL 未配置，无法进行语义文件分块")
+
+            buffer_size = p.buffer_size if p else 1
+            breakpoint_threshold = (
+                p.breakpoint_percentile_threshold if p else 74
+            )
             kwargs = {
                 "input_file": request.input_file,
                 "output_dir": request.output_dir,
+                "embed_model_path": model_path,
+                "buffer_size": buffer_size,
+                "breakpoint_threshold": breakpoint_threshold,
+                "num_workers": default_workers,
             }
-            if request.semantic_params:
-                p = request.semantic_params
-                kwargs.update(
-                    embed_model_path=p.embed_model_path,
-                    buffer_size=p.buffer_size,
-                    breakpoint_threshold=p.breakpoint_percentile_threshold,
-                    num_workers=p.num_workers,
-                )
             raw = _chunk_file(**kwargs)
 
         elif request.method == ChunkMethod.LLAMAINDEX:
@@ -144,33 +193,44 @@ class ChunkService:
             kwargs = {
                 "input_file": request.input_file,
                 "output_dir": request.output_dir,
+                "num_workers": default_workers,
+                "cache_dir": cache_dir,
             }
             if request.llamaindex_params:
                 p = request.llamaindex_params
                 kwargs.update(
                     chunk_size=p.chunk_size,
                     chunk_overlap=p.chunk_overlap,
-                    num_workers=p.num_workers,
-                    cache_dir=p.cache_dir,
                 )
             raw = _chunk_file(**kwargs)
 
         elif request.method == ChunkMethod.LUMBER:
             from lumber_chunk import chunk_file as _chunk_file  # noqa: PLC0415
 
+            p = request.lumber_params
+            model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_VLLM_MODEL_NAME
+            if not model_type:
+                raise ChunkingException("DEFAULT_VLLM_MODEL_NAME 未配置，无法进行 Lumber 文件分块")
+
+            base = p.llm_api_base if p and p.llm_api_base else settings.DEFAULT_VLLM_API_BASE
+            ds_base_url = base.rsplit("/v1", 1)[0] if base.endswith("/v1") else base
+
+            temperature = (
+                p.temperature if p and p.temperature is not None else settings.DEFAULT_LLM_TEMPERATURE
+            )
+            max_tokens = (
+                p.max_tokens if p and p.max_tokens is not None else settings.DEFAULT_LLM_MAX_TOKENS
+            )
+
             kwargs = {
                 "input_file": request.input_file,
                 "output_dir": request.output_dir,
+                "model_type": model_type,
+                "ds_base_url": ds_base_url,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "num_workers": default_workers,
             }
-            if request.lumber_params:
-                p = request.lumber_params
-                kwargs.update(
-                    model_type=p.model_type,
-                    ds_base_url=p.llm_api_base,
-                    temperature=p.temperature,
-                    max_tokens=p.max_tokens,
-                    num_workers=p.num_workers,
-                )
             raw = _chunk_file(**kwargs)
 
         else:

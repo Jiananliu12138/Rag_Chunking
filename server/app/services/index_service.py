@@ -4,6 +4,7 @@
 """
 import json
 
+from app.config import get_settings
 from app.core.exceptions import IndexBuildException, ModelLoadException
 from app.core.logging_config import logger
 from app.repositories.milvus_repository import MilvusRepository
@@ -124,13 +125,16 @@ class IndexService:
             request.docs_path,
         )
         chunks = self._load_chunks_from_file(request.docs_path)
-        embed_model = self._load_langchain_embed(request.embed_model_path)
+        settings = get_settings()
+        model_path = settings.DEFAULT_EMBEDDING_MODEL
+        embed_dim = settings.DEFAULT_EMBEDDING_DIM
+
+        embed_model = self._load_langchain_embed(model_path)
         info = self._repo.build_index(
             collection_name=request.collection_name,
             chunks=chunks,
             langchain_embed=embed_model,
-            embed_dim=request.embed_dim,
-            # build_index 语义固定为“重建/首次构建”，总是覆盖已有 collection
+            embed_dim=embed_dim,
             overwrite=True,
             batch_size=request.batch_size,
         )
@@ -149,12 +153,16 @@ class IndexService:
             request.docs_path,
         )
         chunks = self._load_chunks_from_file(request.docs_path)
-        embed_model = self._load_langchain_embed(request.embed_model_path)
+        settings = get_settings()
+        model_path = settings.DEFAULT_EMBEDDING_MODEL
+        embed_dim = settings.DEFAULT_EMBEDDING_DIM
+
+        embed_model = self._load_langchain_embed(model_path)
         info = self._repo.add_index(
             collection_name=request.collection_name,
             chunks=chunks,
             langchain_embed=embed_model,
-            embed_dim=request.embed_dim,
+            embed_dim=embed_dim,
             batch_size=request.batch_size,
         )
         return IndexAddResult(

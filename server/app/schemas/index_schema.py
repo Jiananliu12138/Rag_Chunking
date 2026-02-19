@@ -10,8 +10,6 @@ class IndexBuildRequest(BaseModel):
             "example": {
                 "collection_name": "lumber_chunk",
                 "docs_path": "/path/to/chunk_result.json",
-                "embed_model_path": "/path/to/bge-large-en-v1.5",
-                "embed_dim": 1024,
                 "batch_size": 100,
             }
         }
@@ -26,8 +24,6 @@ class IndexBuildRequest(BaseModel):
             "格式参考 eval/LongBench/base_lite.py::_parse_chunks_from_json。"
         ),
     )
-    embed_model_path: str = Field(..., description="嵌入模型路径（HuggingFace 本地模型目录）")
-    embed_dim: int = Field(1024, ge=64, description="嵌入向量维度，需与模型输出维度一致")
     batch_size: int = Field(100, ge=1, le=5000, description="批量写入大小（每批写入的文本块数）")
 
 
@@ -39,8 +35,6 @@ class IndexAddRequest(BaseModel):
             "example": {
                 "collection_name": "lumber_chunk",
                 "docs_path": "/path/to/new_chunk_result.json",
-                "embed_model_path": "/path/to/bge-large-en-v1.5",
-                "embed_dim": 1024,
                 "batch_size": 8000,
             }
         }
@@ -54,8 +48,6 @@ class IndexAddRequest(BaseModel):
             "分块结果 JSON 文件路径（将追加到已有 collection 中）。"
         ),
     )
-    embed_model_path: str = Field(..., description="嵌入模型路径（HuggingFace 本地模型目录）")
-    embed_dim: int = Field(1024, ge=64, description="嵌入向量维度，需与模型输出维度一致")
     batch_size: int = Field(8000, ge=1, le=50000, description="批量追加大小（每批追加的文本块数）")
 
 

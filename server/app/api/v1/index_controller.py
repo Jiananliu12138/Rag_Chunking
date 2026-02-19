@@ -60,7 +60,7 @@ def _get_index_service() -> IndexService:
         "**存储规则**：每个 collection 对应 `milvus_data/<collection_name>.db` 文件。\n\n"
         "**参数说明**：\n"
         "- `batch_size`：每批写入节点数，建议 100–500；过大可能导致内存问题\n\n"
-        "**前置条件**：`embed_model_path` 指向本地 HuggingFace 嵌入模型目录（如 `bge-large-en-v1.5`）。"
+        "**前置条件**：服务会从环境变量 `DEFAULT_EMBEDDING_MODEL` / `DEFAULT_EMBEDDING_DIM` 读取默认嵌入模型配置。"
     ),
     responses={422: _ERR_422, 500: _ERR_500},
 )

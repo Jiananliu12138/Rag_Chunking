@@ -17,17 +17,20 @@ class TokenChunkParams(BaseModel):
     chunk_overlap_token_size: int = Field(100, ge=0, description="相邻块的重叠 token 数")
     split_by_character: Optional[str] = Field("\n\n", description="优先在该字符处切割")
     split_by_character_only: bool = Field(False, description="仅在指定字符处切割")
-    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
-    cache_dir: Optional[str] = Field(None, description="tiktoken 缓存目录")
 
 
 # ── Semantic 分块参数 ─────────────────────────────────────────────────────────
 
 class SemanticChunkParams(BaseModel):
-    embed_model_path: str = Field(..., description="HuggingFace 嵌入模型本地路径")
+    embed_model_path: Optional[str] = Field(
+        None,
+        description=(
+            "可选：覆盖默认的嵌入模型路径。"
+            "如不提供，将使用环境变量 DEFAULT_EMBEDDING_MODEL 配置的模型。"
+        ),
+    )
     buffer_size: int = Field(1, ge=1, description="SemanticSplitter 缓冲句子数")
     breakpoint_percentile_threshold: int = Field(74, ge=1, le=99, description="语义断点百分位阈值")
-    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
 
 
 # ── LlamaIndex 分块参数 ───────────────────────────────────────────────────────
@@ -35,18 +38,32 @@ class SemanticChunkParams(BaseModel):
 class LlamaIndexChunkParams(BaseModel):
     chunk_size: int = Field(512, ge=32, description="每个块的最大字符/token 数")
     chunk_overlap: int = Field(50, ge=0, description="相邻块重叠大小")
-    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
-    cache_dir: Optional[str] = Field(None, description="tiktoken 缓存目录")
+    # cache_dir / num_workers 不再从请求传入，统一从环境和模块默认读取
 
 
 # ── Lumber 分块参数 ───────────────────────────────────────────────────────────
 
 class LumberChunkParams(BaseModel):
-    llm_api_base: str = Field("http://localhost:8005", description="vLLM 服务地址")
-    model_type: str = Field("Qwen2.5-7B-Instruct", description="模型名称")
-    temperature: float = Field(0.2, ge=0.0, le=2.0)
-    max_tokens: int = Field(3072, ge=128)
-    num_workers: int = Field(4, ge=1, description="工作进程数（仅 chunk_file 使用）")
+    llm_api_base: Optional[str] = Field(
+        None,
+        description=(
+            "可选：覆盖默认 vLLM 服务地址。"
+            "如不提供，将使用 DEFAULT_VLLM_API_BASE（通常形如 http://host:port/v1）。"
+        ),
+    )
+    model_type: Optional[str] = Field(
+        None,
+        description=(
+            "可选：覆盖默认模型名称。"
+            "如不提供，将使用 DEFAULT_VLLM_MODEL_NAME。"
+        ),
+    )
+    temperature: Optional[float] = Field(
+        None, ge=0.0, le=2.0, description="可选：覆盖默认温度参数（默认取 DEFAULT_LLM_TEMPERATURE）。"
+    )
+    max_tokens: Optional[int] = Field(
+        None, ge=128, description="可选：覆盖默认生成最大 Token 数（默认取 DEFAULT_LLM_MAX_TOKENS）。"
+    )
 
 
 # ── 文本分块请求 ─────────────────────────────────────────────────────────────
