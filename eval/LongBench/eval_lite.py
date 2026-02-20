@@ -4,6 +4,7 @@ import os
 import json
 import numpy as np
 import logging
+from pathlib import Path
 from bert_score import score as bert_score
 from rouge import Rouge
 from metrics_lite import qa_f1_score
@@ -124,48 +125,68 @@ class Evaluator:
             
         return scores
 
-    def run(self):
-        # 1. 读取数据
-        if not os.path.exists(self.config.PREDICTION_FILE):
-            logger.error(f"File not found: {self.config.PREDICTION_FILE}")
+    def run(self, input_json_path=None, output_json_path=None):
+        """
+        执行评估流程。
+        
+        Args:
+            input_json_path: 输入 JSON 文件路径（可选，默认使用 config.PREDICTION_FILE）
+            output_json_path: 输出 JSON 文件路径（可选，默认在输入文件同目录下生成）
+        """
+        # 1. 确定输入路径
+        if input_json_path is None:
+            input_json_path = self.config.PREDICTION_FILE
+        
+        input_path = Path(input_json_path)
+        if not input_path.exists():
+            logger.error(f"File not found: {input_path}")
             return
 
-        with open(self.config.PREDICTION_FILE, 'r', encoding='utf-8') as f:
+        # 2. 读取数据
+        with open(input_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
         predictions = [item['llm_ans'] for item in data]
         answers = [item['answers'] for item in data]
         
-        # 2. 计算传统指标
+        # 3. 计算传统指标
         final_results = self.calculate_traditional_metrics(predictions, answers)
         
-        # 3. 输出结果
-        logger.info("Final Evaluation Results:")
-        print(json.dumps(final_results, indent=4))
+        # 4. 确定输出路径
+        if output_json_path is None:
+            output_json_path = input_path.parent / f"{input_path.stem}_traditional_eval.json"
+        else:
+            output_json_path = Path(output_json_path)
         
-        os.makedirs(self.config.OUTPUT_DIR, exist_ok=True)
+        # 5. 创建输出目录
+        output_json_path.parent.mkdir(parents=True, exist_ok=True)
         
-        pred_basename = os.path.basename(self.config.PREDICTION_FILE).replace('.json', '')
-        output_filename = f"{pred_basename}_traditional_eval.json"
-        output_filepath = os.path.join(self.config.OUTPUT_DIR, output_filename)
-        
-        if os.path.exists(output_filepath):
+        # 6. 合并已有结果（如果存在）
+        if output_json_path.exists():
             try:
-                with open(output_filepath, 'r', encoding='utf-8') as f:
+                with open(output_json_path, 'r', encoding='utf-8') as f:
                     existing_results = json.load(f)
                     existing_results.update(final_results)
                     final_results = existing_results
-            except:
+            except Exception:
                 pass
-
-        with open(output_filepath, 'w', encoding='utf-8') as f:
+        
+        # 7. 保存结果
+        print(f"\n{'='*70}")
+        print(f"💾 保存评估结果")
+        print(f"{'='*70}")
+        print(f"输出文件: {output_json_path}")
+        
+        with open(output_json_path, 'w', encoding='utf-8') as f:
             def convert(o):
                 if isinstance(o, np.float32) or isinstance(o, np.float64):
                     return float(o)
                 raise TypeError
-            json.dump(final_results, f, indent=4, default=convert)
-            
-        logger.info(f"Results saved to {output_filepath}")
+            json.dump(final_results, f, indent=4, default=convert, ensure_ascii=False)
+        
+        print(f"✅ 评估结果已保存")
+        print(f"{'='*70}\n")
+        logger.info(f"Results saved to {output_json_path}")
 
 if __name__ == '__main__':
     evaluator = Evaluator(Config)
