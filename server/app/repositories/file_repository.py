@@ -42,6 +42,95 @@ class FileRepository:
         return records
 
     @staticmethod
+    def parse_eval_results_from_json(data: Any) -> tuple[list[str], list[list[str]]]:
+        """
+        从评估结果 JSON 中提取 predictions 和 answers。
+        
+        输入格式：列表，每项为 {"llm_ans": str, "answers": list[str], ...}
+        
+        Returns:
+            (predictions, answers) 元组
+        """
+        if not isinstance(data, list):
+            raise ValueError(f"评估结果 JSON 应为列表格式，当前为 {type(data)}")
+        
+        predictions: list[str] = []
+        answers: list[list[str]] = []
+        
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            llm_ans = item.get("llm_ans") or item.get("prediction") or ""
+            ans_list = item.get("answers") or item.get("ground_truth") or []
+            if isinstance(ans_list, str):
+                ans_list = [ans_list]
+            if not isinstance(ans_list, list):
+                continue
+            
+            predictions.append(str(llm_ans))
+            answers.append([str(a) for a in ans_list if isinstance(a, str)])
+        
+        return predictions, answers
+
+    @staticmethod
+    def parse_ragas_dataset_from_json(data: Any) -> dict[str, list]:
+        """
+        从 JSON 中解析 RAGAS 数据集格式。
+        
+        支持两种输入格式：
+        1. 标准 RAGAS 格式：{"question": [...], "answer": [...], "contexts": [...], "ground_truth": [...]}
+        2. sample_results.json 格式：列表，每项为 {"input": str, "llm_ans": str, "answers": list[str], "retrieval_list": list[str]}
+        
+        Returns:
+            RAGAS 格式的数据集字典
+        """
+        if isinstance(data, dict):
+            # 格式1: 标准 RAGAS 格式
+            required_keys = ["question", "answer", "contexts", "ground_truth"]
+            if all(key in data for key in required_keys):
+                return {
+                    "question": [str(q) for q in data["question"]],
+                    "answer": [str(a) for a in data["answer"]],
+                    "contexts": [
+                        [str(ctx) for ctx in ctx_list if isinstance(ctx, str)]
+                        for ctx_list in data["contexts"]
+                    ],
+                    "ground_truth": [str(gt) for gt in data["ground_truth"]],
+                }
+            else:
+                raise ValueError(f"标准 RAGAS 格式缺少必需字段，需要: {required_keys}")
+        
+        elif isinstance(data, list):
+            # 格式2: sample_results.json 格式
+            dataset = {
+                "question": [],
+                "answer": [],
+                "contexts": [],
+                "ground_truth": [],
+            }
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                question = item.get("input") or item.get("question") or ""
+                answer = item.get("llm_ans") or item.get("answer") or ""
+                contexts = item.get("retrieval_list") or item.get("contexts") or []
+                if not isinstance(contexts, list):
+                    contexts = []
+                ground_truth_list = item.get("answers") or item.get("ground_truth") or []
+                if isinstance(ground_truth_list, str):
+                    ground_truth_list = [ground_truth_list]
+                ground_truth = " ".join(str(gt) for gt in ground_truth_list if isinstance(gt, str))
+                
+                dataset["question"].append(str(question))
+                dataset["answer"].append(str(answer))
+                dataset["contexts"].append([str(ctx) for ctx in contexts if isinstance(ctx, str)])
+                dataset["ground_truth"].append(ground_truth)
+            
+            return dataset
+        else:
+            raise ValueError(f"不支持的 RAGAS 数据集格式: {type(data)}")
+
+    @staticmethod
     def parse_chunks_from_json(data: Any) -> list[str]:
         """
         兼容现有流水线的多种 JSON 分块格式，统一返回字符串列表。

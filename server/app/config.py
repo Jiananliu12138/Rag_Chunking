@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent  # F:\thesis\Meta-Chunk
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file="/data/h50056789/Rag_Chunking/.env",
+        env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -55,6 +55,20 @@ class Settings(BaseSettings):
     DEFAULT_CHUNK_OVERLAP: int = 50
     DEFAULT_TOKEN_CHUNK_SIZE: int = 1200
     DEFAULT_TOKEN_OVERLAP: int = 100
+
+    # ── 评估默认配置 ─────────────────────────────────────────────
+    DEFAULT_ENABLE_BERT_SCORE: bool = False
+    DEFAULT_BERT_SCORE_MODEL: str = "roberta-large"
+    DEFAULT_BERT_SCORE_DEVICE: str = "cuda:0"
+    
+    # ── RAGAS 评估默认配置 ───────────────────────────────────────
+    DEFAULT_RAGAS_VLLM_API_BASE: str = "http://localhost:8005/v1"
+    DEFAULT_RAGAS_VLLM_API_KEY: str = "EMPTY"
+    DEFAULT_RAGAS_VLLM_MODEL_NAME: str = ""
+    DEFAULT_RAGAS_EMBEDDING_MODEL_PATH: str = ""
+    DEFAULT_RAGAS_DEVICE: str = "cuda:0"
+    DEFAULT_RAGAS_ENABLE_CACHE: bool = True
+    DEFAULT_RAGAS_CACHE_DIR: str = "./ragas_cache"
 
     @property
     def python_paths(self) -> list[str]:

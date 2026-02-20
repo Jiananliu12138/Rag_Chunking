@@ -7,27 +7,60 @@ from pydantic import BaseModel, ConfigDict, Field
 class TraditionalEvalRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "predictions": [
-                    "The transformer architecture uses self-attention mechanisms.",
-                    "BERT is a bidirectional encoder representation model.",
-                ],
-                "answers": [
-                    ["The transformer uses attention mechanisms.", "Transformer relies on self-attention."],
-                    ["BERT stands for Bidirectional Encoder Representations from Transformers."],
-                ],
-                "enable_bert_score": False,
-                "bert_score_model": "roberta-large",
-                "bert_score_device": "cuda:0",
-            }
+            "examples": [
+                {
+                    "summary": "方式1：直接传 predictions 和 answers",
+                    "value": {
+                        "predictions": [
+                            "The transformer architecture uses self-attention mechanisms.",
+                            "BERT is a bidirectional encoder representation model.",
+                        ],
+                        "answers": [
+                            ["The transformer uses attention mechanisms.", "Transformer relies on self-attention."],
+                            ["BERT stands for Bidirectional Encoder Representations from Transformers."],
+                        ],
+                        "enable_bert_score": False,
+                    },
+                },
+                {
+                    "summary": "方式2：传 test 字段（评估结果 JSON 格式）",
+                    "value": {
+                        "test": [
+                            {
+                                "_id": "q1",
+                                "input": "What is a transformer?",
+                                "llm_ans": "A transformer is a neural architecture...",
+                                "answers": ["A transformer uses attention mechanisms."],
+                            },
+                            {
+                                "_id": "q2",
+                                "input": "What is BERT?",
+                                "llm_ans": "BERT is a bidirectional model...",
+                                "answers": ["BERT stands for Bidirectional Encoder..."],
+                            },
+                        ],
+                        "enable_bert_score": False,
+                    },
+                },
+            ]
         }
     )
 
-    predictions: list[str] = Field(..., min_length=1, description="模型预测答案列表")
-    answers: list[list[str]] = Field(..., min_length=1, description="参考答案列表（每条可含多个参考）")
-    enable_bert_score: bool = Field(False, description="是否计算 BERTScore（需要 GPU）")
-    bert_score_model: str = Field("roberta-large", description="BERTScore 使用的模型")
-    bert_score_device: str = Field("cuda:0", description="BERTScore 计算设备")
+    predictions: Optional[list[str]] = Field(None, description="模型预测答案列表（与 test 二选一）")
+    answers: Optional[list[list[str]]] = Field(None, description="参考答案列表（与 test 二选一）")
+    test: Optional[list[dict[str, Any]]] = Field(
+        None,
+        description="评估结果 JSON 格式（列表，每项含 llm_ans、answers 等），与 predictions/answers 二选一",
+    )
+    enable_bert_score: Optional[bool] = Field(
+        None, description="是否计算 BERTScore（可选，未提供时从配置读取 DEFAULT_ENABLE_BERT_SCORE）"
+    )
+    bert_score_model: Optional[str] = Field(
+        None, description="BERTScore 使用的模型（可选，未提供时从配置读取 DEFAULT_BERT_SCORE_MODEL）"
+    )
+    bert_score_device: Optional[str] = Field(
+        None, description="BERTScore 计算设备（可选，未提供时从配置读取 DEFAULT_BERT_SCORE_DEVICE）"
+    )
 
 
 class TraditionalEvalResult(BaseModel):
@@ -78,13 +111,27 @@ class RAGASEvalRequest(BaseModel):
     )
 
     dataset: RAGASDataset = Field(..., description="RAGAS 格式的评估数据集")
-    vllm_api_base: str = Field("http://localhost:8005/v1", description="vLLM API 地址")
-    vllm_api_key: str = Field("EMPTY", description="API Key")
-    vllm_model_name: str = Field(..., description="评估用 LLM 模型名称")
-    embedding_model_path: str = Field(..., description="评估用嵌入模型路径")
-    device: str = Field("cuda:0", description="评估设备")
-    enable_cache: bool = Field(True, description="是否启用 RAGAS 磁盘缓存")
-    cache_dir: str = Field("./ragas_cache", description="缓存目录")
+    vllm_api_base: Optional[str] = Field(
+        None, description="vLLM API 地址（可选，未提供时从配置读取 DEFAULT_RAGAS_VLLM_API_BASE）"
+    )
+    vllm_api_key: Optional[str] = Field(
+        None, description="API Key（可选，未提供时从配置读取 DEFAULT_RAGAS_VLLM_API_KEY）"
+    )
+    vllm_model_name: Optional[str] = Field(
+        None, description="评估用 LLM 模型名称（可选，未提供时从配置读取 DEFAULT_RAGAS_VLLM_MODEL_NAME）"
+    )
+    embedding_model_path: Optional[str] = Field(
+        None, description="评估用嵌入模型路径（可选，未提供时从配置读取 DEFAULT_RAGAS_EMBEDDING_MODEL_PATH）"
+    )
+    device: Optional[str] = Field(
+        None, description="评估设备（可选，未提供时从配置读取 DEFAULT_RAGAS_DEVICE）"
+    )
+    enable_cache: Optional[bool] = Field(
+        None, description="是否启用 RAGAS 磁盘缓存（可选，未提供时从配置读取 DEFAULT_RAGAS_ENABLE_CACHE）"
+    )
+    cache_dir: Optional[str] = Field(
+        None, description="缓存目录（可选，未提供时从配置读取 DEFAULT_RAGAS_CACHE_DIR）"
+    )
 
 
 class RAGASMetricSummary(BaseModel):
@@ -108,6 +155,27 @@ class RAGASEvalResult(BaseModel):
     summary: RAGASSummary
     sample_count: int
     samples: list[dict[str, Any]]
+
+
+class RAGASEvalFileRequest(BaseModel):
+    """从 JSON 文件读取 RAGAS 数据集并评估。"""
+    input_path: str = Field(
+        ...,
+        description=(
+            "输入 JSON 文件路径，支持两种格式：\n"
+            "1. 标准 RAGAS 格式：{\"question\": [...], \"answer\": [...], \"contexts\": [...], \"ground_truth\": [...]}\n"
+            "2. sample_results.json 格式：列表，每项含 input/llm_ans/answers/retrieval_list"
+        ),
+    )
+    vllm_api_base: Optional[str] = Field(
+        None, description="vLLM API 地址（可选，未提供时从配置读取）"
+    )
+    vllm_api_key: Optional[str] = Field(None, description="API Key（可选，未提供时从配置读取）")
+    vllm_model_name: Optional[str] = Field(None, description="评估用 LLM 模型名称（可选，未提供时从配置读取）")
+    embedding_model_path: Optional[str] = Field(None, description="评估用嵌入模型路径（可选，未提供时从配置读取）")
+    device: Optional[str] = Field(None, description="评估设备（可选，未提供时从配置读取）")
+    enable_cache: Optional[bool] = Field(None, description="是否启用 RAGAS 磁盘缓存（可选，未提供时从配置读取）")
+    cache_dir: Optional[str] = Field(None, description="缓存目录（可选，未提供时从配置读取）")
 
 
 # ── 组件级 Chunk 质量评估 ─────────────────────────────────────────────────────
@@ -179,3 +247,19 @@ class ChunkStickinessRequest(BaseModel):
 class ChunkStickinessResult(BaseModel):
     structural_entropy_complete: float = Field(..., description="完全图结构熵")
     structural_entropy_incomplete: float = Field(..., description="不完全图结构熵")
+
+
+# ── 文件输入的传统指标评估 ─────────────────────────────────────────────────────
+
+class TraditionalEvalFileRequest(BaseModel):
+    """从 JSON 文件读取评估结果并计算传统指标。"""
+    input_path: str = Field(..., description="评估结果 JSON 文件路径（格式同 sample_results.json）")
+    enable_bert_score: Optional[bool] = Field(
+        None, description="是否计算 BERTScore（可选，未提供时从配置读取 DEFAULT_ENABLE_BERT_SCORE）"
+    )
+    bert_score_model: Optional[str] = Field(
+        None, description="BERTScore 使用的模型（可选，未提供时从配置读取 DEFAULT_BERT_SCORE_MODEL）"
+    )
+    bert_score_device: Optional[str] = Field(
+        None, description="BERTScore 计算设备（可选，未提供时从配置读取 DEFAULT_BERT_SCORE_DEVICE）"
+    )
