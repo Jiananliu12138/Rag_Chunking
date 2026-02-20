@@ -29,10 +29,10 @@ BASE_URL = os.getenv("META_CHUNKING_BASE_URL", "http://localhost:8080/api/v1")
 COLLECTION_NAME = "test_chunks"
 
 # 用于 /index/build 的分块结果文件（通常是第一次构建）
-DOCS_PATH_BUILD = r"F:\thesis\Meta-Chunking\your_chunk_result_for_build.json"
+DOCS_PATH_BUILD = r"/data/h50056789/Rag_Chunking/MoC/our_metrics/test_data/test.json"
 
 # 用于 /index/add 的分块结果文件（增量追加）
-DOCS_PATH_ADD = r"F:\thesis\Meta-Chunking\your_chunk_result_for_add.json"
+DOCS_PATH_ADD = r"/data/h50056789/Rag_Chunking/MoC/our_metrics/test_data/test_add.json"
 
 
 def _print_response(resp: requests.Response) -> None:
@@ -113,14 +113,14 @@ if __name__ == "__main__":
 
     # 1. 构建索引（若已存在会覆盖）
     # 建议先确保对应 collection 不重要，或在测试环境中使用。
-    test_build_index()
+    # test_build_index()
 
     # 2. 增量追加示例（如暂时没有追加文件，可以先注释掉）
-    # test_add_index()
+    test_add_index()
 
     # 3. 查看当前有哪些 collection
-    test_list_collections()
+    # test_list_collections()
 
     # 4. 如需测试删除，请手动取消下行注释（注意：操作不可逆）
-    # test_delete_collection()
+    test_delete_collection()
 

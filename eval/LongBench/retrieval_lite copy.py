@@ -15,7 +15,7 @@ import torch
 # 配置简单的日志输出
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056787/workspaces/lightrag/tiktoken_cache"
+os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache
 # ============================================================
 # 配置区域 (替代命令行参数)
 # ============================================================

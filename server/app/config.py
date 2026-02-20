@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent  # F:\thesis\Meta-Chunk
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file="F:\thesis\Meta-Chunking\.env",
+        env_file="/data/h50056789/Rag_Chunking/.env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

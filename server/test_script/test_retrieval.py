@@ -16,22 +16,21 @@ Retrieval 相关接口测试脚本。
 import json
 import os
 from typing import Any, Dict
-
 import requests
 
 BASE_URL = os.getenv("META_CHUNKING_BASE_URL", "http://localhost:8080/api/v1")
 
 # 按本地环境修改：collection 需已通过 /index/build 构建
 COLLECTION_NAME = "test_chunks"
-EMBED_MODEL_PATH = os.getenv("DEFAULT_EMBEDDING_MODEL", "F:/thesis/models/bge-base-en-v1.5")
-EMBED_DIM = int(os.getenv("DEFAULT_EMBEDDING_DIM", "768"))
+EMBED_MODEL_PATH = os.getenv("DEFAULT_EMBEDDING_MODEL", "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5")
+EMBED_DIM = int(os.getenv("DEFAULT_EMBEDDING_DIM", "1024"))
 # vLLM 服务地址与模型（/generate、/generate-file 需要）
 LLM_API_BASE = os.getenv("DEFAULT_VLLM_API_BASE", "http://localhost:8005/v1")
-LLM_MODEL_NAME = os.getenv("DEFAULT_VLLM_MODEL_NAME", "/path/to/Qwen2.5-7B-Instruct")
+LLM_MODEL_NAME = os.getenv("DEFAULT_VLLM_MODEL_NAME", "Qwen2.5-7B-Instruct")
 
 # 文件批处理测试路径
-RETRIEVAL_INPUT_JSONL = r"F:\thesis\Meta-Chunking\test_script\retrieval_qa_sample.jsonl"
-RETRIEVAL_OUTPUT_JSON = r"F:\thesis\Meta-Chunking\test_output\retrieval_result.json"
+RETRIEVAL_INPUT_JSONL = r"/data/h50056789/Rag_Chunking/eval/LongBench/sample_data.jsonl"
+RETRIEVAL_OUTPUT_JSON = r"/data/h50056789/Rag_Chunking/test_script/retrieval_result.json"
 
 
 def _print_response(resp: requests.Response) -> None:
@@ -58,7 +57,7 @@ def test_search() -> None:
     """POST /retrieval/search — 向量相似度检索。"""
     url = f"{BASE_URL}/retrieval/search"
     payload: Dict[str, Any] = {
-        "query": "What is the transformer architecture in deep learning?",
+        "query": "What is the profession of Miloš Zličić?",
         "collection_name": COLLECTION_NAME,
         "embed_model_path": EMBED_MODEL_PATH,
         "embed_dim": EMBED_DIM,
@@ -72,7 +71,7 @@ def test_generate() -> None:
     """POST /retrieval/generate — 单条 RAG 检索+生成（需 vLLM 服务）。"""
     url = f"{BASE_URL}/retrieval/generate"
     payload: Dict[str, Any] = {
-        "query": "What are the main advantages of transformer models?",
+        "query": "What is the profession of Miloš Zličić?",
         "collection_name": COLLECTION_NAME,
         "embed_model_path": EMBED_MODEL_PATH,
         "embed_dim": EMBED_DIM,
@@ -128,11 +127,11 @@ if __name__ == "__main__":
     print()
 
     # 1. 检索
-    test_search()
+    # test_search()
 
     # 2. 单条 RAG 生成（需 vLLM，未启动可注释）
     # test_generate()
 
     # 3. 文件批处理 RAG（需 vLLM + 输入 jsonl）
     ensure_sample_jsonl()
-    # test_generate_file()
+    test_generate_file()

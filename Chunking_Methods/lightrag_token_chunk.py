@@ -23,7 +23,7 @@ def create_directory(path):
 
 
 def init_tokenizer():
-    cache_dir = "/data/h50056787/workspaces/lightrag/tiktoken_cache" 
+    cache_dir = "/data/h50056789/Rag_Chunking/tiktoken_cache" 
     os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir 
     return tiktoken.get_encoding("o200k_base")
 

@@ -21,8 +21,8 @@ import requests
 BASE_URL = os.getenv("META_CHUNKING_BASE_URL", "http://localhost:8080/api/v1")
 
 # 这里按你本地实际情况修改
-CHUNK_INPUT_FILE = r"F:\thesis\Meta-Chunking\MoC\your_input.jsonl"
-CHUNK_OUTPUT_DIR = r"F:\thesis\Meta-Chunking\test_output"
+CHUNK_INPUT_FILE = r"/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl"
+CHUNK_OUTPUT_DIR = r"/data/h50056789/Rag_Chunking/test_script"
 
 
 def _print_response(resp: requests.Response) -> None:
@@ -162,12 +162,12 @@ if __name__ == "__main__":
     test_list_methods()
 
     # 2. 文本分块示例（可以按需注释掉某些调用）
-    test_chunk_text_token()
-    test_chunk_text_llamaindex()
+    # test_chunk_text_token()
+    # test_chunk_text_llamaindex()
     # 如环境已配置好语义模型 / vLLM，再开启下面两行：
     # test_chunk_text_semantic()
     # test_chunk_text_lumber()
 
     # 3. 文件分块示例（记得改成你自己的输入/输出路径）
-    # test_chunk_file_llamaindex()
+    test_chunk_file_llamaindex()
 

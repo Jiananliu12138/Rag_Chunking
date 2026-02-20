@@ -15,8 +15,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class Config:
-    PREDICTION_FILE = '/data/h50056789/Rag_Chunking/eval/LongBench/sample_results.json'
-    OUTPUT_DIR = '/data/h50056789/Rag_Chunking/eval/LongBench'
+    PREDICTION_FILE = '/data/h50056789/Rag_Chunking/Retrival_Result/2wikimqa_qa_semantic_chunk.json'
+    OUTPUT_DIR = '/data/h50056789/Rag_Chunking/eval_result'
 
 class Evaluator:
     def __init__(self, config):

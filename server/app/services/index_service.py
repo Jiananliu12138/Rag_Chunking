@@ -102,14 +102,12 @@ class IndexService:
         chunks = self._load_chunks_from_file(request.docs_path)
         settings = get_settings()
         model_path = settings.DEFAULT_EMBEDDING_MODEL
-        embed_dim = settings.DEFAULT_EMBEDDING_DIM
 
         embed_model = self._load_langchain_embed(model_path)
         info = self._repo.add_index(
             collection_name=request.collection_name,
             chunks=chunks,
             langchain_embed=embed_model,
-            embed_dim=embed_dim,
             batch_size=request.batch_size,
         )
         return IndexAddResult(

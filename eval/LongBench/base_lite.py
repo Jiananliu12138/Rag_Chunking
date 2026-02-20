@@ -208,7 +208,7 @@ class BaseRetrieverLite(ABC):
         try:
             import tiktoken
             # 尝试设置本地缓存路径（如果之前设置的环境变量没生效）
-            os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056787/workspaces/lightrag/tiktoken_cache"
+            os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache"
         except ImportError:
             pass
 

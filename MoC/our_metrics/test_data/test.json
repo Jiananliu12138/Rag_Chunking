@@ -2,10 +2,6 @@
   "filepath": "./dataset/docs/2wikimqa/0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt",
   "splits": [
     [
-      "Passage 1:\nZoran Švonja\nZoran Švonja (Serbian Cyrillic: Зоран Швоња; born 4 October 1996) is a Serbian footballer who plays as a midfielder for  Mladost Novi Sad. He is the younger brother of footballer Goran Švonja.\n\nClub career\nFrom 2016 to 2018, he played for OFK Bačka.\nPassage 2:\nAnton Shunto\nAnton Shunto (Belarusian: Антон Шунто; Russian: Антон Шунто; born 31 May 1988) is a Belarusian professional footballer who plays for Zhodino-Yuzhnoye.He is a younger brother of Denis Shunto, who is a founder and former president of Krumkachy Minsk.\n\nCareer\nShunto started his career with FC Krumkachy Minsk.",
-      1
-    ],
-    [
       "Passage 3:\nPeter Rosegger\nPeter Rosegger (original Roßegger) (31 July 1843 – 26 June 1918) was an Austrian writer and poet from Krieglach in the province of Styria. He was a son of a mountain farmer and grew up in the woodlands and mountains of Alpl. Rosegger (or Rossegger) went on to become a most prolific poet and author as well as an insightful teacher and visionary.\nIn his later years, he was honoured by officials from various Austrian universities and the city of Graz (the capital of Styria). He was nominated for the Nobel Prize in Literature three times. He was nearly awarded the Nobel Prize in 1913 and is (at least among the people of Styria) something like a national treasure to this day.\n",
       1
     ],

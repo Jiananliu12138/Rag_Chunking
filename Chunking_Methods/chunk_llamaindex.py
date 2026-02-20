@@ -33,7 +33,7 @@ def init_parser(chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP
         SimpleNodeParser: 配置好的解析器实例
     """
     if cache_dir is not None:
-        os.environ["TIKTOKEN_CACHE_DIR"] = cache_dir
+        os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache"
     
     return SimpleNodeParser.from_defaults(
         chunk_size=chunk_size,

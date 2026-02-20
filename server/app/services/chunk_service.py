@@ -74,7 +74,6 @@ class ChunkService:
 
         elif request.method == ChunkMethod.LLAMAINDEX:
             from chunk_llamaindex import chunk_text as _chunk_text  # noqa: PLC0415
-
             kwargs = {
                 "text_input": request.text,
                 "num_workers": default_workers,
