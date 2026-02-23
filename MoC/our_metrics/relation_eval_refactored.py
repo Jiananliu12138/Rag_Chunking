@@ -161,7 +161,7 @@ class GraphBuilder:
                     position_penalty = delta * abs(i - j) / (n - 1) if n > 1 else 0
                     #块之间越相关，weight越小，距离越近weight越大，保留weight>0.8 即 edge < 0.2的边
                     weight = -weight_temp + 1 + position_penalty
-                    
+                    #weight越大越不相关
                     graph[i][j] = weight
         
         return graph

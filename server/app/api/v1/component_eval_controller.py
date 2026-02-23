@@ -5,8 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.exceptions import EvaluationException, to_http_exception
 from app.schemas.common import BaseResponse
 from app.schemas.eval_schema import (
+    ChunkQualityFileRequest,
     ChunkQualityRequest,
     ChunkQualityResult,
+    ChunkStickinessFileRequest,
     ChunkStickinessRequest,
     ChunkStickinessResult,
 )
@@ -70,6 +72,36 @@ def evaluate_chunk_quality(
 
 
 @router.post(
+    "/chunk-quality-file",
+    response_model=BaseResponse[ChunkQualityResult],
+    summary="分块质量评估（从文件读取）",
+    description=(
+        "从分块结果 JSON 文件中读取文本块并进行**组件级**质量评估。\n\n"
+        "**输入文件格式**：与 chunking 输出保持一致，支持多种 JSON 结构：\n"
+        "- `['chunk1', 'chunk2', ...]`\n"
+        "- `[['chunk1', label], ['chunk2', label2], ...]`\n"
+        "- `{ \"splits\": [...] }`\n"
+        "- `{ \"final_chunks\": [...] }`\n"
+        "- `[ {\"name\": \"doc1\", \"final_chunks\": [...] }, ...]`\n\n"
+        "文件读取与解析统一由 `FileRepository.read_json` 和 `FileRepository.parse_chunks_from_json` 处理，"
+        "最终会转换为纯文本块列表后再做评估。"
+    ),
+    responses={422: _ERR_422, 500: _ERR_500},
+)
+def evaluate_chunk_quality_file(
+    request: ChunkQualityFileRequest,
+    service: Annotated[ComponentEvalService, Depends(_get_component_eval_service)],
+) -> BaseResponse[ChunkQualityResult]:
+    try:
+        result = service.evaluate_chunk_quality_file(request)
+        return BaseResponse.ok(result)
+    except EvaluationException as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
     "/chunk-stickiness",
     response_model=BaseResponse[ChunkStickinessResult],
     summary="分块黏连度评估（结构熵）",
@@ -94,6 +126,36 @@ def evaluate_chunk_stickiness(
 ) -> BaseResponse[ChunkStickinessResult]:
     try:
         result = service.evaluate_chunk_stickiness(request)
+        return BaseResponse.ok(result)
+    except EvaluationException as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/chunk-stickiness-file",
+    response_model=BaseResponse[ChunkStickinessResult],
+    summary="分块黏连度评估（从文件读取）",
+    description=(
+        "从分块结果 JSON 文件中读取文本块，并通过结构熵评估分块黏连度。\n\n"
+        "**输入文件格式**：与 chunking 输出保持一致，支持多种 JSON 结构：\n"
+        "- `['chunk1', 'chunk2', ...]`\n"
+        "- `[['chunk1', label], ['chunk2', label2], ...]`\n"
+        "- `{ \"splits\": [...] }`\n"
+        "- `{ \"final_chunks\": [...] }`\n"
+        "- `[ {\"name\": \"doc1\", \"final_chunks\": [...] }, ...]`\n\n"
+        "文件读取与解析统一由 `FileRepository.read_json` 和 `FileRepository.parse_chunks_from_json` 处理，"
+        "最终会转换为纯文本块列表后再构建图并计算结构熵。"
+    ),
+    responses={422: _ERR_422, 500: _ERR_500},
+)
+def evaluate_chunk_stickiness_file(
+    request: ChunkStickinessFileRequest,
+    service: Annotated[ComponentEvalService, Depends(_get_component_eval_service)],
+) -> BaseResponse[ChunkStickinessResult]:
+    try:
+        result = service.evaluate_chunk_stickiness_file(request)
         return BaseResponse.ok(result)
     except EvaluationException as exc:
         raise to_http_exception(exc)

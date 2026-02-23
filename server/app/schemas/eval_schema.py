@@ -184,26 +184,46 @@ class ChunkQualityRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "chunks": [
-                    "The transformer architecture was introduced in the paper 'Attention is All You Need'.",
-                    "BERT is based on the transformer encoder and trained with masked language modeling.",
-                    "GPT uses the transformer decoder for autoregressive language generation.",
-                ],
-                "ppl_model_name": "/path/to/internlm3-8b-instruct",
-                "sim_model_name": "/path/to/bge-large-en-v1.5",
+                "chunks": {
+                    "splits": [
+                        [
+                            "The transformer architecture was introduced in the paper 'Attention is All You Need'.",
+                            "label1",
+                        ],
+                        [
+                            "BERT is based on the transformer encoder and trained with masked language modeling.",
+                            "label2",
+                        ],
+                        [
+                            "GPT uses the transformer decoder for autoregressive language generation.",
+                            "label3",
+                        ],
+                    ]
+                },
                 "enable_semantic_similarity": True,
                 "enable_boundary_clarity": True,
-                "device_map": "auto",
             }
         }
     )
 
-    chunks: list[str] = Field(..., min_length=2, description="待评估的文本块列表（至少2个）")
-    ppl_model_name: str = Field(..., description="用于困惑度计算的语言模型路径")
-    sim_model_name: str = Field("BAAI/all-MiniLM-L6-v2", description="语义相似度模型路径")
-    enable_semantic_similarity: bool = Field(True, description="是否计算语义不相似度")
-    enable_boundary_clarity: bool = Field(True, description="是否计算边界清晰度 BC")
-    device_map: str = Field("auto", description="模型设备映射策略")
+    chunks: Any = Field(
+        ...,
+        description=(
+            "待评估的分块结果，支持多种 JSON 格式："
+            "['chunk1', 'chunk2', ...]、[['chunk1', label], ...]、"
+            "{'splits': [...]}, {'final_chunks': [...]}, "
+            "[{'name': 'doc', 'final_chunks': [...]}, ...] 等；"
+            "服务端会解析为纯文本块列表。"
+        ),
+    )
+    enable_semantic_similarity: Optional[bool] = Field(
+        None,
+        description="是否计算语义不相似度（可选，未提供时从配置读取 COMPONENT_ENABLE_SEMANTIC_SIMILARITY）",
+    )
+    enable_boundary_clarity: Optional[bool] = Field(
+        None,
+        description="是否计算边界清晰度 BC（可选，未提供时从配置读取 COMPONENT_ENABLE_BOUNDARY_CLARITY）",
+    )
 
 
 class ChunkPairResult(BaseModel):
@@ -218,35 +238,100 @@ class ChunkQualityResult(BaseModel):
     details: list[ChunkPairResult]
 
 
+class ChunkQualityFileRequest(BaseModel):
+    """从分块结果文件读取并进行 Chunk 质量评估（BC + 语义不相似度）。"""
+
+    input_path: str = Field(
+        ...,
+        description=(
+            "分块结果 JSON 文件路径，支持与 chunking 输出一致的多种格式："
+            "['chunk1', 'chunk2', ...]、[['chunk1', label], ...]、"
+            "{'splits': [...]}, {'final_chunks': [...]}, "
+            "[{'name': 'doc', 'final_chunks': [...]}, ...] 等；"
+            "服务端会解析为纯文本块列表。"
+        ),
+    )
+    enable_semantic_similarity: Optional[bool] = Field(
+        None,
+        description="是否计算语义不相似度（可选，未提供时从配置读取 COMPONENT_ENABLE_SEMANTIC_SIMILARITY）",
+    )
+    enable_boundary_clarity: Optional[bool] = Field(
+        None,
+        description="是否计算边界清晰度 BC（可选，未提供时从配置读取 COMPONENT_ENABLE_BOUNDARY_CLARITY）",
+    )
+
+
 # ── 组件级 Chunk 黏连度评估 ───────────────────────────────────────────────────
 
 class ChunkStickinessRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "chunks": [
-                    "The transformer architecture was introduced in the paper 'Attention is All You Need'.",
-                    "BERT is based on the transformer encoder and trained with masked language modeling.",
-                    "GPT uses the transformer decoder for autoregressive language generation.",
-                ],
-                "model_path": "/path/to/internlm3-8b-instruct",
+                "chunks": {
+                    "final_chunks": [
+                        "The transformer architecture was introduced in the paper 'Attention is All You Need'.",
+                        "BERT is based on the transformer encoder and trained with masked language modeling.",
+                        "GPT uses the transformer decoder for autoregressive language generation.",
+                    ]
+                },
                 "threshold": 0.8,
                 "delta": 0.0,
-                "device_map": "auto",
             }
         }
     )
 
-    chunks: list[str] = Field(..., min_length=2, description="待评估的文本块列表（至少2个）")
-    model_path: str = Field(..., description="用于困惑度计算的语言模型路径")
+    chunks: Any = Field(
+        ...,
+        description=(
+            "待评估的分块结果，支持多种 JSON 格式："
+            "['chunk1', 'chunk2', ...]、[['chunk1', label], ...]、"
+            "{'splits': [...]}, {'final_chunks': [...]}, "
+            "[{'name': 'doc', 'final_chunks': [...]}, ...] 等；"
+            "服务端会解析为纯文本块列表。"
+        ),
+    )
     threshold: float = Field(0.8, ge=0.0, le=1.0, description="边权重阈值")
     delta: float = Field(0.0, ge=0.0, description="位置距离惩罚系数")
-    device_map: str = Field("auto", description="模型设备映射策略")
 
 
 class ChunkStickinessResult(BaseModel):
     structural_entropy_complete: float = Field(..., description="完全图结构熵")
     structural_entropy_incomplete: float = Field(..., description="不完全图结构熵")
+    graph_complete: dict[int, dict[int, float]] = Field(
+        ...,
+        description=(
+            "归一化后的完全图邻接矩阵，graph_complete[i][j] 为从块 i 到块 j 的权重；"
+            "权重越小表示两块越相关，权重越大表示越不相关。"
+        ),
+    )
+    graph_incomplete: dict[int, dict[int, float]] = Field(
+        ...,
+        description=(
+            "不完全图（上三角）邻接矩阵，只保留 i <= j 的边；"
+            "用于计算不完全图结构熵。"
+        ),
+    )
+
+
+class ChunkStickinessFileRequest(BaseModel):
+    """从分块结果文件读取并进行 Chunk 黏连度评估（结构熵）。"""
+
+    input_path: str = Field(
+        ...,
+        description=(
+            "分块结果 JSON 文件路径，支持与 chunking 输出一致的多种格式："
+            "['chunk1', 'chunk2', ...]、[['chunk1', label], ...]、"
+            "{'splits': [...]}, {'final_chunks': [...]}, "
+            "[{'name': 'doc', 'final_chunks': [...]}, ...] 等；"
+            "服务端会解析为纯文本块列表。"
+        ),
+    )
+    threshold: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="边权重阈值（可选，未提供时从配置读取 STICKINESS_THRESHOLD）"
+    )
+    delta: Optional[float] = Field(
+        None, ge=0.0, description="位置距离惩罚系数（可选，未提供时从配置读取 STICKINESS_DELTA）"
+    )
 
 
 # ── 文件输入的传统指标评估 ─────────────────────────────────────────────────────

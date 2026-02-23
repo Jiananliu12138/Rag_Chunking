@@ -70,6 +70,18 @@ class Settings(BaseSettings):
     DEFAULT_RAGAS_ENABLE_CACHE: bool = True
     DEFAULT_RAGAS_CACHE_DIR: str = "./ragas_cache"
 
+    # ── 组件级评估默认配置 ───────────────────────────────────────
+    # Chunk 质量评估（BC + 语义不相似度）
+    COMPONENT_PPL_MODEL_PATH: str = ""
+    COMPONENT_SIM_MODEL_PATH: str = "BAAI/all-MiniLM-L6-v2"
+    COMPONENT_ENABLE_SEMANTIC_SIMILARITY: bool = True
+    COMPONENT_ENABLE_BOUNDARY_CLARITY: bool = True
+
+    # Chunk 黏连度评估（结构熵）
+    STICKINESS_MODEL_PATH: str = ""
+    STICKINESS_THRESHOLD: float = 0.8
+    STICKINESS_DELTA: float = 0.0
+
     @property
     def python_paths(self) -> list[str]:
         return [
