@@ -20,11 +20,21 @@ class SearchRequest(BaseModel):
     embed_model_path: str = Field(..., description="嵌入模型路径")
     embed_dim: int = Field(1024, ge=64, description="嵌入向量维度")
     top_k: int = Field(5, ge=1, le=100, description="返回最相关文档数量")
+    filepath: Optional[str] = Field(
+        None,
+        description="可选：按来源文件过滤，仅检索来自该 filepath 的文本块（索引阶段写入的 metadata.filepath）。",
+    )
+    doc_id: Optional[int] = Field(
+        None,
+        description="可选：按 doc_id 过滤，仅检索指定文档 ID 的文本块（MoC splits 第二列写入的 metadata.doc_id）。",
+    )
 
 
 class SearchResultItem(BaseModel):
     text: str = Field(..., description="检索到的文本内容")
     score: Optional[float] = Field(None, description="相似度分数（0-1，越高越相关）")
+    filepath: Optional[str] = Field(None, description="该文本块的来源文件路径（如有）")
+    doc_id: Optional[int] = Field(None, description="该文本块所属文档的 ID（如有）")
 
 
 class SearchResult(BaseModel):
@@ -56,6 +66,14 @@ class RAGRequest(BaseModel):
     embed_model_path: str = Field(..., description="嵌入模型路径")
     embed_dim: int = Field(1024, ge=64, description="嵌入向量维度")
     top_k: int = Field(5, ge=1, le=100, description="检索 top-k 数量")
+    filepath: Optional[str] = Field(
+        None,
+        description="可选：按来源文件过滤，仅检索来自该 filepath 的文本块。",
+    )
+    doc_id: Optional[int] = Field(
+        None,
+        description="可选：按 doc_id 过滤，仅检索指定文档 ID 的文本块。",
+    )
     llm_api_base: str = Field("http://localhost:8005/v1", description="vLLM API 地址")
     llm_model_name: str = Field(..., description="LLM 模型名称/路径")
     temperature: float = Field(0.1, ge=0.0, le=2.0, description="生成温度，越低越稳定")

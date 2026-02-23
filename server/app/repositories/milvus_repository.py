@@ -109,15 +109,24 @@ class MilvusRepository:
         embed_dim: int,
         overwrite: bool = True,
         batch_size: int = 100,
+        metadatas: Optional[list[dict]] | None = None,
     ) -> dict:
         try:
             start = time.time()
 
             raw_count = len(chunks)
             nodes: list[TextNode] = []
-            for text in chunks:
+            for idx, text in enumerate(chunks):
                 if isinstance(text, str) and text.strip():
-                    nodes.append(TextNode(text=text))
+                    metadata = None
+                    if metadatas and idx < len(metadatas):
+                        md = metadatas[idx]
+                        if isinstance(md, dict) and md:
+                            metadata = md
+                    if metadata:
+                        nodes.append(TextNode(text=text, metadata=metadata))
+                    else:
+                        nodes.append(TextNode(text=text))
             indexed = len(nodes)
 
             logger.info(
@@ -181,12 +190,32 @@ class MilvusRepository:
 
             elapsed = time.time() - start
             logger.info("[Milvus] 索引构建完成，collection=%s，耗时 %.2fs", collection_name, elapsed)
+
+            # 汇总 metadata，便于前端展示「本次索引涉及哪些文档 / doc_id」
+            unique_filepaths: set[str] = set()
+            unique_doc_ids: set[int] = set()
+            if metadatas:
+                for md in metadatas:
+                    if not isinstance(md, dict):
+                        continue
+                    fp = md.get("filepath")
+                    if isinstance(fp, str) and fp:
+                        unique_filepaths.add(fp)
+                    doc = md.get("doc_id")
+                    try:
+                        if doc is not None:
+                            unique_doc_ids.add(int(doc))
+                    except Exception:
+                        continue
+
             return {
                 "collection_name": collection_name,
                 "total_chunks": len(chunks),
                 "indexed_chunks": indexed,
                 "time_cost": elapsed,
                 "milvus_uri": self._db_path(collection_name),
+                "filepaths": sorted(unique_filepaths),
+                "doc_ids": sorted(unique_doc_ids),
             }
         except Exception as exc:
             logger.exception("索引构建失败: %s", exc)
@@ -196,17 +225,26 @@ class MilvusRepository:
         self,
         collection_name: str,
         chunks: list[str],
-        langchain_embed,  
+        langchain_embed,
         batch_size: int = 8000,
+        metadatas: Optional[list[dict]] | None = None,
     ) -> dict:
         try:
             start = time.time()
 
             raw_count = len(chunks)
             nodes: list[TextNode] = []
-            for text in chunks:
+            for idx, text in enumerate(chunks):
                 if isinstance(text, str) and text.strip():
-                    nodes.append(TextNode(text=text))
+                    metadata = None
+                    if metadatas and idx < len(metadatas):
+                        md = metadatas[idx]
+                        if isinstance(md, dict) and md:
+                            metadata = md
+                    if metadata:
+                        nodes.append(TextNode(text=text, metadata=metadata))
+                    else:
+                        nodes.append(TextNode(text=text))
             added = len(nodes)
 
             logger.info(
@@ -249,11 +287,30 @@ class MilvusRepository:
             logger.info(
                 "[Milvus] 数据追加完成，collection=%s，耗时 %.2fs", collection_name, elapsed
             )
+
+            unique_filepaths: set[str] = set()
+            unique_doc_ids: set[int] = set()
+            if metadatas:
+                for md in metadatas:
+                    if not isinstance(md, dict):
+                        continue
+                    fp = md.get("filepath")
+                    if isinstance(fp, str) and fp:
+                        unique_filepaths.add(fp)
+                    doc = md.get("doc_id")
+                    try:
+                        if doc is not None:
+                            unique_doc_ids.add(int(doc))
+                    except Exception:
+                        continue
+
             return {
                 "collection_name": collection_name,
                 "added_chunks": added,
                 "time_cost": elapsed,
                 "milvus_uri": self._db_path(collection_name),
+                "filepaths": sorted(unique_filepaths),
+                "doc_ids": sorted(unique_doc_ids),
             }
         except Exception as exc:
             logger.exception("追加索引失败: %s", exc)
@@ -297,7 +354,7 @@ class MilvusRepository:
         top_k: int = 5,
     ) -> list[dict]:
         """
-        在指定 collection 中检索与 query 最相关的文档。
+        在指定 collection 中检索与 query 最相关的文档（不带任何 metadata 过滤）。
 
         Returns:
             [{"text": ..., "score": ...}, ...]
@@ -307,12 +364,18 @@ class MilvusRepository:
                 collection_name, langchain_embed, embed_dim, top_k
             )
             response = engine.query(query)
-            results = []
-            for node in response.source_nodes:
+            results: list[dict] = []
+            for node_with_score in response.source_nodes:
+                node = node_with_score.node
+                meta = getattr(node, "metadata", {}) or {}
                 results.append(
                     {
-                        "text": node.node.get_content(),
-                        "score": float(node.score) if node.score is not None else None,
+                        "text": node.get_content(),
+                        "score": float(node_with_score.score)
+                        if node_with_score.score is not None
+                        else None,
+                        "filepath": meta.get("filepath"),
+                        "doc_id": int(meta["doc_id"]) if "doc_id" in meta else None,
                     }
                 )
             return results
@@ -320,4 +383,91 @@ class MilvusRepository:
             raise
         except Exception as exc:
             logger.exception("检索失败: %s", exc)
+            raise RetrievalException(f"检索失败: {exc}") from exc
+
+    def search_with_metadata_filter(
+        self,
+        collection_name: str,
+        query: str,
+        langchain_embed,
+        embed_dim: int,
+        top_k: int = 5,
+        filepath: Optional[str] = None,
+        doc_id: Optional[int] = None,
+    ) -> list[dict]:
+        """
+        在指定 collection 中检索时，基于 metadata（如 filepath、doc_id）做条件过滤。
+        使用 LlamaIndex 的 MetadataFilters，在 Milvus 端执行过滤，而非 Python 侧后过滤。
+        """
+        try:
+            if not self.collection_exists(collection_name):
+                raise CollectionNotFoundException(
+                    f"Collection '{collection_name}' 不存在，请先构建索引"
+                )
+
+            # 设置嵌入模型 & 加载向量存储
+            self._make_embed_model(langchain_embed)
+            vector_store = self._build_vector_store_with_dim(
+                collection_name, embed_dim, overwrite=False
+            )
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            vector_index = VectorStoreIndex([], storage_context=storage_context)
+
+            # 构造 metadata filters
+            from llama_index.core.vector_stores import (  # 本地导入避免未使用警告
+                MetadataFilter,
+                MetadataFilters,
+                FilterCondition,
+                FilterOperator,
+            )
+
+            filter_list: list[MetadataFilter] = []
+            if filepath is not None:
+                filter_list.append(
+                    MetadataFilter(
+                        key="filepath",
+                        value=str(filepath),
+                        operator=FilterOperator.EQ,
+                    )
+                )
+            if doc_id is not None:
+                filter_list.append(
+                    MetadataFilter(
+                        key="doc_id",
+                        value=int(doc_id),
+                        operator=FilterOperator.EQ,
+                    )
+                )
+
+            filters_obj = (
+                MetadataFilters(filters=filter_list, condition=FilterCondition.AND)
+                if filter_list
+                else None
+            )
+
+            retriever = vector_index.as_retriever(
+                similarity_top_k=top_k,
+                filters=filters_obj,
+            )
+            response_nodes = retriever.retrieve(query)
+
+            results: list[dict] = []
+            for node_with_score in response_nodes:
+                node = node_with_score.node
+                meta = getattr(node, "metadata", {}) or {}
+                results.append(
+                    {
+                        "text": node.get_content(),
+                        "score": float(node_with_score.score)
+                        if node_with_score.score is not None
+                        else None,
+                        "filepath": meta.get("filepath"),
+                        "doc_id": int(meta["doc_id"]) if "doc_id" in meta else None,
+                    }
+                )
+            return results
+        except CollectionNotFoundException:
+            raise
+        except Exception as exc:
+            logger.exception("带过滤条件检索失败: %s", exc)
             raise RetrievalException(f"检索失败: {exc}") from exc

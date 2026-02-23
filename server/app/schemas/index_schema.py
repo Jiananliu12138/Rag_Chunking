@@ -57,6 +57,14 @@ class IndexBuildResult(BaseModel):
     indexed_chunks: int
     time_cost: float
     milvus_uri: str
+    filepaths: list[str] = Field(
+        default_factory=list,
+        description="本次构建索引涉及的源文件路径列表（来自分块结果中的 filepath 元数据）",
+    )
+    doc_ids: list[int] = Field(
+        default_factory=list,
+        description="本次构建索引涉及的文档 ID 列表（来自分块结果中的 doc_id 元数据）",
+    )
 
 
 class IndexAddResult(BaseModel):
@@ -64,6 +72,14 @@ class IndexAddResult(BaseModel):
     added_chunks: int
     time_cost: float
     milvus_uri: str
+    filepaths: list[str] = Field(
+        default_factory=list,
+        description="本次追加索引涉及的源文件路径列表（来自分块结果中的 filepath 元数据）",
+    )
+    doc_ids: list[int] = Field(
+        default_factory=list,
+        description="本次追加索引涉及的文档 ID 列表（来自分块结果中的 doc_id 元数据）",
+    )
 
 
 class CollectionInfo(BaseModel):

@@ -81,13 +81,25 @@ class RetrievalService:
             request.collection_name, request.query[:30], request.top_k,
         )
         embed_model = IndexService._load_langchain_embed(request.embed_model_path)
-        raw_results = self._repo.search(
-            collection_name=request.collection_name,
-            query=request.query,
-            langchain_embed=embed_model,
-            embed_dim=request.embed_dim,
-            top_k=request.top_k,
-        )
+        # 没有过滤条件 → 普通全库检索；有条件 → 调用带 metadata 过滤的方法
+        if request.filepath is None and request.doc_id is None:
+            raw_results = self._repo.search(
+                collection_name=request.collection_name,
+                query=request.query,
+                langchain_embed=embed_model,
+                embed_dim=request.embed_dim,
+                top_k=request.top_k,
+            )
+        else:
+            raw_results = self._repo.search_with_metadata_filter(
+                collection_name=request.collection_name,
+                query=request.query,
+                langchain_embed=embed_model,
+                embed_dim=request.embed_dim,
+                top_k=request.top_k,
+                filepath=request.filepath,
+                doc_id=request.doc_id,
+            )
         items = [SearchResultItem(**r) for r in raw_results]
         return SearchResult(
             query=request.query,
@@ -103,13 +115,24 @@ class RetrievalService:
         )
         # Step 1: 向量检索
         embed_model = IndexService._load_langchain_embed(request.embed_model_path)
-        raw_results = self._repo.search(
-            collection_name=request.collection_name,
-            query=request.query,
-            langchain_embed=embed_model,
-            embed_dim=request.embed_dim,
-            top_k=request.top_k,
-        )
+        if request.filepath is None and request.doc_id is None:
+            raw_results = self._repo.search(
+                collection_name=request.collection_name,
+                query=request.query,
+                langchain_embed=embed_model,
+                embed_dim=request.embed_dim,
+                top_k=request.top_k,
+            )
+        else:
+            raw_results = self._repo.search_with_metadata_filter(
+                collection_name=request.collection_name,
+                query=request.query,
+                langchain_embed=embed_model,
+                embed_dim=request.embed_dim,
+                top_k=request.top_k,
+                filepath=request.filepath,
+                doc_id=request.doc_id,
+            )
         contexts = [r["text"] for r in raw_results]
         context_str = "\n\n".join(contexts)
 

@@ -2,6 +2,8 @@
 向量索引服务层。
 负责嵌入模型加载、向量索引构建与 collection 管理。
 """
+from typing import Any, Tuple
+
 from app.config import get_settings
 from app.core.exceptions import IndexBuildException, ModelLoadException
 from app.core.logging_config import logger
@@ -44,23 +46,71 @@ class IndexService:
         except Exception as exc:
             raise ModelLoadException(f"嵌入模型加载失败 ({embed_model_path}): {exc}") from exc
 
-    # ── 内部：从分块结果 JSON 中解析文本块 ─────────────────────────────────────
+    # ── 内部：从分块结果 JSON 中解析文本块及元数据 ─────────────────────────────
 
     @classmethod
-    def _load_chunks_from_file(cls, docs_path: str) -> list[str]:
-        """从分块结果 JSON 文件中加载文本块列表。"""
+    def _load_chunks_and_metadata_from_file(cls, docs_path: str) -> Tuple[list[str], list[dict[str, Any]]]:
+        """
+        从分块结果 JSON 文件中加载文本块列表及元数据。
+
+        目前特别支持 MoC/our_metrics/test_data/test.json 这种结构：
+        {
+          "filepath": "...",
+          "splits": [[text, doc_id], ...],
+          "time_cost": ...
+        }
+
+        其中：
+        - metadata["filepath"] 来自顶层 filepath
+        - metadata["doc_id"]   来自每个 split 的第二个元素
+
+        其他兼容格式则退化为只有文本、metadata 为空字典。
+        """
         try:
             raw = FileRepository.read_json(docs_path)
         except Exception as exc:
             raise IndexBuildException(f"读取分块结果文件失败 ({docs_path}): {exc}") from exc
 
-        try:
-            chunks = FileRepository.parse_chunks_from_json(raw)
-        except ValueError as exc:
-            raise IndexBuildException(str(exc)) from exc
+        chunks: list[str] = []
+        metadatas: list[dict[str, Any]] = []
+
+        # 特例：带 filepath + splits 的结构（来自 MoC 评估流水线）
+        if isinstance(raw, dict) and "splits" in raw:
+            filepath = raw.get("filepath")
+            splits = raw.get("splits")
+            if isinstance(splits, list):
+                for item in splits:
+                    if isinstance(item, list) and item:
+                        text = item[0]
+                        doc_id = item[1] if len(item) > 1 else None
+                        if isinstance(text, str) and text.strip():
+                            chunks.append(text)
+                            md: dict[str, Any] = {}
+                            if isinstance(filepath, str) and filepath:
+                                md["filepath"] = filepath
+                            if doc_id is not None:
+                                md["doc_id"] = doc_id
+                            metadatas.append(md)
+
+        # 其他通用格式：复用 FileRepository.parse_chunks_from_json，只返回文本
+        if not chunks:
+            try:
+                parsed_chunks = FileRepository.parse_chunks_from_json(raw)
+            except ValueError as exc:
+                raise IndexBuildException(str(exc)) from exc
+            chunks = parsed_chunks
+            metadatas = [{} for _ in chunks]
+
         if not chunks:
             raise IndexBuildException(f"分块结果文件中未解析到任何文本块: {docs_path}")
+
         logger.info("从分块文件解析到 %d 个文本块", len(chunks))
+        return chunks, metadatas
+
+    @classmethod
+    def _load_chunks_from_file(cls, docs_path: str) -> list[str]:
+        """兼容旧调用，只返回文本块列表。"""
+        chunks, _ = cls._load_chunks_and_metadata_from_file(docs_path)
         return chunks
 
     # ── 公开接口 ──────────────────────────────────────────────────────────────
@@ -71,7 +121,7 @@ class IndexService:
             request.collection_name,
             request.docs_path,
         )
-        chunks = self._load_chunks_from_file(request.docs_path)
+        chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
         settings = get_settings()
         model_path = settings.DEFAULT_EMBEDDING_MODEL
         embed_dim = settings.DEFAULT_EMBEDDING_DIM
@@ -80,6 +130,7 @@ class IndexService:
         info = self._repo.build_index(
             collection_name=request.collection_name,
             chunks=chunks,
+            metadatas=metadatas,
             langchain_embed=embed_model,
             embed_dim=embed_dim,
             overwrite=True,
@@ -99,7 +150,7 @@ class IndexService:
             request.collection_name,
             request.docs_path,
         )
-        chunks = self._load_chunks_from_file(request.docs_path)
+        chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
         settings = get_settings()
         model_path = settings.DEFAULT_EMBEDDING_MODEL
 
@@ -107,6 +158,7 @@ class IndexService:
         info = self._repo.add_index(
             collection_name=request.collection_name,
             chunks=chunks,
+            metadatas=metadatas,
             langchain_embed=embed_model,
             batch_size=request.batch_size,
         )
