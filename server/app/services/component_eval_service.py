@@ -15,7 +15,7 @@ from app.schemas.eval_schema import (
     ChunkStickinessRequest,
     ChunkStickinessResult,
 )
-
+from typing import Optional
 
 class ComponentEvalService:
 

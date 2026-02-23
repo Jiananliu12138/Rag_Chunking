@@ -127,8 +127,8 @@ def test_chunk_stickiness_direct() -> None:
             "Chunk 3: GPT uses the transformer decoder for autoregressive language generation.",
         ],
         # 阈值 / 距离惩罚可选，不传则走 STICKINESS_THRESHOLD / STICKINESS_DELTA
-        "threshold": 0.8,
-        "delta": 0.0,
+        "threshold": 0.5,
+        "delta": 0.1,
     }
     resp = requests.post(url, json=payload, timeout=3600)
     _print_response(resp)
@@ -158,12 +158,12 @@ if __name__ == "__main__":
     print("=" * 80)
     print("测试 1: /component-eval/chunk-quality (直接传 chunks)")
     print("=" * 80)
-    test_chunk_quality_direct()
+    # test_chunk_quality_direct()
 
     print("=" * 80)
     print("测试 2: /component-eval/chunk-quality-file (从文件读取)")
     print("=" * 80)
-    test_chunk_quality_file()
+    # test_chunk_quality_file()
 
     print("=" * 80)
     print("测试 3: /component-eval/chunk-stickiness (直接传 chunks)")
@@ -174,6 +174,6 @@ if __name__ == "__main__":
     print("=" * 80)
     print("测试 4: /component-eval/chunk-stickiness-file (从文件读取)")
     print("=" * 80)
-    # test_chunk_stickiness_file()
+    test_chunk_stickiness_file()
 
     print("\n测试脚本结束。")
