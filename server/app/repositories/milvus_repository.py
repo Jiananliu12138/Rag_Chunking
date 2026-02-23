@@ -201,7 +201,7 @@ class MilvusRepository:
                     fp = md.get("filepath")
                     if isinstance(fp, str) and fp:
                         unique_filepaths.add(fp)
-                    doc = md.get("doc_id")
+                    doc = md.get("source_doc_id")
                     if doc is not None:
                         # 统一转成字符串，兼容数字 / 字符串 doc_id
                         unique_doc_ids.add(str(doc))
@@ -295,7 +295,7 @@ class MilvusRepository:
                     fp = md.get("filepath")
                     if isinstance(fp, str) and fp:
                         unique_filepaths.add(fp)
-                    doc = md.get("doc_id")
+                    doc = md.get("source_doc_id")
                     if doc is not None:
                         unique_doc_ids.add(str(doc))
 
@@ -370,7 +370,8 @@ class MilvusRepository:
                         if node_with_score.score is not None
                         else None,
                         "filepath": meta.get("filepath"),
-                        "doc_id": int(meta["doc_id"]) if "doc_id" in meta else None,
+                        # 统一以字符串形式返回 doc_id，兼容数字 / 字符串
+                        "doc_id": str(meta["source_doc_id"]) if "source_doc_id" in meta else None,
                     }
                 )
             return results
@@ -428,7 +429,7 @@ class MilvusRepository:
             if doc_id is not None:
                 filter_list.append(
                     MetadataFilter(
-                        key="doc_id",
+                        key="source_doc_id",
                         value=str(doc_id),
                         operator=FilterOperator.EQ,
                     )
@@ -457,7 +458,7 @@ class MilvusRepository:
                         if node_with_score.score is not None
                         else None,
                         "filepath": meta.get("filepath"),
-                        "doc_id": int(meta["doc_id"]) if "doc_id" in meta else None,
+                        "doc_id": str(meta["source_doc_id"]) if "source_doc_id" in meta else None,
                     }
                 )
             return results

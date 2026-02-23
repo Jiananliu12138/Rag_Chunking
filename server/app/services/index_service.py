@@ -61,8 +61,8 @@ class IndexService:
         }
 
         其中：
-        - metadata["filepath"] 来自顶层 filepath
-        - metadata["doc_id"]   来自每个 split 的第二个元素
+        - metadata["filepath"]      来自顶层 filepath
+        - metadata["source_doc_id"] 来自每个 split 的第二个元素（避免与 LlamaIndex 内置 doc_id 冲突）
 
         其他兼容格式则退化为只有文本、metadata 为空字典。
         """
@@ -89,7 +89,7 @@ class IndexService:
                             if isinstance(filepath, str) and filepath:
                                 md["filepath"] = filepath
                             if doc_id is not None:
-                                md["doc_id"] = doc_id
+                                md["source_doc_id"] = str(doc_id)  # 避免与 LlamaIndex doc_id 冲突
                             metadatas.append(md)
 
         # 其他通用格式：复用 FileRepository.parse_chunks_from_json，只返回文本
