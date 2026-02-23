@@ -133,7 +133,11 @@ class RetrievalService:
                 filepath=request.filepath,
                 doc_id=request.doc_id,
             )
-        contexts = [r["text"] for r in raw_results]
+        # 同时保留纯文本上下文与带 metadata 的完整结果，方便前端展示与调试
+        from app.schemas.retrieval_schema import SearchResultItem  # 避免循环导入
+
+        context_items = [SearchResultItem(**r) for r in raw_results]
+        contexts = [item.text for item in context_items]
         context_str = "\n\n".join(contexts)
 
         # Step 2: 构造 Prompt 并调用 LLM
@@ -154,6 +158,7 @@ class RetrievalService:
             query=request.query,
             answer=answer,
             contexts=contexts,
+            context_items=context_items,
             collection_name=request.collection_name,
         )
 
@@ -216,7 +221,11 @@ class RetrievalService:
                         embed_dim=embed_dim,
                         top_k=request.top_k,
                     )
-                    context_texts = [r["text"] for r in raw_results]
+                    # 与在线 RAG 接口保持一致：既保留纯文本，也保留带 metadata 的完整结果
+                    from app.schemas.retrieval_schema import SearchResultItem  # 延迟导入避免循环依赖
+
+                    context_items = [SearchResultItem(**r) for r in raw_results]
+                    context_texts = [item.text for item in context_items]
                     context_str = "\n\n".join(context_texts)
                     prompt = self._build_llm_prompt(context_str, query)
                     llm_ans = self._call_vllm(
@@ -231,7 +240,10 @@ class RetrievalService:
                         "input": query,
                         "llm_ans": llm_ans,
                         "answers": data.get("answers", []),
+                        # 兼容原有字段：只包含纯文本
                         "retrieval_list": context_texts,
+                        # 新增：完整的检索结果（含 score、filepath、doc_id）
+                        "retrieval_items": [item.model_dump() for item in context_items],
                     }
                     retrieval_save_list.append(save)
                 except Exception as e:

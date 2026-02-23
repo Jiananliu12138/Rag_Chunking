@@ -83,7 +83,11 @@ class RAGRequest(BaseModel):
 class RAGResult(BaseModel):
     query: str
     answer: str
-    contexts: list[str] = Field(..., description="检索到的上下文文本列表")
+    contexts: list[str] = Field(..., description="检索到的上下文纯文本列表（用于拼接到 Prompt）")
+    context_items: list[SearchResultItem] = Field(
+        ...,
+        description="包含分数与元数据的上下文列表（与 /retrieval/search 的结果项结构一致）",
+    )
     collection_name: str
 
 

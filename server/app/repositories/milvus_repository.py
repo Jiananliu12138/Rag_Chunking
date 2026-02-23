@@ -36,11 +36,15 @@ class MilvusRepository:
     def _db_path(self, collection_name: str) -> str:
         """根据模式返回 uri：
         - 在线模式：返回在线 URI（不拼接 collection 名）
-        - Lite 模式：返回本地 .db 文件路径
+        - Lite 模式：返回本地 Milvus Lite 数据目录（使用 MILVUS_DATA_DIR）
+
+        注意：Milvus Lite 的本地 uri 应该是一个目录路径，而不是按 collection
+        拆分的多个 .db 文件，因此这里直接返回配置中的 MILVUS_DATA_DIR。
         """
         if self._online_uri:
             return self._online_uri
-        return str(self._data_dir / f"{collection_name}.db")
+        # 本地 Lite 模式：直接使用配置中的数据目录作为 uri
+        return str(self._data_dir)
 
     def _make_embed_model(self, langchain_embed):
         """将 LangChain embedding 包装成 LlamaIndex 格式并注入全局 Settings。"""
