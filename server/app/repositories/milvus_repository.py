@@ -193,7 +193,7 @@ class MilvusRepository:
 
             # 汇总 metadata，便于前端展示「本次索引涉及哪些文档 / doc_id」
             unique_filepaths: set[str] = set()
-            unique_doc_ids: set[int] = set()
+            unique_doc_ids: set[str] = set()
             if metadatas:
                 for md in metadatas:
                     if not isinstance(md, dict):
@@ -202,11 +202,9 @@ class MilvusRepository:
                     if isinstance(fp, str) and fp:
                         unique_filepaths.add(fp)
                     doc = md.get("doc_id")
-                    try:
-                        if doc is not None:
-                            unique_doc_ids.add(int(doc))
-                    except Exception:
-                        continue
+                    if doc is not None:
+                        # 统一转成字符串，兼容数字 / 字符串 doc_id
+                        unique_doc_ids.add(str(doc))
 
             return {
                 "collection_name": collection_name,
@@ -289,7 +287,7 @@ class MilvusRepository:
             )
 
             unique_filepaths: set[str] = set()
-            unique_doc_ids: set[int] = set()
+            unique_doc_ids: set[str] = set()
             if metadatas:
                 for md in metadatas:
                     if not isinstance(md, dict):
@@ -298,11 +296,8 @@ class MilvusRepository:
                     if isinstance(fp, str) and fp:
                         unique_filepaths.add(fp)
                     doc = md.get("doc_id")
-                    try:
-                        if doc is not None:
-                            unique_doc_ids.add(int(doc))
-                    except Exception:
-                        continue
+                    if doc is not None:
+                        unique_doc_ids.add(str(doc))
 
             return {
                 "collection_name": collection_name,
@@ -393,7 +388,7 @@ class MilvusRepository:
         embed_dim: int,
         top_k: int = 5,
         filepath: Optional[str] = None,
-        doc_id: Optional[int] = None,
+        doc_id: Optional[str] = None,
     ) -> list[dict]:
         """
         在指定 collection 中检索时，基于 metadata（如 filepath、doc_id）做条件过滤。
@@ -434,7 +429,7 @@ class MilvusRepository:
                 filter_list.append(
                     MetadataFilter(
                         key="doc_id",
-                        value=int(doc_id),
+                        value=str(doc_id),
                         operator=FilterOperator.EQ,
                     )
                 )

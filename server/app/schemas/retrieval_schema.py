@@ -24,7 +24,7 @@ class SearchRequest(BaseModel):
         None,
         description="可选：按来源文件过滤，仅检索来自该 filepath 的文本块（索引阶段写入的 metadata.filepath）。",
     )
-    doc_id: Optional[int] = Field(
+    doc_id: Optional[str] = Field(
         None,
         description="可选：按 doc_id 过滤，仅检索指定文档 ID 的文本块（MoC splits 第二列写入的 metadata.doc_id）。",
     )
@@ -34,7 +34,7 @@ class SearchResultItem(BaseModel):
     text: str = Field(..., description="检索到的文本内容")
     score: Optional[float] = Field(None, description="相似度分数（0-1，越高越相关）")
     filepath: Optional[str] = Field(None, description="该文本块的来源文件路径（如有）")
-    doc_id: Optional[int] = Field(None, description="该文本块所属文档的 ID（如有）")
+    doc_id: Optional[str] = Field(None, description="该文本块所属文档的 ID（如有）")
 
 
 class SearchResult(BaseModel):

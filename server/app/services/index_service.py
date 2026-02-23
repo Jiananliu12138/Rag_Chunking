@@ -167,6 +167,8 @@ class IndexService:
             added_chunks=info["added_chunks"],
             time_cost=info["time_cost"],
             milvus_uri=info["milvus_uri"],
+            filepaths=info.get("filepaths", []),
+            doc_ids=info.get("doc_ids", []),
         )
 
     def list_collections(self) -> CollectionListResult:
