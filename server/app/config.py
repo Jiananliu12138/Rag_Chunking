@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ── 路径 ─────────────────────────────────────────────────────
-    MILVUS_DATA_DIR: str = str(BASE_DIR / "milvus_data")
+    MILVUS_DATA_DIR: str = ""
     MILVUS_URI: str = ""
     CHUNKING_METHODS_DIR: str = str(BASE_DIR / "Chunking_Methods")
     EVAL_LONGBENCH_DIR: str = str(BASE_DIR / "eval" / "LongBench")
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # ── 组件级评估默认配置 ───────────────────────────────────────
     # Chunk 质量评估（BC + 语义不相似度）
     COMPONENT_PPL_MODEL_PATH: str = ""
-    COMPONENT_SIM_MODEL_PATH: str = "BAAI/all-MiniLM-L6-v2"
+    COMPONENT_SIM_MODEL_PATH: str = ""
     COMPONENT_ENABLE_SEMANTIC_SIMILARITY: bool = True
     COMPONENT_ENABLE_BOUNDARY_CLARITY: bool = True
 

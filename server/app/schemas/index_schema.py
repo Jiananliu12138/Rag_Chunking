@@ -114,10 +114,6 @@ class CollectionInspectItem(BaseModel):
         default_factory=list,
         description="从示例数据中推断出的动态元数据字段名列表（如 filepath、source_doc_id 等）。",
     )
-    sample_rows: list[dict] = Field(
-        default_factory=list,
-        description="若干行示例数据，每行包含所有字段（包括动态元数据）。",
-    )
 
 
 class CollectionInspectResult(BaseModel):

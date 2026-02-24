@@ -184,24 +184,12 @@ class MilvusRepository:
         predefined_fields = schema_field_names
         dynamic_fields = [f for f in all_fields if f not in schema_field_names]
 
-        # 3) 再取若干行完整记录作为示例
-        try:
-            rows = client.query(
-                collection_name=collection_name,
-                limit=5,
-                output_fields=["*"],
-            )
-        except Exception as exc:  # pragma: no cover
-            logger.warning("sample rows query 失败: %s", exc)
-            rows = []
-
         return {
             "collection_name": collection_name,
             "uri": uri,
             "schema": schema,
             "predefined_fields": predefined_fields,
             "dynamic_fields": dynamic_fields,
-            "sample_rows": rows,
         }
 
     def inspect_all_collections(self) -> list[dict]:
@@ -226,8 +214,13 @@ class MilvusRepository:
             raise CollectionNotFoundException(
                 f"Collection '{collection_name}' 不存在"
             )
+        # 删除主 .db 文件
         db_file.unlink()
-        logger.info("已删除 collection: %s", collection_name)
+        # 同时删除可能存在的锁文件（例如 test_chunks.db.lock）
+        lock_file = db_file.with_suffix(db_file.suffix + ".lock")
+        if lock_file.exists():
+            lock_file.unlink()
+        logger.info("已删除 collection: %s（含 .db 及 .lock 文件，如存在）", collection_name)
 
     def build_index(
         self,
