@@ -13,6 +13,7 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.schema import TextNode
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.vector_stores.milvus import MilvusVectorStore
+from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
 from llama_index.embeddings.langchain import LangchainEmbedding
 
 from app.config import get_settings
@@ -45,7 +46,7 @@ class MilvusRepository:
         if self._online_uri:
             return self._online_uri
         # 本地 Lite 模式：直接使用配置中的数据目录作为 uri
-        return str(self._data_dir)
+        return str(self._data_dir / f"{collection_name}.db")
 
     def _make_embed_model(self, langchain_embed):
         """将 LangChain embedding 包装成 LlamaIndex 格式并注入全局 Settings。"""
@@ -74,12 +75,21 @@ class MilvusRepository:
                     "k": self._settings.MILVUS_HYBRID_RANKER_K
                 }
 
+        sparse_kwargs: dict = {}
+        if enable_sparse:
+            # 强制使用 Milvus 内置 BM25，而不是默认的 BGEM3 / FlagEmbedding
+            sparse_kwargs["sparse_embedding_function"] = BM25BuiltInFunction(
+                input_field_names="text",           # 与默认 text_key 一致
+                output_field_names="sparse_embedding",  # 与默认 sparse_embedding_field 一致
+            )
+
         return MilvusVectorStore(
             uri=self._db_path(collection_name),
             collection_name=collection_name,
             overwrite=overwrite,
             enable_dense=True,
             enable_sparse=enable_sparse,
+            **sparse_kwargs,
             **hybrid_kwargs,
         )
 
@@ -96,6 +106,13 @@ class MilvusRepository:
                     "k": self._settings.MILVUS_HYBRID_RANKER_K
                 }
 
+        sparse_kwargs: dict = {}
+        if enable_sparse:
+            sparse_kwargs["sparse_embedding_function"] = BM25BuiltInFunction(
+                input_field_names="text",
+                output_field_names="sparse_embedding",
+            )
+
         return MilvusVectorStore(
             uri=self._db_path(collection_name),
             collection_name=collection_name,
@@ -103,6 +120,7 @@ class MilvusRepository:
             overwrite=overwrite,
             enable_dense=True,
             enable_sparse=enable_sparse,
+            **sparse_kwargs,
             **hybrid_kwargs,
         )
 
