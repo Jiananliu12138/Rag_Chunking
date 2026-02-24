@@ -18,6 +18,7 @@ from app.schemas.index_schema import (
     IndexBuildResult,
     IndexAddRequest,
     IndexAddResult,
+    IndexDeleteByMetadataRequest,
 )
 
 
@@ -189,3 +190,17 @@ class IndexService:
         raw = self._repo.inspect_all_collections()
         items = [CollectionInspectItem(**item) for item in raw]
         return CollectionInspectResult(collections=items, total=len(items))
+
+    def delete_by_metadata(
+        self,
+        collection_name: str,
+        request: IndexDeleteByMetadataRequest,
+    ) -> None:
+        """
+        按 filepath / doc_ids 删除部分向量。
+        """
+        self._repo.delete_by_metadata(
+            collection_name=collection_name,
+            filepath=request.filepath,
+            doc_ids=request.doc_ids,
+        )

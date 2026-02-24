@@ -17,6 +17,7 @@ from app.schemas.index_schema import (
     IndexBuildResult,
     IndexAddRequest,
     IndexAddResult,
+    IndexDeleteByMetadataRequest,
 )
 from app.services.index_service import IndexService
 
@@ -157,6 +158,34 @@ def delete_collection(
         service.delete_collection(collection_name)
         return BaseResponse.ok(None, message=f"Collection '{collection_name}' 已删除")
     except CollectionNotFoundException as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/collections/{collection_name}/delete-by-metadata",
+    response_model=BaseResponse[None],
+    summary="按 filepath/doc_id 删除部分向量",
+    description=(
+        "在指定 collection 中，按 metadata 条件（filepath / doc_ids）删除部分向量数据，**操作不可逆**。\n\n"
+        "请求体中至少需要提供 `filepath` 或 `doc_ids` 之一：\n"
+        "- `filepath`：仅删除该来源文件对应的所有文本块向量\n"
+        "- `doc_ids`：仅删除这些 doc_id（内部存为 metadata.source_doc_id）对应的文本块向量\n\n"
+        "删除操作不会影响其他 collection，也不会删除整个 .db 文件。"
+    ),
+)
+def delete_by_metadata(
+    collection_name: Annotated[str, Path(description="目标 collection 名称")],
+    request: IndexDeleteByMetadataRequest,
+    service: Annotated[IndexService, Depends(_get_index_service)],
+) -> BaseResponse[None]:
+    try:
+        service.delete_by_metadata(collection_name, request)
+        return BaseResponse.ok(None, message="按 metadata 删除向量成功")
+    except CollectionNotFoundException as exc:
+        raise to_http_exception(exc)
+    except IndexBuildException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

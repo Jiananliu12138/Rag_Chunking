@@ -222,6 +222,63 @@ class MilvusRepository:
             lock_file.unlink()
         logger.info("已删除 collection: %s（含 .db 及 .lock 文件，如存在）", collection_name)
 
+    def delete_by_metadata(
+        self,
+        collection_name: str,
+        filepath: Optional[str] = None,
+        doc_ids: Optional[list[str]] = None,
+    ) -> None:
+        """
+        按 metadata 条件删除部分向量（不可逆）。
+        支持按 filepath / source_doc_id 批量删除。
+        """
+        if filepath is None and (not doc_ids):
+            raise IndexBuildException("至少需要提供 filepath 或 doc_ids 之一用于删除条件")
+
+        if not self.collection_exists(collection_name):
+            raise CollectionNotFoundException(
+                f"Collection '{collection_name}' 不存在"
+            )
+
+        # 构造向量存储（连接已有 collection）
+        vector_store = self._build_vector_store(collection_name, overwrite=False)
+
+        # 构造 metadata filters，与 search_with_metadata_filter 保持一致
+        from llama_index.core.vector_stores import (  # 本地导入避免未使用警告
+            MetadataFilter,
+            MetadataFilters,
+            FilterCondition,
+            FilterOperator,
+        )
+
+        filter_list: list[MetadataFilter] = []
+        if filepath is not None:
+            filter_list.append(
+                MetadataFilter(
+                    key="filepath",
+                    value=str(filepath),
+                    operator=FilterOperator.EQ,
+                )
+            )
+        if doc_ids:
+            filter_list.append(
+                MetadataFilter(
+                    key="source_doc_id",
+                    value=[str(d) for d in doc_ids],
+                    operator=FilterOperator.IN,
+                )
+            )
+
+        filters_obj = MetadataFilters(filters=filter_list, condition=FilterCondition.AND)
+
+        logger.info(
+            "按 metadata 删除向量: collection=%s, filepath=%s, doc_ids=%s",
+            collection_name,
+            filepath,
+            doc_ids,
+        )
+        vector_store.delete_nodes(filters=filters_obj)
+
     def build_index(
         self,
         collection_name: str,
@@ -338,6 +395,19 @@ class MilvusRepository:
                         # 统一转成字符串，兼容数字 / 字符串 doc_id
                         unique_doc_ids.add(str(doc))
 
+            # 将本次构建涉及的 filepath / doc_ids 按 collection 维度写入一个 meta JSON，便于后续前端快速读取
+            try:
+                meta_path = self._data_dir / f"{collection_name}_meta.json"
+                meta_data = {
+                    "collection_name": collection_name,
+                    "filepaths": sorted(unique_filepaths),
+                    "doc_ids": sorted(unique_doc_ids),
+                }
+                import json
+                meta_path.write_text(json.dumps(meta_data, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception as exc:  # pragma: no cover - 记录失败不影响主流程
+                logger.warning("写入 collection meta JSON 失败: %s", exc)
+
             return {
                 "collection_name": collection_name,
                 "total_chunks": len(chunks),
@@ -430,6 +500,32 @@ class MilvusRepository:
                     doc = md.get("source_doc_id")
                     if doc is not None:
                         unique_doc_ids.add(str(doc))
+
+            # 将本次追加涉及的 filepath / doc_ids 合并进 collection 的 meta JSON（若存在则增量合并）
+            try:
+                meta_path = self._data_dir / f"{collection_name}_meta.json"
+                existing_filepaths: set[str] = set()
+                existing_doc_ids: set[str] = set()
+                if meta_path.exists():
+                    import json
+                    raw_meta = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
+                    for fp in raw_meta.get("filepaths", []):
+                        if isinstance(fp, str) and fp:
+                            existing_filepaths.add(fp)
+                    for d in raw_meta.get("doc_ids", []):
+                        if isinstance(d, str) and d:
+                            existing_doc_ids.add(d)
+                merged_filepaths = sorted(existing_filepaths.union(unique_filepaths))
+                merged_doc_ids = sorted(existing_doc_ids.union(unique_doc_ids))
+                new_meta = {
+                    "collection_name": collection_name,
+                    "filepaths": merged_filepaths,
+                    "doc_ids": merged_doc_ids,
+                }
+                import json as _json
+                meta_path.write_text(_json.dumps(new_meta, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception as exc:  # pragma: no cover
+                logger.warning("更新 collection meta JSON 失败: %s", exc)
 
             return {
                 "collection_name": collection_name,

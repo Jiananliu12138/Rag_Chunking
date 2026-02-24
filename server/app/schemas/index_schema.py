@@ -119,3 +119,16 @@ class CollectionInspectItem(BaseModel):
 class CollectionInspectResult(BaseModel):
     collections: list[CollectionInspectItem]
     total: int
+
+
+class IndexDeleteByMetadataRequest(BaseModel):
+    """按 metadata 条件删除部分向量的请求体。"""
+
+    filepath: Optional[str] = Field(
+        None,
+        description="可选：按来源文件删除，仅删除该 filepath 对应的文本块向量。",
+    )
+    doc_ids: Optional[list[str]] = Field(
+        None,
+        description="可选：按 doc_id 列表删除，仅删除这些文档 ID 对应的文本块向量。",
+    )

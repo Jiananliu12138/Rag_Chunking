@@ -181,12 +181,18 @@ class EvalService:
                 cache_dir=cache_dir,
             )
 
-            dataset = {
-                "question": request.dataset.question,
-                "answer": request.dataset.answer,
-                "contexts": request.dataset.contexts,
-                "ground_truth": request.dataset.ground_truth,
-            }
+            # 支持两种输入方式：
+            # 1）request.test：原始 JSON（标准 RAGAS 或 sample_results.json 格式），复用 FileRepository.parse_ragas_dataset_from_json
+            # 2）request.dataset：已经拆好的 RAGASDataset
+            if request.test is not None:
+                dataset = FileRepository.parse_ragas_dataset_from_json(request.test)
+            else:
+                dataset = {
+                    "question": request.dataset.question,
+                    "answer": request.dataset.answer,
+                    "contexts": request.dataset.contexts,
+                    "ground_truth": request.dataset.ground_truth,
+                }
             raw = evaluator.evaluate(dataset)
 
             def _make_summary(name: str) -> RAGASMetricSummary:
@@ -207,9 +213,12 @@ class EvalService:
                 noise_sensitivity_irrelevant=_make_summary("noise_sensitivity_irrelevant"),
             )
 
+            # 如果来自 test，question 是 dataset["question"]；否则是 request.dataset.question，长度等价
+            sample_count = len(dataset["question"])
+
             return RAGASEvalResult(
                 summary=summary,
-                sample_count=len(request.dataset.question),
+                sample_count=sample_count,
                 samples=raw.get("samples", []),
             )
         except Exception as exc:

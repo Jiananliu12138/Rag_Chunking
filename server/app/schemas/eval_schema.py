@@ -111,6 +111,14 @@ class RAGASEvalRequest(BaseModel):
     )
 
     dataset: RAGASDataset = Field(..., description="RAGAS 格式的评估数据集")
+    test: Optional[Any] = Field(
+        None,
+        description=(
+            "可选：直接传入原始评估 JSON（如 sample_results.json 或标准 RAGAS 格式），"
+            "由服务端自动拆解为 question/answer/contexts/ground_truth；"
+            "与 dataset 二选一，若同时提供则优先使用 test。"
+        ),
+    )
     vllm_api_base: Optional[str] = Field(
         None, description="vLLM API 地址（可选，未提供时从配置读取 DEFAULT_RAGAS_VLLM_API_BASE）"
     )
