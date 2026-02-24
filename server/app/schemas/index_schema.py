@@ -95,3 +95,31 @@ class CollectionInfo(BaseModel):
 class CollectionListResult(BaseModel):
     collections: list[CollectionInfo]
     total: int
+
+
+class CollectionInspectItem(BaseModel):
+    collection_name: str
+    uri: str
+    db_file: str
+    size_bytes: int
+    schema: Optional[dict] = Field(
+        None,
+        description="Milvus describe_collection 返回的 schema 信息（可能为 None）。",
+    )
+    predefined_fields: list[str] = Field(
+        default_factory=list,
+        description="MilvusVectorStore 预定义的字段名列表（id/doc_id/text/embedding/sparse_embedding 等）。",
+    )
+    dynamic_fields: list[str] = Field(
+        default_factory=list,
+        description="从示例数据中推断出的动态元数据字段名列表（如 filepath、source_doc_id 等）。",
+    )
+    sample_rows: list[dict] = Field(
+        default_factory=list,
+        description="若干行示例数据，每行包含所有字段（包括动态元数据）。",
+    )
+
+
+class CollectionInspectResult(BaseModel):
+    collections: list[CollectionInspectItem]
+    total: int

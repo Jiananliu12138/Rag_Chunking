@@ -12,6 +12,8 @@ from app.repositories.milvus_repository import MilvusRepository
 from app.schemas.index_schema import (
     CollectionInfo,
     CollectionListResult,
+    CollectionInspectItem,
+    CollectionInspectResult,
     IndexBuildRequest,
     IndexBuildResult,
     IndexAddRequest,
@@ -179,3 +181,11 @@ class IndexService:
 
     def delete_collection(self, collection_name: str) -> None:
         self._repo.delete_collection(collection_name)
+
+    def inspect_collections(self) -> CollectionInspectResult:
+        """
+        结合物理信息（.db 文件）和逻辑信息（schema + 动态字段）返回所有 collection 的详情。
+        """
+        raw = self._repo.inspect_all_collections()
+        items = [CollectionInspectItem(**item) for item in raw]
+        return CollectionInspectResult(collections=items, total=len(items))

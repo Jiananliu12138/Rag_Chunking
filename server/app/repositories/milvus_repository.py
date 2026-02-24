@@ -14,6 +14,7 @@ from llama_index.core.schema import TextNode
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
+from pymilvus import MilvusClient
 from llama_index.embeddings.langchain import LangchainEmbedding
 
 from app.config import get_settings
@@ -140,6 +141,84 @@ class MilvusRepository:
                 }
             )
         return collections
+
+    def inspect_collection(self, collection_name: str) -> dict:
+        """
+        查看单个 collection 的字段信息和示例数据，便于前端展示 schema / 动态元数据。
+        """
+        uri = self._db_path(collection_name)
+        client = MilvusClient(uri=uri)
+
+        # 1) schema 信息
+        try:
+            schema = client.describe_collection(collection_name)
+        except Exception as exc:  # pragma: no cover - 容错
+            logger.warning("describe_collection 失败: %s", exc)
+            schema = None
+
+        # 2) 抽一条样本行，看有哪些字段（含动态元数据）
+        try:
+            sample = client.query(
+                collection_name=collection_name,
+                limit=1,
+                output_fields=["*"],
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("sample query 失败: %s", exc)
+            sample = []
+
+        all_fields: list[str] = []
+        if sample:
+            all_fields = list(sample[0].keys())
+
+        # 根据 schema 动态推断「预定义字段」：所有 schema 中声明的字段名
+        schema_field_names: list[str] = []
+        if isinstance(schema, dict):
+            fields = schema.get("fields") or []
+            try:
+                schema_field_names = [f.get("name") for f in fields if isinstance(f, dict) and "name" in f]
+            except Exception:
+                schema_field_names = []
+
+        # 预定义字段 = schema 中的字段名；动态字段 = sample 行中多出来的字段
+        predefined_fields = schema_field_names
+        dynamic_fields = [f for f in all_fields if f not in schema_field_names]
+
+        # 3) 再取若干行完整记录作为示例
+        try:
+            rows = client.query(
+                collection_name=collection_name,
+                limit=5,
+                output_fields=["*"],
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("sample rows query 失败: %s", exc)
+            rows = []
+
+        return {
+            "collection_name": collection_name,
+            "uri": uri,
+            "schema": schema,
+            "predefined_fields": predefined_fields,
+            "dynamic_fields": dynamic_fields,
+            "sample_rows": rows,
+        }
+
+    def inspect_all_collections(self) -> list[dict]:
+        """
+        结合物理信息（.db 文件）和逻辑信息（schema + 动态字段）返回所有 collection 的详情。
+        """
+        details: list[dict] = []
+        for item in self.list_collections():
+            name = item["name"]
+            try:
+                info = self.inspect_collection(name)
+                info["db_file"] = item["db_file"]
+                info["size_bytes"] = item["size_bytes"]
+                details.append(info)
+            except Exception as exc:  # pragma: no cover
+                logger.warning("inspect_all_collections: collection=%s 失败: %s", name, exc)
+        return details
 
     def delete_collection(self, collection_name: str) -> None:
         db_file = Path(self._db_path(collection_name))

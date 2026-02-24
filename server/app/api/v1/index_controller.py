@@ -12,6 +12,7 @@ from app.repositories.milvus_repository import MilvusRepository
 from app.schemas.common import BaseResponse
 from app.schemas.index_schema import (
     CollectionListResult,
+    CollectionInspectResult,
     IndexBuildRequest,
     IndexBuildResult,
     IndexAddRequest,
@@ -115,6 +116,26 @@ def list_collections(
     service: Annotated[IndexService, Depends(_get_index_service)],
 ) -> BaseResponse[CollectionListResult]:
     result = service.list_collections()
+    return BaseResponse.ok(result)
+
+
+@router.get(
+    "/collections/inspect",
+    response_model=BaseResponse[CollectionInspectResult],
+    summary="查看所有 collection 的字段与示例数据",
+    description=(
+        "对当前 Milvus 中的每个 collection，返回：\n"
+        "- 物理信息：db_file、size_bytes\n"
+        "- schema 信息：describe_collection 的结果\n"
+        "- 预定义字段：id / doc_id / text / embedding / sparse_embedding 等\n"
+        "- 动态元数据字段：从示例数据中推断出的 metadata 字段（如 filepath、source_doc_id 等）\n"
+        "- 若干行示例数据：包含所有字段（便于前端做表格展示）"
+    ),
+)
+def inspect_collections(
+    service: Annotated[IndexService, Depends(_get_index_service)],
+) -> BaseResponse[CollectionInspectResult]:
+    result = service.inspect_collections()
     return BaseResponse.ok(result)
 
 
