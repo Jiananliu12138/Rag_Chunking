@@ -135,6 +135,7 @@ class IndexService:
             embed_dim=embed_dim,
             overwrite=True,
             batch_size=request.batch_size,
+            enable_sparse=request.enable_sparse,
         )
         return IndexBuildResult(**info)
 

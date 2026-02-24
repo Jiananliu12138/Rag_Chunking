@@ -89,6 +89,7 @@ class RetrievalService:
                 langchain_embed=embed_model,
                 embed_dim=request.embed_dim,
                 top_k=request.top_k,
+                use_hybrid_search=request.use_hybrid_search,
             )
         else:
             raw_results = self._repo.search_with_metadata_filter(
@@ -99,6 +100,7 @@ class RetrievalService:
                 top_k=request.top_k,
                 filepath=request.filepath,
                 doc_id=request.doc_id,
+                use_hybrid_search=request.use_hybrid_search,
             )
         items = [SearchResultItem(**r) for r in raw_results]
         return SearchResult(
@@ -122,6 +124,7 @@ class RetrievalService:
                 langchain_embed=embed_model,
                 embed_dim=request.embed_dim,
                 top_k=request.top_k,
+                use_hybrid_search=request.use_hybrid_search,
             )
         else:
             raw_results = self._repo.search_with_metadata_filter(
@@ -132,6 +135,7 @@ class RetrievalService:
                 top_k=request.top_k,
                 filepath=request.filepath,
                 doc_id=request.doc_id,
+                use_hybrid_search=request.use_hybrid_search,
             )
         # 同时保留纯文本上下文与带 metadata 的完整结果，方便前端展示与调试
         from app.schemas.retrieval_schema import SearchResultItem  # 避免循环导入

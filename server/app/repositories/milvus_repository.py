@@ -11,6 +11,7 @@ from llama_index.core import VectorStoreIndex, StorageContext, Settings
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.schema import TextNode
+from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.embeddings.langchain import LangchainEmbedding
 
@@ -25,10 +26,10 @@ from app.core.logging_config import logger
 
 class MilvusRepository:
     def __init__(self):
-        settings = get_settings()
-        self._data_dir = Path(settings.MILVUS_DATA_DIR)
+        self._settings = get_settings()
+        self._data_dir = Path(self._settings.MILVUS_DATA_DIR)
         self._data_dir.mkdir(parents=True, exist_ok=True)
-        uri = (settings.MILVUS_URI or "").strip()
+        uri = (self._settings.MILVUS_URI or "").strip()
         self._online_uri: Optional[str] = uri or None
 
     # ── 内部辅助 ──────────────────────────────────────────────────────────────
@@ -63,20 +64,46 @@ class MilvusRepository:
         return wrapped
 
     def _build_vector_store(self, collection_name: str, overwrite: bool) -> MilvusVectorStore:
+        enable_sparse = self._settings.MILVUS_ENABLE_SPARSE
+        enable_hybrid = self._settings.MILVUS_ENABLE_HYBRID_SEARCH and enable_sparse
+        hybrid_kwargs: dict = {}
+        if enable_hybrid:
+            hybrid_kwargs["hybrid_ranker"] = self._settings.MILVUS_HYBRID_RANKER
+            if self._settings.MILVUS_HYBRID_RANKER == "RRFRanker":
+                hybrid_kwargs["hybrid_ranker_params"] = {
+                    "k": self._settings.MILVUS_HYBRID_RANKER_K
+                }
+
         return MilvusVectorStore(
             uri=self._db_path(collection_name),
             collection_name=collection_name,
             overwrite=overwrite,
+            enable_dense=True,
+            enable_sparse=enable_sparse,
+            **hybrid_kwargs,
         )
 
     def _build_vector_store_with_dim(
         self, collection_name: str, dim: int, overwrite: bool
     ) -> MilvusVectorStore:
+        enable_sparse = self._settings.MILVUS_ENABLE_SPARSE
+        enable_hybrid = self._settings.MILVUS_ENABLE_HYBRID_SEARCH and enable_sparse
+        hybrid_kwargs: dict = {}
+        if enable_hybrid:
+            hybrid_kwargs["hybrid_ranker"] = self._settings.MILVUS_HYBRID_RANKER
+            if self._settings.MILVUS_HYBRID_RANKER == "RRFRanker":
+                hybrid_kwargs["hybrid_ranker_params"] = {
+                    "k": self._settings.MILVUS_HYBRID_RANKER_K
+                }
+
         return MilvusVectorStore(
             uri=self._db_path(collection_name),
             collection_name=collection_name,
             dim=dim,
             overwrite=overwrite,
+            enable_dense=True,
+            enable_sparse=enable_sparse,
+            **hybrid_kwargs,
         )
 
     # ── 公开接口 ──────────────────────────────────────────────────────────────
@@ -114,6 +141,7 @@ class MilvusRepository:
         overwrite: bool = True,
         batch_size: int = 100,
         metadatas: Optional[list[dict]] | None = None,
+        enable_sparse: Optional[bool] = None,
     ) -> dict:
         try:
             start = time.time()
@@ -162,9 +190,19 @@ class MilvusRepository:
 
             # 包装嵌入模型并构建向量存储
             self._make_embed_model(langchain_embed)
-            vector_store = self._build_vector_store_with_dim(
-                collection_name, embed_dim, overwrite
-            )
+            # 若请求显式指定是否启用稀疏，则在首次建索引时覆盖默认配置
+            if enable_sparse is not None:
+                original_sparse = self._settings.MILVUS_ENABLE_SPARSE
+                self._settings.MILVUS_ENABLE_SPARSE = enable_sparse
+            else:
+                original_sparse = None
+            try:
+                vector_store = self._build_vector_store_with_dim(
+                    collection_name, embed_dim, overwrite
+                )
+            finally:
+                if original_sparse is not None:
+                    self._settings.MILVUS_ENABLE_SPARSE = original_sparse
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
             # 分批写入节点，仿照 base_lite 的批处理结构
@@ -321,6 +359,7 @@ class MilvusRepository:
         langchain_embed,
         embed_dim: int,
         top_k: int = 5,
+        use_hybrid_search: Optional[bool] = None,
     ) -> RetrieverQueryEngine:
         """
         加载已有 collection 并返回可执行检索的 QueryEngine。
@@ -336,7 +375,25 @@ class MilvusRepository:
             )
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
             vector_index = VectorStoreIndex([], storage_context=storage_context)
-            retriever = VectorIndexRetriever(index=vector_index, similarity_top_k=top_k)
+            # 计算本次请求是否启用 Hybrid：请求参数优先，其次全局配置；同时要求全局允许稀疏
+            effective_use_hybrid = (
+                use_hybrid_search
+                if use_hybrid_search is not None
+                else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
+            )
+            effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+
+            if effective_use_hybrid:
+                retriever = VectorIndexRetriever(
+                    index=vector_index,
+                    similarity_top_k=top_k,
+                    vector_store_query_mode=VectorStoreQueryMode.HYBRID,
+                )
+            else:
+                retriever = VectorIndexRetriever(
+                    index=vector_index,
+                    similarity_top_k=top_k,
+                )
             return RetrieverQueryEngine(retriever=retriever)
         except CollectionNotFoundException:
             raise
@@ -351,6 +408,7 @@ class MilvusRepository:
         langchain_embed,
         embed_dim: int,
         top_k: int = 5,
+        use_hybrid_search: Optional[bool] = None,
     ) -> list[dict]:
         """
         在指定 collection 中检索与 query 最相关的文档（不带任何 metadata 过滤）。
@@ -360,7 +418,11 @@ class MilvusRepository:
         """
         try:
             engine = self.load_query_engine(
-                collection_name, langchain_embed, embed_dim, top_k
+                collection_name,
+                langchain_embed,
+                embed_dim,
+                top_k,
+                use_hybrid_search=use_hybrid_search,
             )
             response = engine.query(query)
             results: list[dict] = []
@@ -394,6 +456,7 @@ class MilvusRepository:
         top_k: int = 5,
         filepath: Optional[str] = None,
         doc_id: Optional[str] = None,
+        use_hybrid_search: Optional[bool] = None,
     ) -> list[dict]:
         """
         在指定 collection 中检索时，基于 metadata（如 filepath、doc_id）做条件过滤。
@@ -445,10 +508,22 @@ class MilvusRepository:
                 else None
             )
 
-            retriever = vector_index.as_retriever(
-                similarity_top_k=top_k,
-                filters=filters_obj,
+            # 计算本次请求是否启用 Hybrid：请求参数优先，其次全局配置；同时要求全局允许稀疏
+            effective_use_hybrid = (
+                use_hybrid_search
+                if use_hybrid_search is not None
+                else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
             )
+            effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+
+            retriever_kwargs = {
+                "similarity_top_k": top_k,
+                "filters": filters_obj,
+            }
+            if effective_use_hybrid:
+                retriever_kwargs["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
+
+            retriever = vector_index.as_retriever(**retriever_kwargs)
             response_nodes = retriever.retrieve(query)
 
             results: list[dict] = []

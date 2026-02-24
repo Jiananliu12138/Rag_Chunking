@@ -25,6 +25,10 @@ class IndexBuildRequest(BaseModel):
         ),
     )
     batch_size: int = Field(100, ge=1, le=5000, description="批量写入大小（每批写入的文本块数）")
+    enable_sparse: Optional[bool] = Field(
+        None,
+        description="是否为该 collection 启用稀疏向量（BM25）；为空则使用服务端默认配置。",
+    )
 
 
 class IndexAddRequest(BaseModel):

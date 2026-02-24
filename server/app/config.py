@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     # ── 检索默认配置 ─────────────────────────────────────────────
     DEFAULT_RETRIEVE_TOP_K: int = 5
 
+    # ── Milvus / Hybrid Search 配置 ─────────────────────────────────────────
+    # 是否在 Milvus 中启用稀疏向量（BM25）能力
+    MILVUS_ENABLE_SPARSE: bool = True
+    # 是否在检索阶段启用 Hybrid Search（dense + sparse 一起用）
+    MILVUS_ENABLE_HYBRID_SEARCH: bool = True
+    # Hybrid Search 使用的 ranker 类型（RRFRanker 或 WeightedRanker）
+    MILVUS_HYBRID_RANKER: str = "RRFRanker"
+    # RRFRanker 的 k 参数（仅在使用 RRFRanker 时生效）
+    MILVUS_HYBRID_RANKER_K: int = 60
+
     # ── 分块 / tiktoken 默认配置 ─────────────────────────────────
     # 从环境变量中读取对应值（.env 中写 TIKTOKEN_CACHE_DIR / CHUNK_NUM_WORKERS 即可）
     TIKTOKEN_CACHE_DIR: str = ""
