@@ -368,9 +368,20 @@ export default function Home() {
                                       </span>
                                     </div>
                                     <p className="text-slate-700">{ctx.text}</p>
-                                    {ctx.filepath && (
-                                      <p className="text-slate-400 mt-1">📄 {ctx.filepath}</p>
-                                    )}
+                                    <div className="mt-2 space-y-1">
+                                      {ctx.filepath && (
+                                        <p className="text-slate-400 flex items-center gap-1">
+                                          <FileText className="w-3 h-3" />
+                                          {ctx.filepath}
+                                        </p>
+                                      )}
+                                      {ctx.doc_id && (
+                                        <p className="text-slate-400 flex items-center gap-1">
+                                          <Database className="w-3 h-3" />
+                                          {ctx.doc_id}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </CollapsibleContent>
