@@ -12,13 +12,15 @@ import {
   Copy,
   Check,
   Filter,
-  X
+  X,
+  ChevronsUpDown,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
+import { Checkbox } from '../components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -31,6 +33,19 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '../components/ui/collapsible';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '../components/ui/command';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -68,16 +83,60 @@ export default function Home() {
   const [maxNewTokens, setMaxNewTokens] = useState(1280);
 
   // Document Filters
-  const [filterFilepath, setFilterFilepath] = useState('');
-  const [filterDocId, setFilterDocId] = useState('');
+  const [filterFilepath, setFilterFilepath] = useState<string[]>([]);
+  const [filterDocId, setFilterDocId] = useState<string[]>([]);
+  
+  // Available options from collection
+  const [availableFilepaths, setAvailableFilepaths] = useState<string[]>([]);
+  const [availableDocIds, setAvailableDocIds] = useState<string[]>([]);
+  const [loadingCollectionData, setLoadingCollectionData] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Fetch collection data when collectionName changes (with debounce)
+  useEffect(() => {
+    const fetchCollectionData = async () => {
+      if (!collectionName || !enableRag) {
+        setAvailableFilepaths([]);
+        setAvailableDocIds([]);
+        return;
+      }
+
+      setLoadingCollectionData(true);
+      try {
+        const response = await api.listCollections();
+        if (response.success) {
+          const collection = response.data.collections.find(
+            (c: any) => c.name === collectionName
+          );
+          if (collection) {
+            setAvailableFilepaths(collection.filepaths || []);
+            setAvailableDocIds(collection.doc_ids || []);
+          } else {
+            setAvailableFilepaths([]);
+            setAvailableDocIds([]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch collection data:', error);
+      } finally {
+        setLoadingCollectionData(false);
+      }
+    };
+
+    // Debounce: wait 500ms after user stops typing
+    const timeoutId = setTimeout(() => {
+      fetchCollectionData();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [collectionName, enableRag]);
+
   const clearFilters = () => {
-    setFilterFilepath('');
-    setFilterDocId('');
+    setFilterFilepath([]);
+    setFilterDocId([]);
   };
 
   const handleSend = async () => {
@@ -128,8 +187,8 @@ export default function Home() {
         top_k: topK,
         enable_rag: enableRag,
         use_hybrid_search: useHybridSearch || undefined,
-        filepath: filterFilepath || undefined,
-        doc_id: filterDocId || undefined,
+        filepath: filterFilepath.length > 0 ? filterFilepath : undefined,
+        doc_id: filterDocId.length > 0 ? filterDocId : undefined,
         llm_api_base: llmApiBase,
         llm_model_name: llmModelName,
         temperature,
@@ -460,7 +519,7 @@ export default function Home() {
                         <Filter className="w-3 h-3" />
                         Filter Documents
                       </div>
-                      {(filterFilepath || filterDocId) && (
+                      {(filterFilepath.length > 0 || filterDocId.length > 0) && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -472,40 +531,160 @@ export default function Home() {
                       )}
                     </div>
 
+                    {/* File Path Multi-Select */}
                     <div>
                       <Label className="text-xs">File Path (Priority)</Label>
-                      <Input
-                        value={filterFilepath}
-                        onChange={(e) => {
-                          setFilterFilepath(e.target.value);
-                          if (e.target.value) setFilterDocId('');
-                        }}
-                        placeholder="e.g., /path/to/document.pdf"
-                        className="mt-1 text-xs"
-                      />
+                      {availableFilepaths.length > 0 ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-between mt-1 h-auto min-h-9 text-xs"
+                              disabled={loadingCollectionData}
+                            >
+                              <span className="truncate">
+                                {filterFilepath.length === 0
+                                  ? "Select file paths..."
+                                  : `${filterFilepath.length} selected`}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72 p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search file paths..." className="h-8 text-xs" />
+                              <CommandList>
+                                <CommandEmpty>No file paths found.</CommandEmpty>
+                                <CommandGroup>
+                                  {availableFilepaths.map((filepath) => (
+                                    <CommandItem
+                                      key={filepath}
+                                      onSelect={() => {
+                                        if (filterFilepath.includes(filepath)) {
+                                          setFilterFilepath(filterFilepath.filter((f) => f !== filepath));
+                                        } else {
+                                          setFilterFilepath([...filterFilepath, filepath]);
+                                        }
+                                      }}
+                                      className="text-xs"
+                                    >
+                                      <Checkbox
+                                        checked={filterFilepath.includes(filepath)}
+                                        className="mr-2"
+                                      />
+                                      <span className="truncate font-mono">{filepath}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <div className="text-xs text-slate-400 mt-1 p-2 border rounded bg-slate-50">
+                          {loadingCollectionData ? 'Loading...' : 'No file paths available'}
+                        </div>
+                      )}
+                      {filterFilepath.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {filterFilepath.map((fp) => (
+                            <Badge
+                              key={fp}
+                              variant="secondary"
+                              className="text-xs px-2 py-0.5"
+                            >
+                              {fp.split('/').pop()}
+                              <X
+                                className="ml-1 h-2 w-2 cursor-pointer"
+                                onClick={() => setFilterFilepath(filterFilepath.filter((f) => f !== fp))}
+                              />
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
+                    {/* Document ID Multi-Select */}
                     <div>
                       <Label className="text-xs">Document ID</Label>
-                      <Input
-                        value={filterDocId}
-                        onChange={(e) => {
-                          setFilterDocId(e.target.value);
-                          if (e.target.value) setFilterFilepath('');
-                        }}
-                        placeholder="e.g., doc_123"
-                        className="mt-1 text-xs"
-                        disabled={!!filterFilepath}
-                      />
+                      {availableDocIds.length > 0 ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-between mt-1 h-auto min-h-9 text-xs"
+                              disabled={loadingCollectionData}
+                            >
+                              <span className="truncate">
+                                {filterDocId.length === 0
+                                  ? "Select document IDs..."
+                                  : `${filterDocId.length} selected`}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72 p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search document IDs..." className="h-8 text-xs" />
+                              <CommandList>
+                                <CommandEmpty>No document IDs found.</CommandEmpty>
+                                <CommandGroup>
+                                  {availableDocIds.map((docId) => (
+                                    <CommandItem
+                                      key={docId}
+                                      onSelect={() => {
+                                        if (filterDocId.includes(docId)) {
+                                          setFilterDocId(filterDocId.filter((d) => d !== docId));
+                                        } else {
+                                          setFilterDocId([...filterDocId, docId]);
+                                        }
+                                      }}
+                                      className="text-xs"
+                                    >
+                                      <Checkbox
+                                        checked={filterDocId.includes(docId)}
+                                        className="mr-2"
+                                      />
+                                      <span className="truncate font-mono">{docId}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <div className="text-xs text-slate-400 mt-1 p-2 border rounded bg-slate-50">
+                          {loadingCollectionData ? 'Loading...' : 'No document IDs available'}
+                        </div>
+                      )}
+                      {filterDocId.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {filterDocId.map((did) => (
+                            <Badge
+                              key={did}
+                              variant="secondary"
+                              className="text-xs px-2 py-0.5"
+                            >
+                              {did}
+                              <X
+                                className="ml-1 h-2 w-2 cursor-pointer"
+                                onClick={() => setFilterDocId(filterDocId.filter((d) => d !== did))}
+                              />
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {(filterFilepath || filterDocId) && (
+                    {(filterFilepath.length > 0 || filterDocId.length > 0) && (
                       <div className="p-2 bg-green-50 rounded border border-green-200">
                         <div className="text-xs font-medium text-green-900 mb-0.5">
-                          Active Filter
+                          Active Filter{filterFilepath.length + filterDocId.length > 1 ? 's' : ''} (AND)
                         </div>
-                        <div className="text-xs text-green-700 truncate">
-                          {filterFilepath ? `📄 ${filterFilepath}` : `🆔 ${filterDocId}`}
+                        <div className="text-xs text-green-700 space-y-0.5">
+                          {filterFilepath.length > 0 && <div>📄 {filterFilepath.length} file path(s)</div>}
+                          {filterDocId.length > 0 && <div>🆔 {filterDocId.length} document ID(s)</div>}
                         </div>
                       </div>
                     )}

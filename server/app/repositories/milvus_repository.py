@@ -770,20 +770,38 @@ class MilvusRepository:
             )
 
             filter_list: list[MetadataFilter] = []
+
+            # filepath 支持：
+            # - 单个字符串：EQ 过滤
+            # - 字符串列表 / 元组 / 集合：IN 过滤
             if filepath is not None:
+                if isinstance(filepath, (list, tuple, set)):
+                    values = [str(p) for p in filepath]
+                    op = FilterOperator.IN
+                else:
+                    values = str(filepath)
+                    op = FilterOperator.EQ
                 filter_list.append(
                     MetadataFilter(
                         key="filepath",
-                        value=str(filepath),
-                        operator=FilterOperator.EQ,
+                        value=values,
+                        operator=op,
                     )
                 )
+
+            # doc_id 同理，支持单个或多个
             if doc_id is not None:
+                if isinstance(doc_id, (list, tuple, set)):
+                    values = [str(d) for d in doc_id]
+                    op = FilterOperator.IN
+                else:
+                    values = str(doc_id)
+                    op = FilterOperator.EQ
                 filter_list.append(
                     MetadataFilter(
                         key="source_doc_id",
-                        value=str(doc_id),
-                        operator=FilterOperator.EQ,
+                        value=values,
+                        operator=op,
                     )
                 )
 

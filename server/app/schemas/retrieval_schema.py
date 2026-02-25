@@ -24,13 +24,19 @@ class SearchRequest(BaseModel):
         None,
         description="是否使用 Hybrid Search（dense+sparse）；未显式传时使用服务端默认配置。",
     )
-    filepath: Optional[str] = Field(
+    filepath: str | list[str] | None = Field(
         None,
-        description="可选：按来源文件过滤，仅检索来自该 filepath 的文本块（索引阶段写入的 metadata.filepath）。",
+        description=(
+            "可选：按来源文件过滤，仅检索来自这些 filepath 的文本块。"
+            "既支持单个字符串，也支持字符串列表。"
+        ),
     )
-    doc_id: Optional[str] = Field(
+    doc_id: str | list[str] | None = Field(
         None,
-        description="可选：按 doc_id 过滤，仅检索指定文档 ID 的文本块（MoC splits 第二列写入的 metadata.doc_id）。",
+        description=(
+            "可选：按 doc_id 过滤，仅检索指定文档 ID 的文本块。"
+            "既支持单个字符串，也支持字符串列表。"
+        ),
     )
 
 
@@ -78,13 +84,19 @@ class RAGRequest(BaseModel):
         None,
         description="是否使用 Hybrid Search（dense+sparse）；未显式传时使用服务端默认配置。",
     )
-    filepath: Optional[str] = Field(
+    filepath: str | list[str] | None = Field(
         None,
-        description="可选：按来源文件过滤，仅检索来自该 filepath 的文本块。",
+        description=(
+            "可选：按来源文件过滤，仅检索来自这些 filepath 的文本块。"
+            "既支持单个字符串，也支持字符串列表。"
+        ),
     )
-    doc_id: Optional[int] = Field(
+    doc_id: str | list[str] | None = Field(
         None,
-        description="可选：按 doc_id 过滤，仅检索指定文档 ID 的文本块。",
+        description=(
+            "可选：按 doc_id 过滤，仅检索指定文档 ID 的文本块。"
+            "既支持单个字符串，也支持字符串列表。"
+        ),
     )
     llm_api_base: str = Field("http://localhost:8005/v1", description="vLLM API 地址")
     llm_model_name: str = Field(..., description="LLM 模型名称/路径")
