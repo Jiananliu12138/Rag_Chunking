@@ -37,6 +37,8 @@ interface Collection {
   name: string;
   db_file: string;
   size_bytes: number;
+  filepaths: string[];
+  doc_ids: string[];
 }
 
 export default function IndexPage() {
@@ -210,37 +212,16 @@ export default function IndexPage() {
     setSelectedFilepath('');
     setSelectedDocId('');
     
-    // Load documents using inspect API
-    setLoadingDocs(true);
-    try {
-      const response = await api.inspectCollections();
-      if (response.success) {
-        // Find the specific collection
-        const collection = response.data.collections?.find(
-          (c: any) => c.collection_name === collectionName
-        );
-        
-        if (collection) {
-          // Extract unique filepaths and doc_ids from dynamic_fields
-          // Since inspect doesn't give us all documents, we'll use the dynamic fields
-          // to show what metadata fields are available
-          const filepaths: string[] = [];
-          const docIds: string[] = [];
-          
-          // Check if there are sample_data available in the response
-          // If not, we'll just show the available fields
-          setAvailableFilepaths(filepaths);
-          setAvailableDocIds(docIds);
-          
-          toast.info('Note: Use inspect page to view available filepaths and doc_ids');
-        } else {
-          toast.error('Collection not found');
-        }
-      } else {
-        toast.error('Failed to load collection info: ' + response.message);
-      }
-    } finally {
-      setLoadingDocs(false);
+    // Find the collection from the loaded collections list
+    const collection = collections.find(c => c.name === collectionName);
+    if (collection) {
+      // Set available filepaths and doc_ids from the collection data
+      setAvailableFilepaths(collection.filepaths || []);
+      setAvailableDocIds(collection.doc_ids || []);
+    } else {
+      setAvailableFilepaths([]);
+      setAvailableDocIds([]);
+      toast.error('Collection not found');
     }
   };
 
@@ -620,6 +601,46 @@ export default function IndexPage() {
                               </div>
                             </div>
                           </div>
+                          
+                          {(coll.filepaths?.length > 0 || coll.doc_ids?.length > 0) && (
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                              {coll.filepaths?.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
+                                    <FileText className="w-3 h-3" />
+                                    File Paths ({coll.filepaths.length})
+                                  </h4>
+                                  <ScrollArea className="h-32 rounded-md border bg-slate-50 p-2">
+                                    <div className="space-y-1">
+                                      {coll.filepaths.map((fp: string, i: number) => (
+                                        <div key={i} className="text-xs font-mono bg-white p-1 px-2 rounded border">
+                                          {fp}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </ScrollArea>
+                                </div>
+                              )}
+                              
+                              {coll.doc_ids?.length > 0 && (
+                                <div>
+                                  <h4 className="text-sm font-medium mb-2 flex items-center gap-1">
+                                    <Database className="w-3 h-3" />
+                                    Document IDs ({coll.doc_ids.length})
+                                  </h4>
+                                  <ScrollArea className="h-32 rounded-md border bg-slate-50 p-2">
+                                    <div className="space-y-1">
+                                      {coll.doc_ids.map((did: string, i: number) => (
+                                        <div key={i} className="text-xs font-mono bg-white p-1 px-2 rounded border">
+                                          {did}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </ScrollArea>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </Card>
                       ))}
                     </div>
@@ -733,30 +754,68 @@ export default function IndexPage() {
               {deleteFilterType === 'filepath' ? (
                 <div>
                   <Label>File Path to Delete</Label>
-                  <Input
-                    value={selectedFilepath}
-                    onChange={(e) => setSelectedFilepath(e.target.value)}
-                    placeholder="e.g., /path/to/document.pdf"
-                    className="mt-1"
-                  />
+                  {availableFilepaths.length > 0 ? (
+                    <Select
+                      value={selectedFilepath}
+                      onValueChange={setSelectedFilepath}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select a file path" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableFilepaths.map((fp, i) => (
+                          <SelectItem key={i} value={fp}>
+                            {fp}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={selectedFilepath}
+                      onChange={(e) => setSelectedFilepath(e.target.value)}
+                      placeholder="e.g., /path/to/document.pdf"
+                      className="mt-1"
+                    />
+                  )}
                   {selectedFilepath && (
-                    <p className="text-xs text-slate-500 mt-2">
-                      ⚠️ This will delete all documents with filepath: <strong>{selectedFilepath}</strong>
+                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      This will delete all documents with filepath: <strong>{selectedFilepath}</strong>
                     </p>
                   )}
                 </div>
               ) : (
                 <div>
                   <Label>Document ID to Delete</Label>
-                  <Input
-                    value={selectedDocId}
-                    onChange={(e) => setSelectedDocId(e.target.value)}
-                    placeholder="e.g., doc_123"
-                    className="mt-1"
-                  />
+                  {availableDocIds.length > 0 ? (
+                    <Select
+                      value={selectedDocId}
+                      onValueChange={setSelectedDocId}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select a document ID" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableDocIds.map((did, i) => (
+                          <SelectItem key={i} value={did}>
+                            {did}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={selectedDocId}
+                      onChange={(e) => setSelectedDocId(e.target.value)}
+                      placeholder="e.g., doc_123"
+                      className="mt-1"
+                    />
+                  )}
                   {selectedDocId && (
-                    <p className="text-xs text-slate-500 mt-2">
-                      ⚠️ This will delete all documents with ID: <strong>{selectedDocId}</strong>
+                    <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      This will delete all documents with ID: <strong>{selectedDocId}</strong>
                     </p>
                   )}
                 </div>

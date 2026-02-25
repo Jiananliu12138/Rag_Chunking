@@ -131,13 +131,36 @@ class MilvusRepository:
         return Path(self._db_path(collection_name)).exists()
 
     def list_collections(self) -> list[dict]:
-        collections = []
+        collections: list[dict] = []
         for db_file in self._data_dir.glob("*.db"):
+            name = db_file.stem
+            size = db_file.stat().st_size
+
+            # 尝试读取同名 meta JSON，补充 filepaths / doc_ids 信息
+            meta_path = self._data_dir / f"{name}_meta.json"
+            filepaths: list[str] = []
+            doc_ids: list[str] = []
+            if meta_path.exists():
+                try:
+                    import json
+
+                    raw = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
+                    fps = raw.get("filepaths") or []
+                    dids = raw.get("doc_ids") or []
+                    if isinstance(fps, list):
+                        filepaths = [str(x) for x in fps if isinstance(x, (str, int))]
+                    if isinstance(dids, list):
+                        doc_ids = [str(x) for x in dids if isinstance(x, (str, int))]
+                except Exception as exc:  # pragma: no cover - 读取失败不影响主流程
+                    logger.warning("读取 collection meta JSON 失败: %s", exc)
+
             collections.append(
                 {
-                    "name": db_file.stem,
+                    "name": name,
                     "db_file": str(db_file),
-                    "size_bytes": db_file.stat().st_size,
+                    "size_bytes": size,
+                    "filepaths": filepaths,
+                    "doc_ids": doc_ids,
                 }
             )
         return collections
@@ -184,12 +207,32 @@ class MilvusRepository:
         predefined_fields = schema_field_names
         dynamic_fields = [f for f in all_fields if f not in schema_field_names]
 
+        # 额外：从 meta JSON 中读取该 collection 级别的 filepaths / doc_ids 信息
+        meta_filepaths: list[str] = []
+        meta_doc_ids: list[str] = []
+        try:
+            meta_path = self._data_dir / f"{collection_name}_meta.json"
+            if meta_path.exists():
+                import json
+
+                raw = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
+                fps = raw.get("filepaths") or []
+                dids = raw.get("doc_ids") or []
+                if isinstance(fps, list):
+                    meta_filepaths = [str(x) for x in fps if isinstance(x, (str, int))]
+                if isinstance(dids, list):
+                    meta_doc_ids = [str(x) for x in dids if isinstance(x, (str, int))]
+        except Exception as exc:  # pragma: no cover - 容错，不影响主流程
+            logger.warning("inspect_collection 读取 meta JSON 失败: %s", exc)
+
         return {
             "collection_name": collection_name,
             "uri": uri,
             "schema": schema,
             "predefined_fields": predefined_fields,
             "dynamic_fields": dynamic_fields,
+            "filepaths": meta_filepaths,
+            "doc_ids": meta_doc_ids,
         }
 
     def inspect_all_collections(self) -> list[dict]:
@@ -278,6 +321,41 @@ class MilvusRepository:
             doc_ids,
         )
         vector_store.delete_nodes(filters=filters_obj)
+
+        # 同步更新 collection 对应的 meta JSON，将被删除的 filepath / doc_ids 从列表中移除
+        try:
+            meta_path = self._data_dir / f"{collection_name}_meta.json"
+            if meta_path.exists():
+                import json
+
+                raw_meta = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
+                existing_filepaths: set[str] = set()
+                existing_doc_ids: set[str] = set()
+                for fp in raw_meta.get("filepaths", []):
+                    if isinstance(fp, str) and fp:
+                        existing_filepaths.add(fp)
+                for d in raw_meta.get("doc_ids", []):
+                    if isinstance(d, str) and d:
+                        existing_doc_ids.add(d)
+
+                # 删除本次操作对应的 filepath / doc_ids
+                if filepath is not None:
+                    existing_filepaths.discard(str(filepath))
+                if doc_ids:
+                    for d in doc_ids:
+                        existing_doc_ids.discard(str(d))
+
+                new_meta = {
+                    "collection_name": collection_name,
+                    "filepaths": sorted(existing_filepaths),
+                    "doc_ids": sorted(existing_doc_ids),
+                }
+                meta_path.write_text(
+                    json.dumps(new_meta, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+        except Exception as exc:  # pragma: no cover - 元信息更新失败不影响主流程
+            logger.warning("更新 collection meta JSON 失败（delete_by_metadata）: %s", exc)
 
     def build_index(
         self,

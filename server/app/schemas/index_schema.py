@@ -124,6 +124,14 @@ class CollectionInfo(BaseModel):
     name: str
     db_file: str
     size_bytes: int
+    filepaths: list[str] = Field(
+        default_factory=list,
+        description="该 collection 对应的 meta JSON 中记录的源文件路径列表（来自 filepath 元数据）。",
+    )
+    doc_ids: list[str] = Field(
+        default_factory=list,
+        description="该 collection 对应的 meta JSON 中记录的文档 ID 列表（来自 source_doc_id 元数据）。",
+    )
 
 
 class CollectionListResult(BaseModel):
@@ -147,6 +155,14 @@ class CollectionInspectItem(BaseModel):
     dynamic_fields: list[str] = Field(
         default_factory=list,
         description="从示例数据中推断出的动态元数据字段名列表（如 filepath、source_doc_id 等）。",
+    )
+    filepaths: list[str] = Field(
+        default_factory=list,
+        description="该 collection 对应 meta JSON 中记录的源文件路径列表（来自 filepath 元数据）。",
+    )
+    doc_ids: list[str] = Field(
+        default_factory=list,
+        description="该 collection 对应 meta JSON 中记录的文档 ID 列表（来自 source_doc_id 元数据）。",
     )
 
 
