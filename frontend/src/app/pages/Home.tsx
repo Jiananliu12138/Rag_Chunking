@@ -19,7 +19,6 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
-import { ScrollArea } from '../components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -59,13 +58,14 @@ export default function Home() {
   // Settings
   const [collectionName, setCollectionName] = useState('');
   const [embedModelPath, setEmbedModelPath] = useState('');
-  const [embedDim, setEmbedDim] = useState(768);
+  const [embedDim, setEmbedDim] = useState(1024);
   const [topK, setTopK] = useState(5);
+  const [enableRag, setEnableRag] = useState(true);
   const [useHybridSearch, setUseHybridSearch] = useState(false);
-  const [llmApiBase, setLlmApiBase] = useState('');
+  const [llmApiBase, setLlmApiBase] = useState('http://localhost:8005/v1');
   const [llmModelName, setLlmModelName] = useState('');
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxNewTokens, setMaxNewTokens] = useState(512);
+  const [temperature, setTemperature] = useState(0.1);
+  const [maxNewTokens, setMaxNewTokens] = useState(1280);
 
   // Document Filters
   const [filterFilepath, setFilterFilepath] = useState('');
@@ -81,12 +81,31 @@ export default function Home() {
   };
 
   const handleSend = async () => {
-    if (!input.trim() || !collectionName) {
-      if (!collectionName) {
-        toast.error('Please configure collection name in settings first');
-        setShowSettings(true);
-      }
+    // Validate required fields
+    if (!input.trim()) {
+      toast.error('Please enter a question');
       return;
+    }
+    
+    // LLM settings are always required
+    if (!llmModelName) {
+      toast.error('Please configure LLM Model Name in settings first');
+      setShowSettings(true);
+      return;
+    }
+    
+    // Collection and embed model are required only when RAG is enabled
+    if (enableRag) {
+      if (!collectionName) {
+        toast.error('Please configure Collection Name in settings (required when RAG is enabled)');
+        setShowSettings(true);
+        return;
+      }
+      if (!embedModelPath) {
+        toast.error('Please configure Embedding Model Path in settings (required when RAG is enabled)');
+        setShowSettings(true);
+        return;
+      }
     }
 
     const userMessage: Message = {
@@ -104,14 +123,15 @@ export default function Home() {
       const data: any = {
         query: input,
         collection_name: collectionName,
-        embed_model_path: embedModelPath || undefined,
+        embed_model_path: embedModelPath,
         embed_dim: embedDim,
         top_k: topK,
-        use_hybrid_search: useHybridSearch,
+        enable_rag: enableRag,
+        use_hybrid_search: useHybridSearch || undefined,
         filepath: filterFilepath || undefined,
         doc_id: filterDocId || undefined,
-        llm_api_base: llmApiBase || undefined,
-        llm_model_name: llmModelName || undefined,
+        llm_api_base: llmApiBase,
+        llm_model_name: llmModelName,
         temperature,
         max_new_tokens: maxNewTokens,
       };
@@ -169,9 +189,18 @@ export default function Home() {
             </div>
             <div>
               <h1 className="font-bold text-lg">RAG Assistant</h1>
-              <p className="text-xs text-slate-500">
-                {collectionName ? `Collection: ${collectionName}` : 'Configure collection first'}
-                {useHybridSearch && <Badge className="ml-2 h-4 text-xs">Hybrid</Badge>}
+              <p className="text-xs text-slate-500 flex items-center gap-1">
+                {enableRag ? (
+                  <>
+                    {collectionName ? `Collection: ${collectionName}` : 'Configure collection in settings'}
+                    {useHybridSearch && <Badge className="ml-1 h-4 text-xs">Hybrid</Badge>}
+                  </>
+                ) : (
+                  <>
+                    Pure LLM Mode
+                    <Badge variant="secondary" className="ml-1 h-4 text-xs">RAG Disabled</Badge>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -186,7 +215,7 @@ export default function Home() {
         </header>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 px-6 py-8">
+        <div className="flex-1 px-6 py-8 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-md">
@@ -318,7 +347,7 @@ export default function Home() {
               <div ref={messagesEndRef} />
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {/* Input Area */}
         <div className="border-t bg-white px-6 py-4">
@@ -360,144 +389,166 @@ export default function Home() {
             </h2>
           </div>
           
-          <ScrollArea className="flex-1 p-4">
+          <div className="flex-1 p-4 overflow-y-auto">
             <div className="space-y-6">
-              {/* Collection Settings */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Database className="w-4 h-4" />
-                  Index Settings
-                </div>
+              {/* RAG Toggle */}
+              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
                 <div>
-                  <Label className="text-xs">Collection Name *</Label>
-                  <Input
-                    value={collectionName}
-                    onChange={(e) => setCollectionName(e.target.value)}
-                    placeholder="my_collection"
-                    className="mt-1"
-                  />
+                  <Label className="text-sm font-medium">Enable RAG</Label>
+                  <p className="text-xs text-slate-500">Vector Retrieval + Generation</p>
                 </div>
-                <div>
-                  <Label className="text-xs">Embedding Model Path</Label>
-                  <Input
-                    value={embedModelPath}
-                    onChange={(e) => setEmbedModelPath(e.target.value)}
-                    placeholder="Leave empty for default"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Embed Dim</Label>
-                    <Input
-                      type="number"
-                      value={embedDim}
-                      onChange={(e) => setEmbedDim(parseInt(e.target.value))}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Top K</Label>
-                    <Input
-                      type="number"
-                      value={topK}
-                      onChange={(e) => setTopK(parseInt(e.target.value))}
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
+                <Switch
+                  checked={enableRag}
+                  onCheckedChange={setEnableRag}
+                />
+              </div>
 
-                {/* Document Filters - Integrated */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                      <Filter className="w-3 h-3" />
-                      Filter Documents
+              {/* Index Settings - Only show when RAG is enabled */}
+              {enableRag && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Database className="w-4 h-4" />
+                    Index Settings
+                  </div>
+                  <div>
+                    <Label className="text-xs">
+                      Collection Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      value={collectionName}
+                      onChange={(e) => setCollectionName(e.target.value)}
+                      placeholder="my_collection"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">
+                      Embedding Model Path <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      value={embedModelPath}
+                      onChange={(e) => setEmbedModelPath(e.target.value)}
+                      placeholder="/path/to/bge-large-en-v1.5"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Embed Dim</Label>
+                      <Input
+                        type="number"
+                        value={embedDim}
+                        onChange={(e) => setEmbedDim(parseInt(e.target.value))}
+                        className="mt-1"
+                      />
                     </div>
+                    <div>
+                      <Label className="text-xs">Top K</Label>
+                      <Input
+                        type="number"
+                        value={topK}
+                        onChange={(e) => setTopK(parseInt(e.target.value))}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Document Filters */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                        <Filter className="w-3 h-3" />
+                        Filter Documents
+                      </div>
+                      {(filterFilepath || filterDocId) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearFilters}
+                          className="h-5 px-1 text-xs"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">File Path (Priority)</Label>
+                      <Input
+                        value={filterFilepath}
+                        onChange={(e) => {
+                          setFilterFilepath(e.target.value);
+                          if (e.target.value) setFilterDocId('');
+                        }}
+                        placeholder="e.g., /path/to/document.pdf"
+                        className="mt-1 text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Document ID</Label>
+                      <Input
+                        value={filterDocId}
+                        onChange={(e) => {
+                          setFilterDocId(e.target.value);
+                          if (e.target.value) setFilterFilepath('');
+                        }}
+                        placeholder="e.g., doc_123"
+                        className="mt-1 text-xs"
+                        disabled={!!filterFilepath}
+                      />
+                    </div>
+
                     {(filterFilepath || filterDocId) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearFilters}
-                        className="h-5 px-1 text-xs"
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
+                      <div className="p-2 bg-green-50 rounded border border-green-200">
+                        <div className="text-xs font-medium text-green-900 mb-0.5">
+                          Active Filter
+                        </div>
+                        <div className="text-xs text-green-700 truncate">
+                          {filterFilepath ? `📄 ${filterFilepath}` : `🆔 ${filterDocId}`}
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  <div>
-                    <Label className="text-xs">File Path (Priority)</Label>
-                    <Input
-                      value={filterFilepath}
-                      onChange={(e) => {
-                        setFilterFilepath(e.target.value);
-                        if (e.target.value) setFilterDocId('');
-                      }}
-                      placeholder="e.g., /path/to/document.pdf"
-                      className="mt-1 text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <Label className="text-xs">Document ID</Label>
-                    <Input
-                      value={filterDocId}
-                      onChange={(e) => {
-                        setFilterDocId(e.target.value);
-                        if (e.target.value) setFilterFilepath('');
-                      }}
-                      placeholder="e.g., doc_123"
-                      className="mt-1 text-xs"
-                      disabled={!!filterFilepath}
-                    />
-                  </div>
-
-                  {(filterFilepath || filterDocId) && (
-                    <div className="p-2 bg-green-50 rounded border border-green-200">
-                      <div className="text-xs font-medium text-green-900 mb-0.5">
-                        Active Filter
-                      </div>
-                      <div className="text-xs text-green-700 truncate">
-                        {filterFilepath ? `📄 ${filterFilepath}` : `🆔 ${filterDocId}`}
-                      </div>
+                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div>
+                      <Label className="text-xs font-medium">Hybrid Search</Label>
+                      <p className="text-xs text-slate-500">Dense + Sparse</p>
                     </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div>
-                    <Label className="text-xs font-medium">Hybrid Search</Label>
-                    <p className="text-xs text-slate-500">Dense + Sparse</p>
+                    <Switch
+                      checked={useHybridSearch}
+                      onCheckedChange={setUseHybridSearch}
+                    />
                   </div>
-                  <Switch
-                    checked={useHybridSearch}
-                    onCheckedChange={setUseHybridSearch}
-                  />
                 </div>
-              </div>
+              )}
 
-              {/* LLM Settings */}
+              {/* LLM Settings - Always visible */}
               <div className="space-y-3 pt-3 border-t">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Zap className="w-4 h-4" />
                   LLM Settings
                 </div>
                 <div>
-                  <Label className="text-xs">API Base</Label>
+                  <Label className="text-xs">
+                    API Base <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     value={llmApiBase}
                     onChange={(e) => setLlmApiBase(e.target.value)}
-                    placeholder="http://localhost:8000/v1"
+                    placeholder="http://localhost:8005/v1"
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Model Name</Label>
+                  <Label className="text-xs">
+                    Model Name <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     value={llmModelName}
                     onChange={(e) => setLlmModelName(e.target.value)}
-                    placeholder="gpt-3.5-turbo"
+                    placeholder="/path/to/Qwen2.5-7B-Instruct"
                     className="mt-1"
                   />
                 </div>
@@ -527,11 +578,13 @@ export default function Home() {
               {/* Info */}
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <p className="text-xs text-slate-600">
-                  💡 Tip: Create a collection in the Index page first, then configure the collection name here for chatting.
+                  💡 {enableRag 
+                    ? 'Tip: Create a collection in the Index page first, then configure it here for RAG chatting.'
+                    : 'Tip: RAG is disabled. Only LLM will be used without context retrieval.'}
                 </p>
               </div>
             </div>
-          </ScrollArea>
+          </div>
         </aside>
       )}
     </div>

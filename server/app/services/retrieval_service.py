@@ -111,38 +111,50 @@ class RetrievalService:
         )
 
     def rag_generate(self, request: RAGRequest) -> RAGResult:
-        logger.info(
-            "RAG 生成: collection=%s, query=%s...",
-            request.collection_name, request.query[:30],
-        )
-        # Step 1: 向量检索
-        embed_model = IndexService._load_langchain_embed(request.embed_model_path)
-        if request.filepath is None and request.doc_id is None:
-            raw_results = self._repo.search(
-                collection_name=request.collection_name,
-                query=request.query,
-                langchain_embed=embed_model,
-                embed_dim=request.embed_dim,
-                top_k=request.top_k,
-                use_hybrid_search=request.use_hybrid_search,
-            )
-        else:
-            raw_results = self._repo.search_with_metadata_filter(
-                collection_name=request.collection_name,
-                query=request.query,
-                langchain_embed=embed_model,
-                embed_dim=request.embed_dim,
-                top_k=request.top_k,
-                filepath=request.filepath,
-                doc_id=request.doc_id,
-                use_hybrid_search=request.use_hybrid_search,
-            )
-        # 同时保留纯文本上下文与带 metadata 的完整结果，方便前端展示与调试
         from app.schemas.retrieval_schema import SearchResultItem  # 避免循环导入
 
-        context_items = [SearchResultItem(**r) for r in raw_results]
-        contexts = [item.text for item in context_items]
-        context_str = "\n\n".join(contexts)
+        # Step 1: （可选）向量检索 + 上下文构造
+        if request.enable_rag:
+            logger.info(
+                "RAG 生成: collection=%s, query=%s...",
+                request.collection_name,
+                request.query[:30],
+            )
+            embed_model = IndexService._load_langchain_embed(request.embed_model_path)
+
+            if request.filepath is None and request.doc_id is None:
+                raw_results = self._repo.search(
+                    collection_name=request.collection_name,
+                    query=request.query,
+                    langchain_embed=embed_model,
+                    embed_dim=request.embed_dim,
+                    top_k=request.top_k,
+                    use_hybrid_search=request.use_hybrid_search,
+                )
+            else:
+                raw_results = self._repo.search_with_metadata_filter(
+                    collection_name=request.collection_name,
+                    query=request.query,
+                    langchain_embed=embed_model,
+                    embed_dim=request.embed_dim,
+                    top_k=request.top_k,
+                    filepath=request.filepath,
+                    doc_id=request.doc_id,
+                    use_hybrid_search=request.use_hybrid_search,
+                )
+
+            context_items = [SearchResultItem(**r) for r in raw_results]
+            contexts = [item.text for item in context_items]
+            context_str = "\n\n".join(contexts)
+        else:
+            # 纯 LLM 调用：不做任何检索，仅用用户 query 作为上下文
+            logger.info(
+                "纯 LLM 生成（未启用 RAG）: query=%s...",
+                request.query[:30],
+            )
+            context_items: list[SearchResultItem] = []
+            contexts: list[str] = []
+            context_str = ""
 
         # Step 2: 构造 Prompt 并调用 LLM
         prompt = self._build_llm_prompt(context_str, request.query)

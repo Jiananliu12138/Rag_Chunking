@@ -70,6 +70,10 @@ class RAGRequest(BaseModel):
     embed_model_path: str = Field(..., description="嵌入模型路径")
     embed_dim: int = Field(1024, ge=64, description="嵌入向量维度")
     top_k: int = Field(5, ge=1, le=100, description="检索 top-k 数量")
+    enable_rag: bool = Field(
+        True,
+        description="是否启用 RAG（向量检索+上下文拼接）。为 false 时仅调用 LLM，不做检索。",
+    )
     use_hybrid_search: Optional[bool] = Field(
         None,
         description="是否使用 Hybrid Search（dense+sparse）；未显式传时使用服务端默认配置。",
