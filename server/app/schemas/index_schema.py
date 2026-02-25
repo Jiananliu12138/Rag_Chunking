@@ -16,12 +16,12 @@ class IndexBuildRequest(BaseModel):
     )
 
     collection_name: str = Field(..., min_length=1, description="Milvus collection 名称")
-    docs_path: str = Field(
-        ...,
-        min_length=1,
+    docs_path: Optional[str] = Field(
+        None,
         description=(
-            "分块结果 JSON 文件路径。内容需可解析出 chunk 文本，"
+            "可选：单个分块结果 JSON 文件路径。内容需可解析出 chunk 文本，"
             "格式参考 eval/LongBench/base_lite.py::_parse_chunks_from_json。"
+            "若提供 docs_paths，则该字段可留空。"
         ),
     )
     docs_paths: Optional[list[str]] = Field(
@@ -65,11 +65,11 @@ class IndexAddRequest(BaseModel):
     )
 
     collection_name: str = Field(..., min_length=1, description="Milvus collection 名称")
-    docs_path: str = Field(
-        ...,
-        min_length=1,
+    docs_path: Optional[str] = Field(
+        None,
         description=(
-            "分块结果 JSON 文件路径（将追加到已有 collection 中）。"
+            "可选：单个分块结果 JSON 文件路径（将追加到已有 collection 中）。"
+            "若提供 docs_paths，则该字段可留空。"
         ),
     )
     docs_paths: Optional[list[str]] = Field(
