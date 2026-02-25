@@ -19,6 +19,7 @@ from llama_index.embeddings.langchain import LangchainEmbedding
 
 from app.config import get_settings
 from app.core.exceptions import (
+    ChunkingException,
     CollectionNotFoundException,
     IndexBuildException,
     RetrievalException,
@@ -258,12 +259,31 @@ class MilvusRepository:
                 f"Collection '{collection_name}' 不存在"
             )
         # 删除主 .db 文件
-        db_file.unlink()
+        try:
+            db_file.unlink()
+        except Exception as exc:
+            logger.warning("删除 .db 文件失败 (%s): %s", db_file, exc)
+
         # 同时删除可能存在的锁文件（例如 test_chunks.db.lock）
         lock_file = db_file.with_suffix(db_file.suffix + ".lock")
         if lock_file.exists():
-            lock_file.unlink()
-        logger.info("已删除 collection: %s（含 .db 及 .lock 文件，如存在）", collection_name)
+            try:
+                lock_file.unlink()
+            except Exception as exc:
+                logger.warning("删除 .lock 文件失败 (%s): %s", lock_file, exc)
+
+        # 删除对应的 meta JSON（如 <collection_name>_meta.json）
+        meta_path = self._data_dir / f"{collection_name}_meta.json"
+        if meta_path.exists():
+            try:
+                meta_path.unlink()
+            except Exception as exc:
+                logger.warning("删除 meta JSON 失败 (%s): %s", meta_path, exc)
+
+        logger.info(
+            "已删除 collection: %s（含 .db、.lock 及 meta JSON 文件，如存在）",
+            collection_name,
+        )
 
     def delete_by_metadata(
         self,
@@ -276,7 +296,8 @@ class MilvusRepository:
         支持按 filepath / source_doc_id 批量删除。
         """
         if filepath is None and (not doc_ids):
-            raise IndexBuildException("至少需要提供 filepath 或 doc_ids 之一用于删除条件")
+            # 参数校验错误，应该返回 422，而不是 500
+            raise ChunkingException("至少需要提供 filepath 或 doc_ids 之一用于删除条件")
 
         if not self.collection_exists(collection_name):
             raise CollectionNotFoundException(

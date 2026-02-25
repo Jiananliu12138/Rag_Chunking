@@ -175,7 +175,7 @@ def delete_collection(
         "删除操作不会影响其他 collection，也不会删除整个 .db 文件。"
     ),
 )
-def delete_by_metadata(
+async def delete_by_metadata(
     collection_name: Annotated[str, Path(description="目标 collection 名称")],
     request: IndexDeleteByMetadataRequest,
     service: Annotated[IndexService, Depends(_get_index_service)],

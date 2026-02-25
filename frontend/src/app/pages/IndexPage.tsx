@@ -228,6 +228,16 @@ export default function IndexPage() {
   const handleDeleteDocuments = async () => {
     if (!selectedCollection) return;
     
+    // Check if this is the last filepath or doc_id
+    if (deleteFilterType === 'filepath' && availableFilepaths.length === 1) {
+      toast.error('Cannot delete the last filepath in this collection');
+      return;
+    }
+    if (deleteFilterType === 'doc_id' && availableDocIds.length === 1) {
+      toast.error('Cannot delete the last document ID in this collection');
+      return;
+    }
+    
     const requestData: any = {};
     
     if (deleteFilterType === 'filepath' && selectedFilepath) {
@@ -755,21 +765,30 @@ export default function IndexPage() {
                 <div>
                   <Label>File Path to Delete</Label>
                   {availableFilepaths.length > 0 ? (
-                    <Select
-                      value={selectedFilepath}
-                      onValueChange={setSelectedFilepath}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select a file path" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableFilepaths.map((fp, i) => (
-                          <SelectItem key={i} value={fp}>
-                            {fp}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <>
+                      <Select
+                        value={selectedFilepath}
+                        onValueChange={setSelectedFilepath}
+                        disabled={availableFilepaths.length === 1}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select a file path" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableFilepaths.map((fp, i) => (
+                            <SelectItem key={i} value={fp}>
+                              {fp}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {availableFilepaths.length === 1 && (
+                        <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          Cannot delete the last filepath in this collection
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <Input
                       value={selectedFilepath}
@@ -778,7 +797,7 @@ export default function IndexPage() {
                       className="mt-1"
                     />
                   )}
-                  {selectedFilepath && (
+                  {selectedFilepath && availableFilepaths.length > 1 && (
                     <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" />
                       This will delete all documents with filepath: <strong>{selectedFilepath}</strong>
@@ -789,21 +808,30 @@ export default function IndexPage() {
                 <div>
                   <Label>Document ID to Delete</Label>
                   {availableDocIds.length > 0 ? (
-                    <Select
-                      value={selectedDocId}
-                      onValueChange={setSelectedDocId}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select a document ID" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableDocIds.map((did, i) => (
-                          <SelectItem key={i} value={did}>
-                            {did}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <>
+                      <Select
+                        value={selectedDocId}
+                        onValueChange={setSelectedDocId}
+                        disabled={availableDocIds.length === 1}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select a document ID" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableDocIds.map((did, i) => (
+                            <SelectItem key={i} value={did}>
+                              {did}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {availableDocIds.length === 1 && (
+                        <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          Cannot delete the last document ID in this collection
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <Input
                       value={selectedDocId}
@@ -812,7 +840,7 @@ export default function IndexPage() {
                       className="mt-1"
                     />
                   )}
-                  {selectedDocId && (
+                  {selectedDocId && availableDocIds.length > 1 && (
                     <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" />
                       This will delete all documents with ID: <strong>{selectedDocId}</strong>
