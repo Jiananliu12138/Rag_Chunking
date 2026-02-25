@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Loader2, FileText, Type, Scissors } from 'lucide-react';
+import { Loader2, FileText, Type, Scissors, X, Eraser } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -43,6 +43,11 @@ export default function ChunkingPage() {
   useEffect(() => {
     loadMethods();
   }, []);
+
+  useEffect(() => {
+    // Clear chunks when method changes
+    setTextChunks([]);
+  }, [selectedMethod]);
 
   const loadMethods = async () => {
     const response = await api.getChunkMethods();
@@ -278,10 +283,23 @@ export default function ChunkingPage() {
 
           {/* Text Chunking Tab */}
           <TabsContent value="text">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-220px)]">
               {/* Input */}
-              <Card className="p-6">
-                <h3 className="font-bold mb-4">Input Text</h3>
+              <Card className="p-6 flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold">Input Text</h3>
+                  {inputText && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setInputText('')}
+                      className="h-8 text-slate-500 hover:text-slate-700"
+                    >
+                      <Eraser className="w-4 h-4 mr-1" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
                 <Textarea
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
@@ -334,11 +352,24 @@ export default function ChunkingPage() {
               </Card>
 
               {/* Output */}
-              <Card className="p-6">
-                <h3 className="font-bold mb-4">Chunking Results</h3>
+              <Card className="p-6 flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold">Chunking Results</h3>
+                  {textChunks.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTextChunks([])}
+                      className="h-8 text-slate-500 hover:text-slate-700"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
                 {textChunks.length > 0 ? (
-                  <ScrollArea className="h-[500px]">
-                    <div className="space-y-3">
+                  <ScrollArea className="flex-1 overflow-auto">
+                    <div className="space-y-3 pr-4">
                       {textChunks.map((chunk, index) => (
                         <div
                           key={index}
@@ -350,13 +381,13 @@ export default function ChunkingPage() {
                               {chunk[0]?.length || 0} chars
                             </span>
                           </div>
-                          <p className="text-sm text-slate-700">{chunk[0]}</p>
+                          <p className="text-base leading-relaxed text-slate-700 whitespace-pre-wrap">{chunk[0]}</p>
                         </div>
                       ))}
                     </div>
                   </ScrollArea>
                 ) : (
-                  <div className="h-[500px] flex items-center justify-center text-slate-400">
+                  <div className="flex-1 flex items-center justify-center text-slate-400">
                     <div className="text-center">
                       <Scissors className="w-12 h-12 mx-auto mb-2 opacity-50" />
                       <p>Chunking results will appear here</p>

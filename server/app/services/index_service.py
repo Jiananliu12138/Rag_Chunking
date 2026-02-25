@@ -124,10 +124,25 @@ class IndexService:
             request.collection_name,
             request.docs_path,
         )
-        chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
+        # 支持一次性从多个分块结果文件构建索引（若提供 docs_paths，则忽略 docs_path）
+        if getattr(request, "docs_paths", None):
+            all_chunks: list[str] = []
+            all_metadatas: list[dict[str, Any]] = []
+            for p in request.docs_paths or []:
+                cks, mds = self._load_chunks_and_metadata_from_file(p)
+                all_chunks.extend(cks)
+                all_metadatas.extend(mds)
+            chunks, metadatas = all_chunks, all_metadatas
+            logger.info(
+                "本次构建共合并 %d 个分块文件，总文本块数=%d",
+                len(request.docs_paths or []),
+                len(chunks),
+            )
+        else:
+            chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
         settings = get_settings()
-        model_path = settings.DEFAULT_EMBEDDING_MODEL
-        embed_dim = settings.DEFAULT_EMBEDDING_DIM
+        model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
+        embed_dim = request.embed_dim or settings.DEFAULT_EMBEDDING_DIM
 
         embed_model = self._load_langchain_embed(model_path)
         info = self._repo.build_index(
@@ -154,9 +169,24 @@ class IndexService:
             request.collection_name,
             request.docs_path,
         )
-        chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
+        # 支持一次性从多个分块结果文件追加数据（若提供 docs_paths，则忽略 docs_path）
+        if getattr(request, "docs_paths", None):
+            all_chunks: list[str] = []
+            all_metadatas: list[dict[str, Any]] = []
+            for p in request.docs_paths or []:
+                cks, mds = self._load_chunks_and_metadata_from_file(p)
+                all_chunks.extend(cks)
+                all_metadatas.extend(mds)
+            chunks, metadatas = all_chunks, all_metadatas
+            logger.info(
+                "本次追加共合并 %d 个分块文件，总文本块数=%d",
+                len(request.docs_paths or []),
+                len(chunks),
+            )
+        else:
+            chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
         settings = get_settings()
-        model_path = settings.DEFAULT_EMBEDDING_MODEL
+        model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
 
         embed_model = self._load_langchain_embed(model_path)
         info = self._repo.add_index(

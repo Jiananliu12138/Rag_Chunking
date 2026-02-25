@@ -24,10 +24,30 @@ class IndexBuildRequest(BaseModel):
             "格式参考 eval/LongBench/base_lite.py::_parse_chunks_from_json。"
         ),
     )
+    docs_paths: Optional[list[str]] = Field(
+        None,
+        description=(
+            "可选：一次性构建多个分块结果文件到同一个 collection。"
+            "若提供 docs_paths，则会依次读取并合并所有文件；docs_path 字段将被忽略。"
+        ),
+    )
     batch_size: int = Field(100, ge=1, le=5000, description="批量写入大小（每批写入的文本块数）")
     enable_sparse: Optional[bool] = Field(
         None,
         description="是否为该 collection 启用稀疏向量（BM25）；为空则使用服务端默认配置。",
+    )
+    embed_model_path: Optional[str] = Field(
+        None,
+        description=(
+            "可选：覆盖默认的嵌入模型路径。未提供时使用配置 DEFAULT_EMBEDDING_MODEL。"
+        ),
+    )
+    embed_dim: Optional[int] = Field(
+        None,
+        ge=64,
+        description=(
+            "可选：覆盖默认的嵌入维度。未提供时使用配置 DEFAULT_EMBEDDING_DIM。"
+        ),
     )
 
 
@@ -52,7 +72,21 @@ class IndexAddRequest(BaseModel):
             "分块结果 JSON 文件路径（将追加到已有 collection 中）。"
         ),
     )
+    docs_paths: Optional[list[str]] = Field(
+        None,
+        description=(
+            "可选：一次性向同一个 collection 追加多个分块结果文件。"
+            "若提供 docs_paths，则会依次读取并合并所有文件；docs_path 字段将被忽略。"
+        ),
+    )
     batch_size: int = Field(8000, ge=1, le=50000, description="批量追加大小（每批追加的文本块数）")
+    embed_model_path: Optional[str] = Field(
+        None,
+        description=(
+            "可选：覆盖默认的嵌入模型路径。未提供时使用配置 DEFAULT_EMBEDDING_MODEL。"
+            "请确保与构建该 collection 时使用的模型/维度保持一致。"
+        ),
+    )
 
 
 class IndexBuildResult(BaseModel):

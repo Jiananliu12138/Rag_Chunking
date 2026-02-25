@@ -1,4 +1,4 @@
-const API_BASE_URL = '/api/v1';
+const API_BASE_URL = 'http://127.0.0.1:8080/api/v1';
 
 export interface ApiResponse<T = any> {
   success: boolean;

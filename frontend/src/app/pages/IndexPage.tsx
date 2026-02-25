@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Loader2, Plus, Trash2, Database, Eye, RefreshCw, FileText, Filter } from 'lucide-react';
+import { Loader2, Plus, Trash2, Database, Eye, RefreshCw, FileText, Filter, X, FolderOpen, AlertCircle } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -47,14 +47,21 @@ export default function IndexPage() {
 
   // Build form
   const [collectionName, setCollectionName] = useState('');
-  const [docsPath, setDocsPath] = useState('');
+  const [docsPaths, setDocsPaths] = useState<string[]>([]);
+  const [tempDocPath, setTempDocPath] = useState(''); // For adding files
   const [batchSize, setBatchSize] = useState(100);
   const [enableSparse, setEnableSparse] = useState(false);
+  const [embedModelPath, setEmbedModelPath] = useState('');
+  const [embedDim, setEmbedDim] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Add form
   const [addCollectionName, setAddCollectionName] = useState('');
-  const [addDocsPath, setAddDocsPath] = useState('');
+  const [addDocsPaths, setAddDocsPaths] = useState<string[]>([]);
+  const [tempAddDocPath, setTempAddDocPath] = useState(''); // For adding files
   const [addBatchSize, setAddBatchSize] = useState(100);
+  const [addEmbedModelPath, setAddEmbedModelPath] = useState('');
+  const addFileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete documents dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -100,26 +107,38 @@ export default function IndexPage() {
   };
 
   const handleBuildIndex = async () => {
-    if (!collectionName || !docsPath) {
+    if (!collectionName || !docsPaths.length) {
       toast.error('Please fill in collection name and documents path');
       return;
     }
 
     setBuildLoading(true);
     try {
-      const response = await api.buildIndex({
+      const requestData: any = {
         collection_name: collectionName,
-        docs_path: docsPath,
+        docs_paths: docsPaths,
         batch_size: batchSize,
         enable_sparse: enableSparse,
-      });
+      };
+      
+      if (embedModelPath.trim()) {
+        requestData.embed_model_path = embedModelPath.trim();
+      }
+      
+      if (embedDim.trim()) {
+        requestData.embed_dim = parseInt(embedDim);
+      }
+
+      const response = await api.buildIndex(requestData);
 
       if (response.success) {
         toast.success(
           `Index built! Indexed ${response.data.indexed_chunks}/${response.data.total_chunks} chunks in ${response.data.time_cost?.toFixed(2)}s`
         );
         setCollectionName('');
-        setDocsPath('');
+        setDocsPaths([]);
+        setEmbedModelPath('');
+        setEmbedDim('');
         loadCollections();
       } else {
         toast.error('Failed to build index: ' + response.message);
@@ -130,25 +149,32 @@ export default function IndexPage() {
   };
 
   const handleAddIndex = async () => {
-    if (!addCollectionName || !addDocsPath) {
+    if (!addCollectionName || !addDocsPaths.length) {
       toast.error('Please fill in collection name and documents path');
       return;
     }
 
     setBuildLoading(true);
     try {
-      const response = await api.addIndex({
+      const requestData: any = {
         collection_name: addCollectionName,
-        docs_path: addDocsPath,
+        docs_paths: addDocsPaths,
         batch_size: addBatchSize,
-      });
+      };
+      
+      if (addEmbedModelPath.trim()) {
+        requestData.embed_model_path = addEmbedModelPath.trim();
+      }
+
+      const response = await api.addIndex(requestData);
 
       if (response.success) {
         toast.success(
           `Added ${response.data.added_chunks} chunks in ${response.data.time_cost?.toFixed(2)}s`
         );
         setAddCollectionName('');
-        setAddDocsPath('');
+        setAddDocsPaths([]);
+        setAddEmbedModelPath('');
         loadCollections();
       } else {
         toast.error('Failed to add to index: ' + response.message);
@@ -287,11 +313,87 @@ export default function IndexPage() {
                 />
               </div>
               <div>
-                <Label>Documents Path</Label>
+                <Label>Documents Paths</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={tempDocPath}
+                    onChange={(e) => setTempDocPath(e.target.value)}
+                    placeholder="/path/to/chunks.json or click + to browse"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && tempDocPath.trim()) {
+                        setDocsPaths([...docsPaths, tempDocPath.trim()]);
+                        setTempDocPath('');
+                      }
+                    }}
+                  />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      const paths = files.map(f => f.name);
+                      setDocsPaths([...docsPaths, ...paths]);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (tempDocPath.trim()) {
+                        setDocsPaths([...docsPaths, tempDocPath.trim()]);
+                        setTempDocPath('');
+                      } else {
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {tempDocPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                  </Button>
+                </div>
+                {docsPaths.length > 0 && (
+                  <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
+                    <div className="p-2 space-y-1">
+                      {docsPaths.map((path, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200"
+                        >
+                          <span className="text-xs font-mono truncate flex-1">{path}</span>
+                          <Button
+                            type="button"
+                            onClick={() => setDocsPaths(docsPaths.filter((_, i) => i !== idx))}
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+              <div>
+                <Label>Embedding Model Path (Optional)</Label>
                 <Input
-                  value={docsPath}
-                  onChange={(e) => setDocsPath(e.target.value)}
-                  placeholder="/path/to/chunks.json"
+                  value={embedModelPath}
+                  onChange={(e) => setEmbedModelPath(e.target.value)}
+                  placeholder="Optional: /path/to/embedding/model"
+                />
+              </div>
+              <div>
+                <Label>Embedding Dimension (Optional)</Label>
+                <Input
+                  type="number"
+                  value={embedDim}
+                  onChange={(e) => setEmbedDim(e.target.value)}
+                  placeholder="e.g., 768"
                 />
               </div>
               <div>
@@ -345,12 +447,71 @@ export default function IndexPage() {
                 />
               </div>
               <div>
-                <Label>Documents Path</Label>
-                <Input
-                  value={addDocsPath}
-                  onChange={(e) => setAddDocsPath(e.target.value)}
-                  placeholder="/path/to/new_chunks.json"
-                />
+                <Label>Documents Paths</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={tempAddDocPath}
+                    onChange={(e) => setTempAddDocPath(e.target.value)}
+                    placeholder="/path/to/new_chunks.json or click + to browse"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && tempAddDocPath.trim()) {
+                        setAddDocsPaths([...addDocsPaths, tempAddDocPath.trim()]);
+                        setTempAddDocPath('');
+                      }
+                    }}
+                  />
+                  <input
+                    ref={addFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      const paths = files.map(f => f.name);
+                      setAddDocsPaths([...addDocsPaths, ...paths]);
+                      if (addFileInputRef.current) addFileInputRef.current.value = '';
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (tempAddDocPath.trim()) {
+                        setAddDocsPaths([...addDocsPaths, tempAddDocPath.trim()]);
+                        setTempAddDocPath('');
+                      } else {
+                        addFileInputRef.current?.click();
+                      }
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {tempAddDocPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                  </Button>
+                </div>
+                {addDocsPaths.length > 0 && (
+                  <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
+                    <div className="p-2 space-y-1">
+                      {addDocsPaths.map((path, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200"
+                        >
+                          <span className="text-xs font-mono truncate flex-1">{path}</span>
+                          <Button
+                            type="button"
+                            onClick={() => setAddDocsPaths(addDocsPaths.filter((_, i) => i !== idx))}
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
               </div>
               <div>
                 <Label>Batch Size</Label>
@@ -360,7 +521,24 @@ export default function IndexPage() {
                   onChange={(e) => setAddBatchSize(parseInt(e.target.value))}
                 />
               </div>
-              <div className="h-[52px]" /> {/* Spacer */}
+              <div>
+                <Label>Embedding Model Path (Optional)</Label>
+                <Input
+                  value={addEmbedModelPath}
+                  onChange={(e) => setAddEmbedModelPath(e.target.value)}
+                  placeholder="Optional: /path/to/embedding/model"
+                />
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Vector type (sparse/dense) will follow original collection
+                  </p>
+                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Embedding dimension must match original collection
+                  </p>
+                </div>
+              </div>
               <Button
                 onClick={handleAddIndex}
                 disabled={buildLoading}

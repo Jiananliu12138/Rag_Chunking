@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ── 路径 ─────────────────────────────────────────────────────
-    MILVUS_DATA_DIR: str = ""
+    MILVUS_DATA_DIR: str = "F:/thesis/Meta-Chunking/database"
     MILVUS_URI: str = ""
     CHUNKING_METHODS_DIR: str = str(BASE_DIR / "Chunking_Methods")
     EVAL_LONGBENCH_DIR: str = str(BASE_DIR / "eval" / "LongBench")
