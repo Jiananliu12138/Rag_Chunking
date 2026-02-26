@@ -76,29 +76,24 @@ class TraditionalEvalResult(BaseModel):
 
 # ── RAGAS 评估 ────────────────────────────────────────────────────────────────
 
-class RAGASDataset(BaseModel):
-    question: list[str]
-    answer: list[str]
-    contexts: list[list[str]]
-    ground_truth: list[str]
-
-
 class RAGASEvalRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "dataset": {
-                    "question": ["What is RAG?", "How does BERT work?"],
-                    "answer": ["RAG combines retrieval with generation.", "BERT uses bidirectional transformers."],
-                    "contexts": [
-                        ["Retrieval-Augmented Generation (RAG) is a technique..."],
-                        ["BERT is a pre-trained model based on transformers..."],
-                    ],
-                    "ground_truth": [
-                        "RAG retrieves relevant documents and uses them to generate answers.",
-                        "BERT is trained on masked language modeling and next sentence prediction.",
-                    ],
-                },
+                "test": [
+                    {
+                        "_id": "q1",
+                        "input": "Who is Peter Rosegger?",
+                        "llm_ans": "Peter Rosegger was an Austrian writer and poet...",
+                        "answers": [
+                            "He was an Austrian writer and poet from Krieglach in the province of Styria."
+                        ],
+                        "retrieval_list": [
+                            "Passage 3: Peter Rosegger ...",
+                            "Early life ...",
+                        ],
+                    }
+                ],
                 "vllm_api_base": "http://localhost:8005/v1",
                 "vllm_api_key": "EMPTY",
                 "vllm_model_name": "/path/to/Qwen2.5-7B-Instruct",
@@ -110,13 +105,11 @@ class RAGASEvalRequest(BaseModel):
         }
     )
 
-    dataset: RAGASDataset = Field(..., description="RAGAS 格式的评估数据集")
-    test: Optional[Any] = Field(
-        None,
+    test: Any = Field(
+        ...,
         description=(
-            "可选：直接传入原始评估 JSON（如 sample_results.json 或标准 RAGAS 格式），"
-            "由服务端自动拆解为 question/answer/contexts/ground_truth；"
-            "与 dataset 二选一，若同时提供则优先使用 test。"
+            "必填：直接传入原始评估 JSON（如 sample_results.json 或标准 RAGAS 格式），"
+            "服务端会自动拆解为 question/answer/contexts/ground_truth 供 RAGAS 使用。"
         ),
     )
     vllm_api_base: Optional[str] = Field(
