@@ -8,6 +8,14 @@ import { Switch } from '../components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../components/ui/dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -15,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Loader2, BarChart3, FileText, Sparkles } from 'lucide-react';
+import { Loader2, BarChart3, FileText, Sparkles, Settings } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -25,7 +33,6 @@ export default function EvalPage() {
   // Traditional Eval - Direct Input
   const [testDataJson, setTestDataJson] = useState('');
   const [enableBertScore, setEnableBertScore] = useState(false);
-  const [bertScoreModel, setBertScoreModel] = useState('');
   const [traditionalResult, setTraditionalResult] = useState<any>(null);
 
   // Traditional Eval - File Input
@@ -37,6 +44,12 @@ export default function EvalPage() {
 
   // RAGAS Eval - File Input
   const [ragasFilePath, setRagasFilePath] = useState('');
+
+  // RAGAS Configuration (shared between direct input and file input)
+  const [ragasConfigOpen, setRagasConfigOpen] = useState(false);
+  const [vllmApiBase, setVllmApiBase] = useState('http://localhost:8005/v1');
+  const [vllmModelName, setVllmModelName] = useState('/path/to/Qwen2.5-7B-Instruct');
+  const [embeddingModelPath, setEmbeddingModelPath] = useState('/path/to/bge-large-en-v1.5');
 
   const handleTraditionalEval = async () => {
     if (!testDataJson.trim()) {
@@ -53,10 +66,6 @@ export default function EvalPage() {
         test: testData,  // Pass as test field to backend
         enable_bert_score: enableBertScore,
       };
-
-      if (bertScoreModel) {
-        data.bert_score_model = bertScoreModel;
-      }
 
       const response = await api.traditionalEval(data);
       if (response.success) {
@@ -85,10 +94,6 @@ export default function EvalPage() {
         enable_bert_score: enableBertScore,
       };
 
-      if (bertScoreModel) {
-        data.bert_score_model = bertScoreModel;
-      }
-
       const response = await api.traditionalEvalFile(data);
       if (response.success) {
         setTraditionalResult(response.data);
@@ -111,6 +116,9 @@ export default function EvalPage() {
     try {
       const response = await api.ragasEvalFile({
         input_path: ragasFilePath,
+        vllm_api_base: vllmApiBase,
+        vllm_model_name: vllmModelName,
+        embedding_model_path: embeddingModelPath,
       });
 
       if (response.success) {
@@ -137,6 +145,9 @@ export default function EvalPage() {
       
       const data: any = {
         test: ragasData,  // Pass as test field to backend (will be parsed automatically)
+        vllm_api_base: vllmApiBase,
+        vllm_model_name: vllmModelName,
+        embedding_model_path: embeddingModelPath,
       };
 
       const response = await api.ragasEval(data);
@@ -180,15 +191,15 @@ export default function EvalPage() {
                   </h2>
                   <div className="space-y-4">
                     <div>
-                      <Label>Test Data (JSON format - sample_results.json)</Label>
+                      <Label>Test Data (JSON Array)</Label>
                       <Textarea
                         value={testDataJson}
                         onChange={(e) => setTestDataJson(e.target.value)}
-                        placeholder='[\n  {\n    "_id": "q1",\n    "input": "Who is Peter Rosegger?",\n    "llm_ans": "Peter Rosegger was an Austrian writer...",\n    "answers": ["He was an Austrian writer..."],\n    "retrieval_list": ["Passage 1...", "Passage 2..."]\n  },\n  {\n    "_id": "q2",\n    "input": "What teams...",\n    "llm_ans": "Based on the information...",\n    "answers": ["Team A", "Team B"],\n    "retrieval_list": ["Context 1...", "Context 2..."]\n  }\n]'
+                        placeholder={'Enter an array of test cases. Each item should have:\n• _id: unique identifier\n• input: the question\n• llm_ans: LLM generated answer\n• answers: array of ground truth answers\n• retrieval_list: (optional) retrieved contexts\n\nExample:\n[\n  {\n    "_id": "question_1",\n    "input": "Who is Peter Rosegger?",\n    "llm_ans": "Peter Rosegger was an Austrian writer and poet.",\n    "answers": ["He was an Austrian writer and poet."],\n    "retrieval_list": ["Peter Rosegger (1843-1918) was..."]\n  }\n]'}
                         className="min-h-[200px] font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        💡 Format: Array of objects with fields: _id, input, llm_ans, answers (array), retrieval_list (optional)
+                        💡 Paste your JSON array directly, or type/edit above. The system accepts flexible formats.
                       </p>
                     </div>
 
@@ -202,17 +213,6 @@ export default function EvalPage() {
                         onCheckedChange={setEnableBertScore}
                       />
                     </div>
-
-                    {enableBertScore && (
-                      <div>
-                        <Label className="text-sm">BERTScore Model (optional)</Label>
-                        <Input
-                          value={bertScoreModel}
-                          onChange={(e) => setBertScoreModel(e.target.value)}
-                          placeholder="bert-base-uncased"
-                        />
-                      </div>
-                    )}
 
                     <Button
                       onClick={handleTraditionalEval}
@@ -335,21 +335,84 @@ export default function EvalPage() {
               <div className="space-y-6">
                 {/* Direct JSON Input */}
                 <Card className="p-6">
-                  <h2 className="font-bold mb-4 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-purple-600" />
-                    Direct JSON Input
-                  </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-bold flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                      Direct JSON Input
+                    </h2>
+                    <Dialog open={ragasConfigOpen} onOpenChange={setRagasConfigOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Settings className="w-4 h-4 text-slate-500 hover:text-purple-600" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[500px]">
+                        <DialogHeader>
+                          <DialogTitle>RAGAS Configuration</DialogTitle>
+                          <DialogDescription>
+                            Configure VLLM API and embedding model settings
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div>
+                            <Label htmlFor="vllm-api-base-2">VLLM API Base URL</Label>
+                            <Input
+                              id="vllm-api-base-2"
+                              value={vllmApiBase}
+                              onChange={(e) => setVllmApiBase(e.target.value)}
+                              placeholder="http://localhost:8005/v1"
+                              className="mt-1.5"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              The base URL for the VLLM API endpoint
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor="vllm-model-name-2">VLLM Model Path</Label>
+                            <Input
+                              id="vllm-model-name-2"
+                              value={vllmModelName}
+                              onChange={(e) => setVllmModelName(e.target.value)}
+                              placeholder="/path/to/Qwen2.5-7B-Instruct"
+                              className="mt-1.5"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              Path to the VLLM model for evaluation
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor="embedding-model-path-2">Embedding Model Path</Label>
+                            <Input
+                              id="embedding-model-path-2"
+                              value={embeddingModelPath}
+                              onChange={(e) => setEmbeddingModelPath(e.target.value)}
+                              placeholder="/path/to/bge-large-en-v1.5"
+                              className="mt-1.5"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              Path to the embedding model for semantic evaluation
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button onClick={() => setRagasConfigOpen(false)}>
+                            Done
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                   <div className="space-y-4">
                     <div>
-                      <Label>RAGAS Data (JSON format)</Label>
+                      <Label>RAGAS Data (Flexible JSON Format)</Label>
                       <Textarea
                         value={ragasDataJson}
                         onChange={(e) => setRagasDataJson(e.target.value)}
-                        placeholder='Supports two formats:\n\n1. Standard RAGAS:\n{\n  "question": ["Q1?", "Q2?"],\n  "answer": ["A1", "A2"],\n  "contexts": [["C1a", "C1b"], ["C2a"]],\n  "ground_truth": ["GT1", "GT2"]\n}\n\n2. sample_results.json:\n[\n  {\n    "_id": "q1",\n    "input": "Question?",\n    "llm_ans": "Answer",\n    "answers": ["GT"],\n    "retrieval_list": ["Context1", "Context2"]\n  }\n]'
+                        placeholder={'Two formats supported:\n\n📊 Format 1 - Standard RAGAS:\n{\n  "question": ["Question 1?", "Question 2?"],\n  "answer": ["Answer 1", "Answer 2"],\n  "contexts": [["Context 1a", "Context 1b"], ["Context 2"]],\n  "ground_truth": ["Ground truth 1", "Ground truth 2"]\n}\n\n📄 Format 2 - Sample Results:\n[\n  {\n    "_id": "q1",\n    "input": "Your question?",\n    "llm_ans": "LLM answer",\n    "answers": ["Ground truth"],\n    "retrieval_list": ["Retrieved context 1", "Retrieved context 2"]\n  }\n]'}
                         className="min-h-[280px] font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        💡 Supports both standard RAGAS format and sample_results.json format
+                        💡 Paste your data in either format above. Auto-detection handles both.
                       </p>
                     </div>
 
@@ -384,10 +447,73 @@ export default function EvalPage() {
 
                 {/* File Input */}
                 <Card className="p-6">
-                  <h2 className="font-bold mb-4 flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-purple-600" />
-                    File Evaluation
-                  </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-bold flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-purple-600" />
+                      File Evaluation
+                    </h2>
+                    <Dialog open={ragasConfigOpen} onOpenChange={setRagasConfigOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Settings className="w-4 h-4 text-slate-500 hover:text-purple-600" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[500px]">
+                        <DialogHeader>
+                          <DialogTitle>RAGAS Configuration</DialogTitle>
+                          <DialogDescription>
+                            Configure VLLM API and embedding model settings
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div>
+                            <Label htmlFor="vllm-api-base-2">VLLM API Base URL</Label>
+                            <Input
+                              id="vllm-api-base-2"
+                              value={vllmApiBase}
+                              onChange={(e) => setVllmApiBase(e.target.value)}
+                              placeholder="http://localhost:8005/v1"
+                              className="mt-1.5"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              The base URL for the VLLM API endpoint
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor="vllm-model-name-2">VLLM Model Path</Label>
+                            <Input
+                              id="vllm-model-name-2"
+                              value={vllmModelName}
+                              onChange={(e) => setVllmModelName(e.target.value)}
+                              placeholder="/path/to/Qwen2.5-7B-Instruct"
+                              className="mt-1.5"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              Path to the VLLM model for evaluation
+                            </p>
+                          </div>
+                          <div>
+                            <Label htmlFor="embedding-model-path-2">Embedding Model Path</Label>
+                            <Input
+                              id="embedding-model-path-2"
+                              value={embeddingModelPath}
+                              onChange={(e) => setEmbeddingModelPath(e.target.value)}
+                              placeholder="/path/to/bge-large-en-v1.5"
+                              className="mt-1.5"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              Path to the embedding model for semantic evaluation
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <Button onClick={() => setRagasConfigOpen(false)}>
+                            Done
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                   <div className="space-y-4">
                     <div>
                       <Label>Evaluation Data File Path</Label>
