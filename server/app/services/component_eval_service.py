@@ -26,6 +26,11 @@ class ComponentEvalService:
         chunks: list[str],
         enable_semantic_similarity: Optional[bool],
         enable_boundary_clarity: Optional[bool],
+        ppl_model_path: Optional[str],
+        sim_model_path: Optional[str],
+        use_vllm: Optional[bool],
+        vllm_api_base: Optional[str],
+        vllm_model_name: Optional[str],
     ) -> ChunkQualityResult:
         if len(chunks) < 2:
             raise EvaluationException(f"至少需要 2 个文本块才能评估，当前只有 {len(chunks)} 个")
@@ -37,8 +42,9 @@ class ComponentEvalService:
             from chunk_eval_refactored import ChunkEvaluator, EvaluatorConfig  # noqa: PLC0415
 
             settings = get_settings()
-            if not settings.COMPONENT_PPL_MODEL_PATH:
-                raise ModelLoadException("未配置组件评估困惑度模型路径（COMPONENT_PPL_MODEL_PATH）")
+            ppl_path = ppl_model_path or settings.COMPONENT_PPL_MODEL_PATH
+            if not ppl_path:
+                raise ModelLoadException("未配置组件评估困惑度模型路径（COMPONENT_PPL_MODEL_PATH），且请求未指定 ppl_model_path")
             # 解析最终的开关配置（请求未提供时走全局配置）
             use_semantic = (
                 enable_semantic_similarity
@@ -51,14 +57,22 @@ class ComponentEvalService:
                 else settings.COMPONENT_ENABLE_BOUNDARY_CLARITY
             )
 
-            if use_semantic and not settings.COMPONENT_SIM_MODEL_PATH:
-                raise ModelLoadException("未配置组件评估语义相似度模型路径（COMPONENT_SIM_MODEL_PATH）")
+            sim_path = sim_model_path or settings.COMPONENT_SIM_MODEL_PATH
+            if use_semantic and not sim_path:
+                raise ModelLoadException("未配置组件评估语义相似度模型路径（COMPONENT_SIM_MODEL_PATH），且请求未指定 sim_model_path")
+
+            use_vllm_flag = bool(use_vllm)
+            vllm_base = vllm_api_base or settings.DEFAULT_VLLM_API_BASE
+            vllm_model = vllm_model_name or settings.DEFAULT_VLLM_MODEL_NAME
 
             config = EvaluatorConfig(
-                ppl_model_name=settings.COMPONENT_PPL_MODEL_PATH,
-                sim_model_name=settings.COMPONENT_SIM_MODEL_PATH,
+                ppl_model_name=ppl_path,
+                sim_model_name=sim_path,
                 enable_semantic_similarity=use_semantic,
                 enable_boundary_clarity=use_boundary,
+                use_vllm=use_vllm_flag,
+                vllm_api_base=vllm_base,
+                vllm_model_name=vllm_model,
             )
             evaluator = ChunkEvaluator(config)
             evaluator.load_models()
@@ -96,6 +110,11 @@ class ComponentEvalService:
             chunks=chunks,
             enable_semantic_similarity=request.enable_semantic_similarity,
             enable_boundary_clarity=request.enable_boundary_clarity,
+            ppl_model_path=request.ppl_model_path,
+            sim_model_path=request.sim_model_path,
+            use_vllm=request.use_vllm,
+            vllm_api_base=request.vllm_api_base,
+            vllm_model_name=request.vllm_model_name,
         )
 
     def evaluate_chunk_quality_file(self, request: ChunkQualityFileRequest) -> ChunkQualityResult:
@@ -111,6 +130,11 @@ class ComponentEvalService:
             chunks=chunks,
             enable_semantic_similarity=request.enable_semantic_similarity,
             enable_boundary_clarity=request.enable_boundary_clarity,
+            ppl_model_path=request.ppl_model_path,
+            sim_model_path=request.sim_model_path,
+            use_vllm=request.use_vllm,
+            vllm_api_base=request.vllm_api_base,
+            vllm_model_name=request.vllm_model_name,
         )
 
     # ── Chunk 黏连度评估（结构熵） ────────────────────────────────────────────
@@ -129,6 +153,10 @@ class ComponentEvalService:
             chunks=chunks,
             threshold=request.threshold,
             delta=request.delta,
+            model_path=request.model_path,
+            use_vllm=request.use_vllm,
+            vllm_api_base=request.vllm_api_base,
+            vllm_model_name=request.vllm_model_name,
         )
 
     def evaluate_chunk_stickiness_file(self, request: ChunkStickinessFileRequest) -> ChunkStickinessResult:
@@ -147,6 +175,10 @@ class ComponentEvalService:
             chunks=chunks,
             threshold=request.threshold,
             delta=request.delta,
+            model_path=request.model_path,
+            use_vllm=request.use_vllm,
+            vllm_api_base=request.vllm_api_base,
+            vllm_model_name=request.vllm_model_name,
         )
 
     def _evaluate_chunk_stickiness_core(
@@ -154,6 +186,10 @@ class ComponentEvalService:
         chunks: list[str],
         threshold: Optional[float],
         delta: Optional[float],
+        model_path: Optional[str],
+        use_vllm: Optional[bool],
+        vllm_api_base: Optional[str],
+        vllm_model_name: Optional[str],
     ) -> ChunkStickinessResult:
         try:
             from app.core.path_setup import ensure_paths
@@ -162,16 +198,24 @@ class ComponentEvalService:
             from relation_eval_refactored import StickinessEvaluator, StickinessConfig  # noqa: PLC0415
 
             settings = get_settings()
-            if not settings.STICKINESS_MODEL_PATH:
-                raise ModelLoadException("未配置黏连度评估模型路径（STICKINESS_MODEL_PATH）")
+            stickiness_model = model_path or settings.STICKINESS_MODEL_PATH
+            if not stickiness_model:
+                raise ModelLoadException("未配置黏连度评估模型路径（STICKINESS_MODEL_PATH），且请求未指定 model_path")
 
             use_threshold = threshold if threshold is not None else settings.STICKINESS_THRESHOLD
             use_delta = delta if delta is not None else settings.STICKINESS_DELTA
 
+            use_vllm_flag = bool(use_vllm)
+            vllm_base = vllm_api_base or settings.DEFAULT_VLLM_API_BASE
+            vllm_model = vllm_model_name or settings.DEFAULT_VLLM_MODEL_NAME
+
             config = StickinessConfig(
-                model_path=settings.STICKINESS_MODEL_PATH,
+                model_path=stickiness_model,
                 threshold=use_threshold,
                 delta=use_delta,
+                use_vllm=use_vllm_flag,
+                vllm_api_base=vllm_base,
+                vllm_model_name=vllm_model,
             )
             evaluator = StickinessEvaluator(config)
             evaluator.load_model()

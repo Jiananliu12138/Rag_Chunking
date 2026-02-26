@@ -225,6 +225,26 @@ class ChunkQualityRequest(BaseModel):
         None,
         description="是否计算边界清晰度 BC（可选，未提供时从配置读取 COMPONENT_ENABLE_BOUNDARY_CLARITY）",
     )
+    ppl_model_path: Optional[str] = Field(
+        None,
+        description="可选：覆盖默认的困惑度模型路径；未提供时使用 COMPONENT_PPL_MODEL_PATH。",
+    )
+    sim_model_path: Optional[str] = Field(
+        None,
+        description="可选：覆盖默认的语义相似度模型路径；未提供时使用 COMPONENT_SIM_MODEL_PATH。",
+    )
+    use_vllm: Optional[bool] = Field(
+        None,
+        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
+    )
+    vllm_api_base: Optional[str] = Field(
+        None,
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+    )
+    vllm_model_name: Optional[str] = Field(
+        None,
+        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
+    )
 
 
 class ChunkPairResult(BaseModel):
@@ -260,6 +280,26 @@ class ChunkQualityFileRequest(BaseModel):
         None,
         description="是否计算边界清晰度 BC（可选，未提供时从配置读取 COMPONENT_ENABLE_BOUNDARY_CLARITY）",
     )
+    ppl_model_path: Optional[str] = Field(
+        None,
+        description="可选：覆盖默认的困惑度模型路径；未提供时使用 COMPONENT_PPL_MODEL_PATH。",
+    )
+    sim_model_path: Optional[str] = Field(
+        None,
+        description="可选：覆盖默认的语义相似度模型路径；未提供时使用 COMPONENT_SIM_MODEL_PATH。",
+    )
+    use_vllm: Optional[bool] = Field(
+        None,
+        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
+    )
+    vllm_api_base: Optional[str] = Field(
+        None,
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+    )
+    vllm_model_name: Optional[str] = Field(
+        None,
+        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
+    )
 
 
 # ── 组件级 Chunk 黏连度评估 ───────────────────────────────────────────────────
@@ -293,6 +333,22 @@ class ChunkStickinessRequest(BaseModel):
     )
     threshold: float = Field(0.8, ge=0.0, le=1.0, description="边权重阈值")
     delta: float = Field(0.0, ge=0.0, description="位置距离惩罚系数")
+    model_path: Optional[str] = Field(
+        None,
+        description="可选：覆盖默认的黏连度评估模型路径；未提供时使用 STICKINESS_MODEL_PATH。",
+    )
+    use_vllm: Optional[bool] = Field(
+        None,
+        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
+    )
+    vllm_api_base: Optional[str] = Field(
+        None,
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+    )
+    vllm_model_name: Optional[str] = Field(
+        None,
+        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
+    )
 
 
 class ChunkStickinessResult(BaseModel):
@@ -332,6 +388,22 @@ class ChunkStickinessFileRequest(BaseModel):
     )
     delta: Optional[float] = Field(
         None, ge=0.0, description="位置距离惩罚系数（可选，未提供时从配置读取 STICKINESS_DELTA）"
+    )
+    model_path: Optional[str] = Field(
+        None,
+        description="可选：覆盖默认的黏连度评估模型路径；未提供时使用 STICKINESS_MODEL_PATH。",
+    )
+    use_vllm: Optional[bool] = Field(
+        None,
+        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
+    )
+    vllm_api_base: Optional[str] = Field(
+        None,
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+    )
+    vllm_model_name: Optional[str] = Field(
+        None,
+        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
     )
 
 

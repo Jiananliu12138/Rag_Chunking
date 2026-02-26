@@ -16,6 +16,7 @@ from collections import defaultdict
 import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
+import requests
 
 
 @dataclass
@@ -28,6 +29,11 @@ class StickinessConfig:
     delta: float = 0.0
     device_map: str = "auto"
     log_level: str = 'INFO'
+
+    # 使用 vLLM API 计算困惑度时的配置
+    use_vllm: bool = False
+    vllm_api_base: Optional[str] = None  # 例如 http://localhost:8005/v1
+    vllm_model_name: Optional[str] = None
 
 
 @dataclass
@@ -45,18 +51,64 @@ class StickinessResult:
         }
 
 
+class VLLMPerplexityClient:
+    """
+    通过 vLLM OpenAI-compatible /completions 接口近似计算困惑度。
+    """
+
+    def __init__(self, api_base: str, model_name: str, timeout: int = 120):
+        self.api_base = api_base
+        self.model_name = model_name
+        self.timeout = timeout
+
+    def _get_token_logprobs(self, text: str):
+        payload = {
+            "model": self.model_name,
+            "prompt": text,
+            "max_tokens": 0,
+            "temperature": 0.0,
+            "logprobs": 1,
+            "echo": True,
+        }
+        resp = requests.post(f"{self.api_base}/completions", json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        logprobs = data["choices"][0]["logprobs"]["token_logprobs"]
+        return [lp for lp in logprobs if lp is not None]
+
+    def perplexity(self, context: str, target: str) -> Tuple[float, int]:
+        full = self._get_token_logprobs(context + target)
+        ctx = self._get_token_logprobs(context) if context.strip() else []
+        if not full:
+            return 0.0, 0
+        if len(full) <= len(ctx):
+            target_logprobs = full
+        else:
+            target_logprobs = full[len(ctx):]
+        token_num = max(len(target_logprobs), 1)
+        loss_sum = -sum(target_logprobs)
+        return loss_sum, token_num
+
+
 class PerplexityCalculator:
     """困惑度计算器"""
     
-    def __init__(self, model, tokenizer):
+    def __init__(self, model, tokenizer, vllm_client: Optional[VLLMPerplexityClient] = None, use_vllm: bool = False):
         self.model = model
         self.tokenizer = tokenizer
+        self.vllm_client = vllm_client
+        self.use_vllm = use_vllm
     
     def get_ppl_for_next(self, context: str, target: str) -> Tuple[float, int]:
         """
         计算给定context预测target的困惑度
         返回: (总损失, target的token数)
         """
+        if self.use_vllm:
+            if self.vllm_client is None:
+                raise RuntimeError("vLLM 客户端未初始化")
+            return self.vllm_client.perplexity(context, target)
+
         context_tokens = self.tokenizer(context, return_tensors="pt", add_special_tokens=False)
         target_tokens = self.tokenizer(target, return_tensors="pt", add_special_tokens=False)
         
@@ -235,24 +287,47 @@ class StickinessEvaluator:
         return logger
     
     def load_model(self):
-        """加载模型"""
-        self.logger.info(f"加载模型: {self.config.model_path}")
-        
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.config.model_path,
-            trust_remote_code=True
-        )
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.config.model_path,
-            trust_remote_code=True,
-            device_map=self.config.device_map
-        )
-        self.model.eval()
-        
-        self.ppl_calc = PerplexityCalculator(self.model, self.tokenizer)
-        self.graph_builder = GraphBuilder(self.ppl_calc)
-        
-        self.logger.info("✓ 模型加载完成")
+        """加载模型或初始化 vLLM 客户端"""
+        if self.config.use_vllm:
+            if not (self.config.vllm_api_base and self.config.vllm_model_name):
+                raise ValueError("use_vllm=True 时必须提供 vllm_api_base 与 vllm_model_name")
+            self.logger.info(
+                f"使用 vLLM API 计算困惑度: {self.config.vllm_model_name} @ {self.config.vllm_api_base}"
+            )
+            vllm_client = VLLMPerplexityClient(
+                api_base=self.config.vllm_api_base.rstrip("/"),
+                model_name=self.config.vllm_model_name,
+            )
+            self.ppl_calc = PerplexityCalculator(
+                model=None,
+                tokenizer=None,
+                vllm_client=vllm_client,
+                use_vllm=True,
+            )
+            self.graph_builder = GraphBuilder(self.ppl_calc)
+            self.logger.info("✓ vLLM 困惑度客户端初始化完成")
+        else:
+            self.logger.info(f"加载模型: {self.config.model_path}")
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.config.model_path,
+                trust_remote_code=True
+            )
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.config.model_path,
+                trust_remote_code=True,
+                device_map=self.config.device_map
+            )
+            self.model.eval()
+
+            self.ppl_calc = PerplexityCalculator(
+                model=self.model,
+                tokenizer=self.tokenizer,
+                vllm_client=None,
+                use_vllm=False,
+            )
+            self.graph_builder = GraphBuilder(self.ppl_calc)
+
+            self.logger.info("✓ 模型加载完成")
     
     def evaluate_chunks(self, chunks: List[str]) -> StickinessResult:
         """评估文本块列表的黏连度"""

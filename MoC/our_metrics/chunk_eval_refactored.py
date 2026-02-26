@@ -16,6 +16,7 @@ from torch import nn
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from sentence_transformers import SentenceTransformer
+import requests
 
 
 # ============================================================================
@@ -30,6 +31,11 @@ class EvaluatorConfig:
     ppl_model_name: str = 'internlm3-8b-instruct'
     sim_model_name: str = 'BAAI/all-MiniLM-L6-v2'
     device_map: str = "auto"
+
+    # 使用 vLLM API 计算困惑度时的配置（仅影响 PPL / BC，语义模型仍走本地）
+    use_vllm: bool = False
+    vllm_api_base: Optional[str] = None  # 例如 http://localhost:8005/v1
+    vllm_model_name: Optional[str] = None
     
     # 输入输出路径
     input_file: str = 'merge_data/db_qa_semantic_68.json'
@@ -88,6 +94,65 @@ class AggregatedResults:
 # 核心评估器类
 # ============================================================================
 
+class VLLMPerplexityClient:
+    """
+    通过 vLLM OpenAI-compatible /completions 接口近似计算困惑度。
+    基本思路：
+      - ppl(text) ~= -avg_logprob(text_tokens)
+      - ppl(target | context) 通过分别计算 context+target 与 context 的 token 数来截取 target 段 logprob
+    """
+
+    def __init__(self, api_base: str, model_name: str, timeout: int = 120):
+        self.api_base = api_base
+        self.model_name = model_name
+        self.timeout = timeout
+
+    def _get_token_logprobs(self, text: str) -> List[float]:
+        """
+        调用 /completions 接口，使用 echo+logprobs 拿到 prompt token 的 logprob 列表。
+        依赖 vLLM 的 OpenAI 兼容行为。
+        """
+        payload = {
+            "model": self.model_name,
+            "prompt": text,
+            "max_tokens": 0,
+            "temperature": 0.0,
+            "logprobs": 1,
+            "echo": True,
+        }
+        resp = requests.post(f"{self.api_base}/completions", json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        # choices[0].logprobs.token_logprobs 对应整个 prompt 的 token 对数概率
+        logprobs = data["choices"][0]["logprobs"]["token_logprobs"]
+        # 过滤掉 None（例如特殊 token）
+        return [lp for lp in logprobs if lp is not None]
+
+    def _mean_neg_logprob(self, text: str) -> float:
+        token_logprobs = self._get_token_logprobs(text)
+        if not token_logprobs:
+            return 0.0
+        # 负对数概率的平均值，作为“困惑度”的 proxy
+        return -sum(token_logprobs) / len(token_logprobs)
+
+    def perplexity(self, context: str, target: str) -> float:
+        """
+        近似 ppl(target | context)：
+          - 先拿 context+target 的 token_logprobs
+          - 再拿 context 的 token_logprobs，做差得到 target 段
+        """
+        full = self._get_token_logprobs(context + target)
+        ctx = self._get_token_logprobs(context) if context.strip() else []
+        if not full:
+            return 0.0
+        if len(full) <= len(ctx):
+            # 退化情况：长度异常时就整体当成 target
+            target_logprobs = full
+        else:
+            target_logprobs = full[len(ctx):]
+        return -sum(target_logprobs) / max(len(target_logprobs), 1)
+
+
 class ChunkEvaluator:
     """文本分块质量评估器"""
     
@@ -101,9 +166,10 @@ class ChunkEvaluator:
         self.config = config
         self.logger = self._setup_logger()
         
-        # 延迟加载模型
+        # 延迟加载模型 / 客户端
         self.ppl_model = None
         self.ppl_tokenizer = None
+        self.vllm_client: Optional[VLLMPerplexityClient] = None
         self.sim_model = None
         
         self.logger.info("评估器初始化完成")
@@ -132,21 +198,32 @@ class ChunkEvaluator:
     
     def load_models(self):
         """加载所需模型"""
-        
-        # 加载困惑度计算模型
+        # 加载困惑度计算模型或 vLLM 客户端
         if self.config.enable_boundary_clarity:
-            self.logger.info(f"加载困惑度模型: {self.config.ppl_model_name}")
-            self.ppl_tokenizer = AutoTokenizer.from_pretrained(
-                self.config.ppl_model_name,
-                trust_remote_code=True
-            )
-            self.ppl_model = AutoModelForCausalLM.from_pretrained(
-                self.config.ppl_model_name,
-                trust_remote_code=True,
-                device_map=self.config.device_map
-            )
-            self.ppl_model.eval()
-            self.logger.info("✓ 困惑度模型加载完成")
+            if self.config.use_vllm:
+                if not (self.config.vllm_api_base and self.config.vllm_model_name):
+                    raise ValueError("use_vllm=True 时必须提供 vllm_api_base 与 vllm_model_name")
+                self.logger.info(
+                    f"使用 vLLM API 计算困惑度: {self.config.vllm_model_name} @ {self.config.vllm_api_base}"
+                )
+                self.vllm_client = VLLMPerplexityClient(
+                    api_base=self.config.vllm_api_base.rstrip("/"),
+                    model_name=self.config.vllm_model_name,
+                )
+                self.logger.info("✓ vLLM 困惑度客户端初始化完成")
+            else:
+                self.logger.info(f"加载困惑度模型: {self.config.ppl_model_name}")
+                self.ppl_tokenizer = AutoTokenizer.from_pretrained(
+                    self.config.ppl_model_name,
+                    trust_remote_code=True
+                )
+                self.ppl_model = AutoModelForCausalLM.from_pretrained(
+                    self.config.ppl_model_name,
+                    trust_remote_code=True,
+                    device_map=self.config.device_map
+                )
+                self.ppl_model.eval()
+                self.logger.info("✓ 困惑度模型加载完成")
         
         # 加载语义相似度模型
         if self.config.enable_semantic_similarity:
@@ -197,6 +274,13 @@ class ChunkEvaluator:
         Returns:
             困惑度（交叉熵损失）
         """
+        # vLLM 模式：通过远程 API 近似计算困惑度
+        if self.config.use_vllm:
+            if self.vllm_client is None:
+                raise RuntimeError("vLLM 客户端未初始化，请先调用 load_models()")
+            return self.vllm_client.perplexity(context, target)
+
+        # 本地 HuggingFace 模式
         if self.ppl_model is None or self.ppl_tokenizer is None:
             raise RuntimeError("困惑度模型未加载，请先调用 load_models()")
         
