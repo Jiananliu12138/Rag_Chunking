@@ -394,13 +394,12 @@ export default function ComponentEvalPage() {
     }
   };
 
-  // Auto re-evaluate on param change
+  // Auto re-evaluate on param change（仅在非 loading 状态下触发）
   useEffect(() => {
-    if (stickinessChunksJson && stickinessResult) {
-      const t = setTimeout(() => handleStickinessEval(), 500);
-      return () => clearTimeout(t);
-    }
-  }, [threshold, delta]);
+    if (!stickinessChunksJson || !stickinessResult || loading) return;
+    const t = setTimeout(() => handleStickinessEval(), 500);
+    return () => clearTimeout(t);
+  }, [threshold, delta, loading, stickinessChunksJson, stickinessResult]);
 
   // ── Derived data ────────────────────────────────────────────────────────────
   const qualityChartData =
@@ -848,7 +847,14 @@ export default function ComponentEvalPage() {
                         <Label>Threshold</Label>
                         <span className="text-sm font-mono text-slate-600">{threshold[0].toFixed(2)}</span>
                       </div>
-                      <Slider value={threshold} onValueChange={setThreshold} min={0} max={1} step={0.01} />
+                      <Slider
+                        value={threshold}
+                        onValueChange={setThreshold}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        disabled={loading}
+                      />
                       <p className="text-xs text-slate-500">Controls which edges are considered "strong correlation"</p>
                     </div>
                     <div className="space-y-2">
@@ -856,7 +862,14 @@ export default function ComponentEvalPage() {
                         <Label>Delta (Position Penalty)</Label>
                         <span className="text-sm font-mono text-slate-600">{delta[0].toFixed(2)}</span>
                       </div>
-                      <Slider value={delta} onValueChange={setDelta} min={0} max={1} step={0.01} />
+                      <Slider
+                        value={delta}
+                        onValueChange={setDelta}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        disabled={loading}
+                      />
                       <p className="text-xs text-slate-500">Higher values favor adjacent chunks</p>
                     </div>
                     <div className="space-y-2">
@@ -864,7 +877,14 @@ export default function ComponentEvalPage() {
                         <Label>Visualization Threshold</Label>
                         <span className="text-sm font-mono text-slate-600">{similarityThreshold[0].toFixed(2)}</span>
                       </div>
-                      <Slider value={similarityThreshold} onValueChange={setSimilarityThreshold} min={0} max={1} step={0.01} />
+                      <Slider
+                        value={similarityThreshold}
+                        onValueChange={setSimilarityThreshold}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        disabled={loading}
+                      />
                       <p className="text-xs text-slate-500">Only show graph edges with similarity above this value</p>
                     </div>
                   </div>
