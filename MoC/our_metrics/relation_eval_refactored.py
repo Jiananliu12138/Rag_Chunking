@@ -142,6 +142,22 @@ class PerplexityCalculator:
         
         return loss.sum().item(), shift_labels.shape[1]
 
+    def get_token_num(self, text: str) -> int:
+        """
+        获取文本的 token 数：
+        - use_vllm=True 时，使用 vLLM 的 tokenizer（通过 logprobs 的长度间接获得）
+        - 否则使用本地 tokenizer.encode
+        """
+        if self.use_vllm:
+            if self.vllm_client is None:
+                raise RuntimeError("vLLM 客户端未初始化")
+            logprobs = self.vllm_client._get_token_logprobs(text)
+            return len(logprobs)
+
+        if self.tokenizer is None:
+            raise RuntimeError("本地 tokenizer 未初始化")
+        return int(self.tokenizer.encode(text, return_tensors='pt').shape[1])
+
 
 class GraphBuilder:
     """图构建器"""
@@ -334,11 +350,8 @@ class StickinessEvaluator:
         n = len(chunks)
         self.logger.info(f"评估 {n} 个文本块的黏连度")
         
-        # Step 1: 计算token数量
-        token_nums = [
-            self.tokenizer.encode(chunk, return_tensors='pt').shape[1]
-            for chunk in chunks
-        ]
+        # Step 1: 计算token数量（通过 PerplexityCalculator 封装，兼容 vLLM / 本地两种模式）
+        token_nums = [self.ppl_calc.get_token_num(chunk) for chunk in chunks]
         
         # Step 2: 构建完全图
         self.logger.info("构建完全图...")
