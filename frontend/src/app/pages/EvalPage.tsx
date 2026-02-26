@@ -731,28 +731,40 @@ export default function EvalPage() {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>#</TableHead>
+                                <TableHead>ID</TableHead>
                                 <TableHead>Question</TableHead>
-                                <TableHead>Scores</TableHead>
+                                <TableHead>Metrics</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {ragasResult.samples.slice(0, 10).map((sample: any, idx: number) => (
                                 <TableRow key={idx}>
-                                  <TableCell>{idx + 1}</TableCell>
+                                  <TableCell className="font-mono text-xs">
+                                    {sample._id || sample.id || `#${idx + 1}`}
+                                  </TableCell>
                                   <TableCell className="max-w-xs truncate">
                                     {sample.question || sample.input || '-'}
                                   </TableCell>
                                   <TableCell>
                                     <div className="text-xs space-y-1">
                                       {Object.entries(sample)
-                                        .filter(([key]) => key !== 'question' && key !== 'input')
+                                        .filter(([key]) => 
+                                          key !== 'question' && 
+                                          key !== 'input' && 
+                                          key !== '_id' && 
+                                          key !== 'id' &&
+                                          key !== 'answer' && 
+                                          key !== 'ground_truth' &&
+                                          key !== 'contexts' &&
+                                          key !== 'retrieval_list' &&
+                                          key !== 'llm_ans' &&
+                                          key !== 'answers'
+                                        )
                                         .map(([key, val]) => (
                                           <div key={key}>
-                                            {key}: {typeof val === 'number' ? (val as number).toFixed(3) : '-'}
+                                            <span className="text-slate-500">{key}:</span> {typeof val === 'number' ? (val as number).toFixed(3) : '-'}
                                           </div>
-                                        ))}
-                                    </div>
+                                        ))}\n                                    </div>
                                   </TableCell>
                                 </TableRow>
                               ))}
