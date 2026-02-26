@@ -740,7 +740,7 @@ export default function EvalPage() {
                               {ragasResult.samples.slice(0, 10).map((sample: any, idx: number) => (
                                 <TableRow key={idx}>
                                   <TableCell className="font-mono text-xs">
-                                    {sample._id || sample.id || `#${idx + 1}`}
+                                    {sample.index || sample.id || `#${idx + 1}`}
                                   </TableCell>
                                   <TableCell className="max-w-xs truncate">
                                     {sample.question || sample.input || '-'}
@@ -751,20 +751,20 @@ export default function EvalPage() {
                                         .filter(([key]) => 
                                           key !== 'question' && 
                                           key !== 'input' && 
-                                          key !== '_id' && 
                                           key !== 'id' &&
                                           key !== 'answer' && 
                                           key !== 'ground_truth' &&
                                           key !== 'contexts' &&
                                           key !== 'retrieval_list' &&
                                           key !== 'llm_ans' &&
-                                          key !== 'answers'
+                                          key !== 'answers' &&
+                                          key !== 'metrics'
                                         )
                                         .map(([key, val]) => (
                                           <div key={key}>
                                             <span className="text-slate-500">{key}:</span> {typeof val === 'number' ? (val as number).toFixed(3) : '-'}
                                           </div>
-                                        ))}\n                                    </div>
+                                        ))}                                   </div>
                                   </TableCell>
                                 </TableRow>
                               ))}
