@@ -144,7 +144,7 @@ export default function EvalPage() {
       const ragasData = JSON.parse(ragasDataJson);
       
       const data: any = {
-        test: ragasData,  // Pass as test field to backend (will be parsed automatically)
+        dataset: ragasData,  // Changed from 'test' to 'dataset'
         vllm_api_base: vllmApiBase,
         vllm_model_name: vllmModelName,
         embedding_model_path: embeddingModelPath,
@@ -408,8 +408,8 @@ export default function EvalPage() {
                       <Textarea
                         value={ragasDataJson}
                         onChange={(e) => setRagasDataJson(e.target.value)}
-                        placeholder={'Two formats supported:\n\n📊 Format 1 - Standard RAGAS:\n{\n  "question": ["Question 1?", "Question 2?"],\n  "answer": ["Answer 1", "Answer 2"],\n  "contexts": [["Context 1a", "Context 1b"], ["Context 2"]],\n  "ground_truth": ["Ground truth 1", "Ground truth 2"]\n}\n\n📄 Format 2 - Sample Results:\n[\n  {\n    "_id": "q1",\n    "input": "Your question?",\n    "llm_ans": "LLM answer",\n    "answers": ["Ground truth"],\n    "retrieval_list": ["Retrieved context 1", "Retrieved context 2"]\n  }\n]'}
-                        className="min-h-[280px] font-mono text-xs"
+                        placeholder={'Two formats supported:\\n\\n📊 Format 1 - Standard RAGAS:\\n{\\n  \"question\": [\"Question 1?\", \"Question 2?\"],\\n  \"answer\": [\"Answer 1\", \"Answer 2\"],\\n  \"contexts\": [[\"Context 1a\", \"Context 1b\"], [\"Context 2\"]],\\n  \"ground_truth\": [\"Ground truth 1\", \"Ground truth 2\"]\\n}\\n\\n📄 Format 2 - Sample Results:\\n[\\n  {\\n    \"_id\": \"q1\",\\n    \"input\": \"Your question?\",\\n    \"llm_ans\": \"LLM answer\",\\n    \"answers\": [\"Ground truth\"],\\n    \"retrieval_list\": [\"Retrieved context 1\", \"Retrieved context 2\"]\\n  }\\n]'}
+                        className="min-h-[320px] font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         💡 Paste your data in either format above. Auto-detection handles both.
