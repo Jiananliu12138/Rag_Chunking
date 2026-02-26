@@ -48,7 +48,7 @@ export default function EvalPage() {
   // RAGAS Configuration (shared between direct input and file input)
   const [ragasConfigOpen, setRagasConfigOpen] = useState(false);
   const [vllmApiBase, setVllmApiBase] = useState('http://localhost:8005/v1');
-  const [vllmModelName, setVllmModelName] = useState('/path/to/Qwen2.5-7B-Instruct');
+  const [vllmModelName, setVllmModelName] = useState('Qwen2.5-7B-Instruct');
   const [embeddingModelPath, setEmbeddingModelPath] = useState('/path/to/bge-large-en-v1.5');
 
   const handleTraditionalEval = async () => {
@@ -144,7 +144,7 @@ export default function EvalPage() {
       const ragasData = JSON.parse(ragasDataJson);
       
       const data: any = {
-        dataset: ragasData,  // Changed from 'test' to 'dataset'
+        test: ragasData,  // Use 'test' field - backend will auto-parse to dataset format
         vllm_api_base: vllmApiBase,
         vllm_model_name: vllmModelName,
         embedding_model_path: embeddingModelPath,
@@ -373,7 +373,7 @@ export default function EvalPage() {
                               id="vllm-model-name-2"
                               value={vllmModelName}
                               onChange={(e) => setVllmModelName(e.target.value)}
-                              placeholder="/path/to/Qwen2.5-7B-Instruct"
+                              placeholder="Qwen2.5-7B-Instruct"
                               className="mt-1.5"
                             />
                             <p className="text-xs text-slate-500 mt-1">
@@ -485,7 +485,7 @@ export default function EvalPage() {
                               id="vllm-model-name-2"
                               value={vllmModelName}
                               onChange={(e) => setVllmModelName(e.target.value)}
-                              placeholder="/path/to/Qwen2.5-7B-Instruct"
+                              placeholder="Qwen2.5-7B-Instruct"
                               className="mt-1.5"
                             />
                             <p className="text-xs text-slate-500 mt-1">
@@ -567,19 +567,36 @@ export default function EvalPage() {
                         <div>
                           <h3 className="text-sm font-medium mb-3">Summary</h3>
                           <div className="grid grid-cols-2 gap-3">
-                            {Object.entries(ragasResult.summary).map(([key, value]) => (
-                              <div
-                                key={key}
-                                className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200"
-                              >
-                                <div className="text-xs text-slate-600 mb-1">
-                                  {key.replace(/_/g, ' ').toUpperCase()}
+                            {Object.entries(ragasResult.summary).map(([key, value]) => {
+                              // Handle both simple numbers and {mean, min, max} objects
+                              let displayValue: string;
+                              if (typeof value === 'number') {
+                                displayValue = value.toFixed(4);
+                              } else if (value && typeof value === 'object' && 'mean' in value) {
+                                displayValue = `${(value as any).mean.toFixed(4)}`;
+                              } else {
+                                displayValue = String(value);
+                              }
+                              
+                              return (
+                                <div
+                                  key={key}
+                                  className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200"
+                                >
+                                  <div className="text-xs text-slate-600 mb-1">
+                                    {key.replace(/_/g, ' ').toUpperCase()}
+                                  </div>
+                                  <div className="text-xl font-bold text-purple-900">
+                                    {displayValue}
+                                  </div>
+                                  {value && typeof value === 'object' && 'mean' in value && (
+                                    <div className="text-xs text-slate-500 mt-1">
+                                      min: {(value as any).min.toFixed(3)} | max: {(value as any).max.toFixed(3)}
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="text-xl font-bold text-purple-900">
-                                  {typeof value === 'number' ? (value as number).toFixed(4) : value}
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}
