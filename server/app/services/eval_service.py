@@ -10,7 +10,6 @@ from app.core.logging_config import logger
 from app.core.path_setup import ensure_paths
 from app.repositories.file_repository import FileRepository
 from app.schemas.eval_schema import (
-    RAGASDataset,
     RAGASEvalFileRequest,
     RAGASEvalRequest,
     RAGASEvalResult,
@@ -181,18 +180,13 @@ class EvalService:
                 cache_dir=cache_dir,
             )
 
-            # 支持两种输入方式：
-            # 1）request.test：原始 JSON（标准 RAGAS 或 sample_results.json 格式），复用 FileRepository.parse_ragas_dataset_from_json
-            # 2）request.dataset：已经拆好的 RAGASDataset
-            if request.test is not None:
-                dataset = FileRepository.parse_ragas_dataset_from_json(request.test)
-            else:
-                dataset = {
-                    "question": request.dataset.question,
-                    "answer": request.dataset.answer,
-                    "contexts": request.dataset.contexts,
-                    "ground_truth": request.dataset.ground_truth,
-                }
+            # 仅支持一种输入方式：request.test
+            # test 为原始 JSON（标准 RAGAS 或 sample_results.json 格式），
+            # 统一复用 FileRepository.parse_ragas_dataset_from_json 进行拆解。
+            if request.test is None:
+                raise EvaluationException("RAGAS 评估必须提供 test 字段（原始评估 JSON）")
+
+            dataset = FileRepository.parse_ragas_dataset_from_json(request.test)
             raw = evaluator.evaluate(dataset)
 
             def _make_summary(name: str) -> RAGASMetricSummary:
