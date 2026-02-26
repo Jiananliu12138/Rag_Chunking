@@ -998,6 +998,14 @@ export default function ComponentEvalPage() {
                       )}
                     </Card>
                   </div>
+
+                  {/* Raw JSON details */}
+                  <Card className="p-6 mt-6">
+                    <h3 className="text-sm font-medium mb-2">Complete Stickiness Results</h3>
+                    <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto max-h-[360px]">
+                      {JSON.stringify(stickinessResult, null, 2)}
+                    </pre>
+                  </Card>
                 </>
               ) : null}
             </div>
