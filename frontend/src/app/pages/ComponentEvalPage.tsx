@@ -22,6 +22,189 @@ import { api } from '../utils/api';
 import { toast } from 'sonner';
 import ForceGraph2D from 'react-force-graph-2d';
 
+// ── Top-level dialog components (must NOT be defined inside the parent) ────────
+
+interface QualityConfigDialogProps {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  pplModelPath: string;
+  setPplModelPath: (v: string) => void;
+  simModelPath: string;
+  setSimModelPath: (v: string) => void;
+  useVllm: boolean;
+  setUseVllm: (v: boolean) => void;
+  vllmApiBase: string;
+  setVllmApiBase: (v: string) => void;
+  vllmModelName: string;
+  setVllmModelName: (v: string) => void;
+}
+
+function QualityConfigDialog({
+  open, onOpenChange,
+  pplModelPath, setPplModelPath,
+  simModelPath, setSimModelPath,
+  useVllm, setUseVllm,
+  vllmApiBase, setVllmApiBase,
+  vllmModelName, setVllmModelName,
+}: QualityConfigDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <Settings className="w-4 h-4 text-slate-500 hover:text-blue-600" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Chunk Quality Model Config</DialogTitle>
+          <DialogDescription>
+            Override default model paths. Leave blank to use server defaults.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>PPL Model Path</Label>
+            <Input
+              value={pplModelPath}
+              onChange={(e) => setPplModelPath(e.target.value)}
+              placeholder="/models/gpt2 (leave blank for default)"
+              className="mt-1.5"
+            />
+            <p className="text-xs text-slate-500 mt-1">Perplexity model for Boundary Clarity</p>
+          </div>
+          <div>
+            <Label>Sim Model Path</Label>
+            <Input
+              value={simModelPath}
+              onChange={(e) => setSimModelPath(e.target.value)}
+              placeholder="/models/bge-large-en-v1.5 (leave blank for default)"
+              className="mt-1.5"
+            />
+            <p className="text-xs text-slate-500 mt-1">Embedding model for Semantic Dissimilarity</p>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div>
+              <Label className="text-sm">Use vLLM for PPL</Label>
+              <p className="text-xs text-slate-500">Call vLLM API instead of local model</p>
+            </div>
+            <Switch checked={useVllm} onCheckedChange={setUseVllm} />
+          </div>
+          {useVllm && (
+            <div className="space-y-3 pl-3 border-l-2 border-blue-200">
+              <div>
+                <Label>vLLM API Base</Label>
+                <Input
+                  value={vllmApiBase}
+                  onChange={(e) => setVllmApiBase(e.target.value)}
+                  placeholder="http://localhost:8005/v1"
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label>vLLM Model Name</Label>
+                <Input
+                  value={vllmModelName}
+                  onChange={(e) => setVllmModelName(e.target.value)}
+                  placeholder="e.g. Qwen2.5-7B-Instruct"
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={() => onOpenChange(false)}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface StickinessConfigDialogProps {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  modelPath: string;
+  setModelPath: (v: string) => void;
+  useVllm: boolean;
+  setUseVllm: (v: boolean) => void;
+  vllmApiBase: string;
+  setVllmApiBase: (v: string) => void;
+  vllmModelName: string;
+  setVllmModelName: (v: string) => void;
+}
+
+function StickinessConfigDialog({
+  open, onOpenChange,
+  modelPath, setModelPath,
+  useVllm, setUseVllm,
+  vllmApiBase, setVllmApiBase,
+  vllmModelName, setVllmModelName,
+}: StickinessConfigDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <Settings className="w-4 h-4 text-slate-500 hover:text-orange-600" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Chunk Stickiness Model Config</DialogTitle>
+          <DialogDescription>
+            Override default model path. Leave blank to use server default.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Model Path</Label>
+            <Input
+              value={modelPath}
+              onChange={(e) => setModelPath(e.target.value)}
+              placeholder="/models/bge-large-en-v1.5 (leave blank for default)"
+              className="mt-1.5"
+            />
+            <p className="text-xs text-slate-500 mt-1">Embedding model for structural-entropy evaluation</p>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div>
+              <Label className="text-sm">Use vLLM for PPL</Label>
+              <p className="text-xs text-slate-500">Call vLLM API instead of local model</p>
+            </div>
+            <Switch checked={useVllm} onCheckedChange={setUseVllm} />
+          </div>
+          {useVllm && (
+            <div className="space-y-3 pl-3 border-l-2 border-orange-200">
+              <div>
+                <Label>vLLM API Base</Label>
+                <Input
+                  value={vllmApiBase}
+                  onChange={(e) => setVllmApiBase(e.target.value)}
+                  placeholder="http://localhost:8005/v1"
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label>vLLM Model Name</Label>
+                <Input
+                  value={vllmModelName}
+                  onChange={(e) => setVllmModelName(e.target.value)}
+                  placeholder="e.g. Qwen2.5-7B-Instruct"
+                  className="mt-1.5"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={() => onOpenChange(false)}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────────
+
 export default function ComponentEvalPage() {
   const [loading, setLoading] = useState(false);
 
@@ -259,154 +442,6 @@ export default function ComponentEvalPage() {
     return data;
   }, [stickinessResult]);
 
-  // ── Shared config dialog sub-components ────────────────────────────────────
-  const QualityConfigDialog = ({ triggerId }: { triggerId: string }) => (
-    <Dialog open={qualityConfigOpen} onOpenChange={setQualityConfigOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-          <Settings className="w-4 h-4 text-slate-500 hover:text-blue-600" />
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Chunk Quality Model Config</DialogTitle>
-          <DialogDescription>
-            Override default model paths. Leave blank to use server defaults.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div>
-            <Label htmlFor={`ppl-${triggerId}`}>PPL Model Path</Label>
-            <Input
-              id={`ppl-${triggerId}`}
-              value={pplModelPath}
-              onChange={(e) => setPplModelPath(e.target.value)}
-              placeholder="/models/gpt2 (leave blank for default)"
-              className="mt-1.5"
-            />
-            <p className="text-xs text-slate-500 mt-1">Perplexity model for Boundary Clarity</p>
-          </div>
-          <div>
-            <Label htmlFor={`sim-${triggerId}`}>Sim Model Path</Label>
-            <Input
-              id={`sim-${triggerId}`}
-              value={simModelPath}
-              onChange={(e) => setSimModelPath(e.target.value)}
-              placeholder="/models/bge-large-en-v1.5 (leave blank for default)"
-              className="mt-1.5"
-            />
-            <p className="text-xs text-slate-500 mt-1">Embedding model for Semantic Dissimilarity</p>
-          </div>
-
-          {/* vLLM toggle */}
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <div>
-              <Label className="text-sm">Use vLLM for PPL</Label>
-              <p className="text-xs text-slate-500">Call vLLM API instead of local model</p>
-            </div>
-            <Switch checked={qualityUseVllm} onCheckedChange={setQualityUseVllm} />
-          </div>
-
-          {qualityUseVllm && (
-            <div className="space-y-3 pl-3 border-l-2 border-blue-200">
-              <div>
-                <Label htmlFor={`q-vllm-base-${triggerId}`}>vLLM API Base</Label>
-                <Input
-                  id={`q-vllm-base-${triggerId}`}
-                  value={qualityVllmApiBase}
-                  onChange={(e) => setQualityVllmApiBase(e.target.value)}
-                  placeholder="http://localhost:8005/v1"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor={`q-vllm-model-${triggerId}`}>vLLM Model Name</Label>
-                <Input
-                  id={`q-vllm-model-${triggerId}`}
-                  value={qualityVllmModelName}
-                  onChange={(e) => setQualityVllmModelName(e.target.value)}
-                  placeholder="e.g. Qwen2.5-7B-Instruct"
-                  className="mt-1.5"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="flex justify-end pt-2">
-          <Button onClick={() => setQualityConfigOpen(false)}>Done</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-
-  const StickinessConfigDialog = ({ triggerId }: { triggerId: string }) => (
-    <Dialog open={stickinessConfigOpen} onOpenChange={setStickinessConfigOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-          <Settings className="w-4 h-4 text-slate-500 hover:text-orange-600" />
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Chunk Stickiness Model Config</DialogTitle>
-          <DialogDescription>
-            Override default model path. Leave blank to use server default.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div>
-            <Label htmlFor={`st-model-${triggerId}`}>Model Path</Label>
-            <Input
-              id={`st-model-${triggerId}`}
-              value={stickinessModelPath}
-              onChange={(e) => setStickinessModelPath(e.target.value)}
-              placeholder="/models/bge-large-en-v1.5 (leave blank for default)"
-              className="mt-1.5"
-            />
-            <p className="text-xs text-slate-500 mt-1">Embedding model for structural-entropy evaluation</p>
-          </div>
-
-          {/* vLLM toggle */}
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <div>
-              <Label className="text-sm">Use vLLM for PPL</Label>
-              <p className="text-xs text-slate-500">Call vLLM API instead of local model</p>
-            </div>
-            <Switch checked={stickinessUseVllm} onCheckedChange={setStickinessUseVllm} />
-          </div>
-
-          {stickinessUseVllm && (
-            <div className="space-y-3 pl-3 border-l-2 border-orange-200">
-              <div>
-                <Label htmlFor={`st-vllm-base-${triggerId}`}>vLLM API Base</Label>
-                <Input
-                  id={`st-vllm-base-${triggerId}`}
-                  value={stickinessVllmApiBase}
-                  onChange={(e) => setStickinessVllmApiBase(e.target.value)}
-                  placeholder="http://localhost:8005/v1"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor={`st-vllm-model-${triggerId}`}>vLLM Model Name</Label>
-                <Input
-                  id={`st-vllm-model-${triggerId}`}
-                  value={stickinessVllmModelName}
-                  onChange={(e) => setStickinessVllmModelName(e.target.value)}
-                  placeholder="e.g. Qwen2.5-7B-Instruct"
-                  className="mt-1.5"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="flex justify-end pt-2">
-          <Button onClick={() => setStickinessConfigOpen(false)}>Done</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-full overflow-auto">
@@ -434,7 +469,20 @@ export default function ComponentEvalPage() {
                       <Activity className="w-5 h-5" />
                       Direct Input
                     </h2>
-                    <QualityConfigDialog triggerId="direct" />
+                    <QualityConfigDialog
+                      open={qualityConfigOpen}
+                      onOpenChange={setQualityConfigOpen}
+                      pplModelPath={pplModelPath}
+                      setPplModelPath={setPplModelPath}
+                      simModelPath={simModelPath}
+                      setSimModelPath={setSimModelPath}
+                      useVllm={qualityUseVllm}
+                      setUseVllm={setQualityUseVllm}
+                      vllmApiBase={qualityVllmApiBase}
+                      setVllmApiBase={setQualityVllmApiBase}
+                      vllmModelName={qualityVllmModelName}
+                      setVllmModelName={setQualityVllmModelName}
+                    />
                   </div>
                   <div className="space-y-4">
                     <div>
@@ -475,7 +523,20 @@ export default function ComponentEvalPage() {
                       <FileText className="w-5 h-5" />
                       File Input
                     </h2>
-                    <QualityConfigDialog triggerId="file" />
+                    <QualityConfigDialog
+                      open={qualityConfigOpen}
+                      onOpenChange={setQualityConfigOpen}
+                      pplModelPath={pplModelPath}
+                      setPplModelPath={setPplModelPath}
+                      simModelPath={simModelPath}
+                      setSimModelPath={setSimModelPath}
+                      useVllm={qualityUseVllm}
+                      setUseVllm={setQualityUseVllm}
+                      vllmApiBase={qualityVllmApiBase}
+                      setVllmApiBase={setQualityVllmApiBase}
+                      vllmModelName={qualityVllmModelName}
+                      setVllmModelName={setQualityVllmModelName}
+                    />
                   </div>
                   <div className="space-y-4">
                     <div>
@@ -653,7 +714,18 @@ export default function ComponentEvalPage() {
                       <Cpu className="w-5 h-5" />
                       Direct Input
                     </h2>
-                    <StickinessConfigDialog triggerId="direct" />
+                    <StickinessConfigDialog
+                      open={stickinessConfigOpen}
+                      onOpenChange={setStickinessConfigOpen}
+                      modelPath={stickinessModelPath}
+                      setModelPath={setStickinessModelPath}
+                      useVllm={stickinessUseVllm}
+                      setUseVllm={setStickinessUseVllm}
+                      vllmApiBase={stickinessVllmApiBase}
+                      setVllmApiBase={setStickinessVllmApiBase}
+                      vllmModelName={stickinessVllmModelName}
+                      setVllmModelName={setStickinessVllmModelName}
+                    />
                   </div>
                   <div className="space-y-4">
                     <div>
@@ -678,7 +750,18 @@ export default function ComponentEvalPage() {
                       <FileText className="w-5 h-5" />
                       File Input
                     </h2>
-                    <StickinessConfigDialog triggerId="file" />
+                    <StickinessConfigDialog
+                      open={stickinessConfigOpen}
+                      onOpenChange={setStickinessConfigOpen}
+                      modelPath={stickinessModelPath}
+                      setModelPath={setStickinessModelPath}
+                      useVllm={stickinessUseVllm}
+                      setUseVllm={setStickinessUseVllm}
+                      vllmApiBase={stickinessVllmApiBase}
+                      setVllmApiBase={setStickinessVllmApiBase}
+                      vllmModelName={stickinessVllmModelName}
+                      setVllmModelName={setStickinessVllmModelName}
+                    />
                   </div>
                   <div className="space-y-4">
                     <div>
