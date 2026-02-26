@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Loader2, BarChart3, FileText, Sparkles, Settings } from 'lucide-react';
+import { Loader2, BarChart3, FileText, Sparkles, Settings, Upload, FolderOpen, Plus, X } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -36,14 +36,18 @@ export default function EvalPage() {
   const [traditionalResult, setTraditionalResult] = useState<any>(null);
 
   // Traditional Eval - File Input
-  const [traditionalFilePath, setTraditionalFilePath] = useState('');
+  const [tempTraditionalPath, setTempTraditionalPath] = useState('');
+  const [traditionalFilePaths, setTraditionalFilePaths] = useState<string[]>([]);
+  const traditionalFileRef = useRef<HTMLInputElement>(null);
 
   // RAGAS Eval - Direct Input
   const [ragasDataJson, setRagasDataJson] = useState('');
   const [ragasResult, setRagasResult] = useState<any>(null);
 
   // RAGAS Eval - File Input
-  const [ragasFilePath, setRagasFilePath] = useState('');
+  const [tempRagasPath, setTempRagasPath] = useState('');
+  const [ragasFilePaths, setRagasFilePaths] = useState<string[]>([]);
+  const ragasFileRef = useRef<HTMLInputElement>(null);
 
   // RAGAS Configuration (shared between direct input and file input)
   const [ragasConfigOpen, setRagasConfigOpen] = useState(false);
@@ -82,15 +86,16 @@ export default function EvalPage() {
   };
 
   const handleTraditionalFileEval = async () => {
-    if (!traditionalFilePath) {
-      toast.error('Please enter file path');
+    if (!traditionalFilePaths.length) {
+      toast.error('Please add at least one file path');
       return;
     }
 
     setLoading(true);
     try {
+      // Use the first file path if only one API call is supported
       const data: any = {
-        input_path: traditionalFilePath,
+        input_path: traditionalFilePaths[0],  // Backend expects single path
         enable_bert_score: enableBertScore,
       };
 
@@ -107,15 +112,15 @@ export default function EvalPage() {
   };
 
   const handleRagasFileEval = async () => {
-    if (!ragasFilePath) {
-      toast.error('Please enter file path');
+    if (!ragasFilePaths.length) {
+      toast.error('Please add at least one file path');
       return;
     }
 
     setLoading(true);
     try {
       const response = await api.ragasEvalFile({
-        input_path: ragasFilePath,
+        input_path: ragasFilePaths[0],  // Backend expects single path
         vllm_api_base: vllmApiBase,
         vllm_model_name: vllmModelName,
         embedding_model_path: embeddingModelPath,
@@ -195,11 +200,11 @@ export default function EvalPage() {
                       <Textarea
                         value={testDataJson}
                         onChange={(e) => setTestDataJson(e.target.value)}
-                        placeholder={'Enter an array of test cases. Each item should have:\n• _id: unique identifier\n• input: the question\n• llm_ans: LLM generated answer\n• answers: array of ground truth answers\n• retrieval_list: (optional) retrieved contexts\n\nExample:\n[\n  {\n    "_id": "question_1",\n    "input": "Who is Peter Rosegger?",\n    "llm_ans": "Peter Rosegger was an Austrian writer and poet.",\n    "answers": ["He was an Austrian writer and poet."],\n    "retrieval_list": ["Peter Rosegger (1843-1918) was..."]\n  }\n]'}
-                        className="min-h-[200px] font-mono text-xs"
+                        placeholder={'[\n  {\n    "_id": "question_1",\n    "input": "Who is Peter Rosegger?",\n    "llm_ans": "Peter Rosegger was an Austrian writer and poet.",\n    "answers": ["He was an Austrian writer and poet."],\n    "retrieval_list": ["Peter Rosegger (1843-1918) was..."]\n  }\n]'}
+                        className="min-h-[280px] font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        💡 Paste your JSON array directly, or type/edit above. The system accepts flexible formats.
+                        💡 Paste your JSON array directly. Each item needs: _id, input, llm_ans, answers, retrieval_list (optional)
                       </p>
                     </div>
 
@@ -240,11 +245,70 @@ export default function EvalPage() {
                   <div className="space-y-4">
                     <div>
                       <Label>Evaluation Results File Path</Label>
-                      <Input
-                        value={traditionalFilePath}
-                        onChange={(e) => setTraditionalFilePath(e.target.value)}
-                        placeholder="/path/to/sample_results.json"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={tempTraditionalPath}
+                          onChange={(e) => setTempTraditionalPath(e.target.value)}
+                          placeholder="/path/to/sample_results.json or click + to browse"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && tempTraditionalPath.trim()) {
+                              setTraditionalFilePaths([...traditionalFilePaths, tempTraditionalPath.trim()]);
+                              setTempTraditionalPath('');
+                            }
+                          }}
+                        />
+                        <input
+                          type="file"
+                          ref={traditionalFileRef}
+                          accept=".json"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setTraditionalFilePaths([...traditionalFilePaths, file.name]);
+                              if (traditionalFileRef.current) traditionalFileRef.current.value = '';
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (tempTraditionalPath.trim()) {
+                              setTraditionalFilePaths([...traditionalFilePaths, tempTraditionalPath.trim()]);
+                              setTempTraditionalPath('');
+                            } else {
+                              traditionalFileRef.current?.click();
+                            }
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {tempTraditionalPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                      {traditionalFilePaths.length > 0 && (
+                        <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
+                          <div className="p-2 space-y-1">
+                            {traditionalFilePaths.map((path, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200"
+                              >
+                                <span className="text-xs font-mono truncate flex-1">{path}</span>
+                                <Button
+                                  type="button"
+                                  onClick={() => setTraditionalFilePaths(traditionalFilePaths.filter((_, i) => i !== idx))}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
@@ -408,11 +472,11 @@ export default function EvalPage() {
                       <Textarea
                         value={ragasDataJson}
                         onChange={(e) => setRagasDataJson(e.target.value)}
-                        placeholder={'Two formats supported:\\n\\n📊 Format 1 - Standard RAGAS:\\n{\\n  \"question\": [\"Question 1?\", \"Question 2?\"],\\n  \"answer\": [\"Answer 1\", \"Answer 2\"],\\n  \"contexts\": [[\"Context 1a\", \"Context 1b\"], [\"Context 2\"]],\\n  \"ground_truth\": [\"Ground truth 1\", \"Ground truth 2\"]\\n}\\n\\n📄 Format 2 - Sample Results:\\n[\\n  {\\n    \"_id\": \"q1\",\\n    \"input\": \"Your question?\",\\n    \"llm_ans\": \"LLM answer\",\\n    \"answers\": [\"Ground truth\"],\\n    \"retrieval_list\": [\"Retrieved context 1\", \"Retrieved context 2\"]\\n  }\\n]'}
-                        className="min-h-[320px] font-mono text-xs"
+                        placeholder={'Format 1 - Standard RAGAS:\n{\n  "question": ["Q1?", "Q2?"],\n  "answer": ["A1", "A2"],\n  "contexts": [["C1a", "C1b"], ["C2"]],\n  "ground_truth": ["GT1", "GT2"]\n}\n\nFormat 2 - Sample Results:\n[\n  {\n    "_id": "q1",\n    "input": "Question?",\n    "llm_ans": "LLM answer",\n    "answers": ["Ground truth"],\n    "retrieval_list": ["Context 1", "Context 2"]\n  }\n]'}
+                        className="min-h-[360px] font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        💡 Paste your data in either format above. Auto-detection handles both.
+                        💡 Supports both formats. Backend auto-detects and converts.
                       </p>
                     </div>
 
@@ -517,11 +581,70 @@ export default function EvalPage() {
                   <div className="space-y-4">
                     <div>
                       <Label>Evaluation Data File Path</Label>
-                      <Input
-                        value={ragasFilePath}
-                        onChange={(e) => setRagasFilePath(e.target.value)}
-                        placeholder="/path/to/ragas_data.json"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={tempRagasPath}
+                          onChange={(e) => setTempRagasPath(e.target.value)}
+                          placeholder="/path/to/ragas_data.json or click + to browse"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && tempRagasPath.trim()) {
+                              setRagasFilePaths([...ragasFilePaths, tempRagasPath.trim()]);
+                              setTempRagasPath('');
+                            }
+                          }}
+                        />
+                        <input
+                          type="file"
+                          ref={ragasFileRef}
+                          accept=".json"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setRagasFilePaths([...ragasFilePaths, file.name]);
+                              if (ragasFileRef.current) ragasFileRef.current.value = '';
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (tempRagasPath.trim()) {
+                              setRagasFilePaths([...ragasFilePaths, tempRagasPath.trim()]);
+                              setTempRagasPath('');
+                            } else {
+                              ragasFileRef.current?.click();
+                            }
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {tempRagasPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                      {ragasFilePaths.length > 0 && (
+                        <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
+                          <div className="p-2 space-y-1">
+                            {ragasFilePaths.map((path, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200"
+                              >
+                                <span className="text-xs font-mono truncate flex-1">{path}</span>
+                                <Button
+                                  type="button"
+                                  onClick={() => setRagasFilePaths(ragasFilePaths.filter((_, i) => i !== idx))}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
                       <p className="text-xs text-slate-500 mt-1">
                         Supports standard RAGAS format or sample_results.json format
                       </p>
