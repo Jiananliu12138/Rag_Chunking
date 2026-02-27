@@ -435,7 +435,12 @@ export default function ComponentEvalPage() {
     nodeIds.forEach((i) => {
       nodeIds.forEach((j) => {
         const weight = graph[i]?.[j] ?? 1;
-        data.push({ x: parseInt(i), y: parseInt(j), similarity: Math.max(0, 1 - weight) });
+        const ii = parseInt(i);
+        const jj = parseInt(j);
+        // 对角线固定相似度为 1（颜色最深），其他位置按 1 - weight 映射
+        const similarity =
+          ii === jj ? 1 : Math.max(0, 1 - weight);
+        data.push({ x: ii, y: jj, similarity });
       });
     });
     return data;
