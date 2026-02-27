@@ -37,17 +37,19 @@ class EvaluatorConfig:
     vllm_api_base: Optional[str] = None  # 例如 http://localhost:8005/v1
     vllm_model_name: Optional[str] = None
     
-    # 输入输出路径
+    # 输入输出路径（仅在命令行模式下使用）
     input_file: str = 'merge_data/db_qa_semantic_68.json'
     output_file: str = 'mergechunk_eval3/db_qa_semantic_68.json'
     
     # 评估选项
     enable_semantic_similarity: bool = True
     enable_boundary_clarity: bool = True
+
+    # 最多评估多少个文本块（-1 表示使用全部）
+    max_eval_chunks: int = -1
     
-    # 日志配置
+    # 日志配置（仅控制台）
     log_level: str = 'INFO'
-    log_file: Optional[str] = None
     
     def __post_init__(self):
         """验证配置"""
@@ -185,14 +187,6 @@ class ChunkEvaluator:
             logging.Formatter('[%(levelname)s] %(message)s')
         )
         logger.addHandler(console_handler)
-        
-        # 文件处理器（可选）
-        if self.config.log_file:
-            file_handler = logging.FileHandler(self.config.log_file, encoding='utf-8')
-            file_handler.setFormatter(
-                logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-            )
-            logger.addHandler(file_handler)
         
         return logger
     
@@ -508,7 +502,16 @@ class ChunkEvaluator:
         else:
             raise ValueError(f"不支持的输入格式，期望 list 或 dict")
         
-        self.logger.info(f"成功读取 {len(chunks)} 个文本块")
+        total_chunks = len(chunks)
+        self.logger.info(f"成功读取 {total_chunks} 个文本块")
+
+        # 如果配置了 max_eval_chunks，只评估前 N 个文本块
+        if self.config.max_eval_chunks is not None and self.config.max_eval_chunks > 0:
+            if total_chunks > self.config.max_eval_chunks:
+                self.logger.info(
+                    f"仅对前 {self.config.max_eval_chunks} 个文本块进行评估（总共 {total_chunks} 个）"
+                )
+                chunks = chunks[: self.config.max_eval_chunks]
         
         # 加载模型
         self.load_models()
@@ -550,35 +553,16 @@ class ChunkEvaluator:
 # ============================================================================
 
 def main():
-    """主函数"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='文本分块质量评估工具')
-    parser.add_argument('--input', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/Qwen3-4B_0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt.json',
-                       help='输入JSON文件路径')
-    parser.add_argument('--output', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/eval.json',
-                       help='输出JSON文件路径')
-    parser.add_argument('--ppl-model', type=str, default='/data/h50056789/Rag_chunk_bench/model/Qwen3-4B', 
-                       help='困惑度计算模型')
-    parser.add_argument('--sim-model', type=str, default='/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5',
-                       help='语义相似度模型')
-    parser.add_argument('--log-file', type=str, default=None, help='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data.log')
-    parser.add_argument('--disable-semantic', action='store_true', 
-                       help='禁用语义相似度评估')
-    parser.add_argument('--disable-bc', action='store_true',
-                       help='禁用边界清晰度评估')
-    
-    args = parser.parse_args()
-    
-    # 创建配置
+    """主函数：用于本地实验，参数直接在代码里写死。"""
+    # 根据你自己的实验路径/模型路径在这里改
     config = EvaluatorConfig(
-        input_file=args.input,
-        output_file=args.output,
-        ppl_model_name=args.ppl_model,
-        sim_model_name=args.sim_model,
-        log_file=args.log_file,
-        enable_semantic_similarity=not args.disable_semantic,
-        enable_boundary_clarity=not args.disable_bc
+        input_file='/data/h50056789/Rag_Chunking/component_eval/test_data/test.json',
+        output_file='/data/h50056789/Rag_Chunking/component_eval/test_data/eval.json',
+        ppl_model_name='/data/h50056789/Rag_chunk_bench/model/Qwen3-4B',
+        sim_model_name='/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5',
+        enable_semantic_similarity=True,
+        enable_boundary_clarity=True,
+        max_eval_chunks=200,  # 例如：最多评估前 200 个文本块；改成 -1 表示全部
     )
     
     # 创建评估器并运行

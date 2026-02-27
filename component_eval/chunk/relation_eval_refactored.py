@@ -35,6 +35,9 @@ class StickinessConfig:
     vllm_api_base: Optional[str] = None  # 例如 http://localhost:8005/v1
     vllm_model_name: Optional[str] = None
 
+    # 每个文档最多评估多少个文本块（-1 表示使用该文档的全部文本块）
+    max_eval_chunks: int = -1
+
 
 @dataclass
 class StickinessResult:
@@ -437,7 +440,8 @@ class StickinessEvaluator:
         else:
             raise ValueError(f"不支持的输入格式，期望 list 或 dict")
         
-        self.logger.info(f"共 {len(documents)} 个文档")
+        total_docs = len(documents)
+        self.logger.info(f"共 {total_docs} 个文档")
         
         # 加载模型
         self.load_model()
@@ -451,7 +455,17 @@ class StickinessEvaluator:
         
         for idx, doc in enumerate(tqdm(documents, desc="评估文档")):
             chunks = doc['final_chunks']
-            
+            total_chunks = len(chunks)
+            self.logger.info(f"文档 {idx}: 共有 {total_chunks} 个文本块")
+
+            # 如果配置了 max_eval_chunks，仅评估该文档前 N 个文本块
+            if self.config.max_eval_chunks is not None and self.config.max_eval_chunks > 0:
+                if total_chunks > self.config.max_eval_chunks:
+                    self.logger.info(
+                        f"文档 {idx}: 仅对前 {self.config.max_eval_chunks} 个文本块进行评估（总共 {total_chunks} 个）"
+                    )
+                    chunks = chunks[: self.config.max_eval_chunks]
+
             result = self.evaluate_chunks(chunks)
             
             entropy_complete_list.append(result.structural_entropy_complete)
@@ -500,25 +514,16 @@ class StickinessEvaluator:
 
 
 def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='文本块黏连度评估工具')
-    parser.add_argument('--input', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/test_star_structure.json')
-    parser.add_argument('--output-dir', type=str, default='/data/h50056789/Rag_Chunking/MoC/our _metrics/test_data/eval_graph_dep.json')
-    parser.add_argument('--model', type=str, default='/data/h50056789/Rag_chunk_bench/model/Qwen3-4B')
-    parser.add_argument('--threshold', type=float, default=0.8)
-    parser.add_argument('--delta', type=float, default=0.0)
-    
-    args = parser.parse_args()
-    
+    """主函数：用于本地实验，参数直接在代码里写死。"""
     config = StickinessConfig(
-        model_path=args.model,
-        input_file=args.input,
-        output_dir=args.output_dir,
-        threshold=args.threshold,
-        delta=args.delta
+        model_path='/data/h50056789/Rag_chunk_bench/model/Qwen3-4B',
+        input_file='/data/h50056789/Rag_Chunking/component_eval/test_data/test.json',
+        output_dir='/data/h50056789/Rag_Chunking/component_eval/test_data/eval_graph',
+        threshold=0.8,
+        delta=0.0,
+        max_eval_chunks=50,  # 例如：每个文档最多评估前 50 个文本块；改成 -1 表示全部
     )
-    
+
     evaluator = StickinessEvaluator(config)
     evaluator.evaluate_from_file()
 

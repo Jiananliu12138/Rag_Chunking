@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     MILVUS_URI: str = ""
     CHUNKING_METHODS_DIR: str = str(BASE_DIR / "Chunking_Methods")
     EVAL_LONGBENCH_DIR: str = str(BASE_DIR / "eval" / "LongBench")
-    MOC_METRICS_DIR: str = str(BASE_DIR / "MoC" / "our_metrics")
+    MOC_METRICS_DIR: str = str(BASE_DIR / "component_eval" / "chunk")
 
     # ── 嵌入模型默认配置 ──────────────────────────────────────────
     DEFAULT_EMBEDDING_MODEL: str = ""
