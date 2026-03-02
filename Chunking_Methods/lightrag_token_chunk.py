@@ -99,7 +99,13 @@ def process_context(context_text, doc_id, tokenizer):
         chunk_token_size=CHUNK_TOKEN_SIZE
     )
     
-    splits = [[chunk['content'], doc_id] for chunk in chunks]
+    if doc_id:
+        splits = [
+            [chunk['content'], doc_id, chunk_id]
+            for chunk_id, chunk in enumerate(chunks, start=1)
+        ]
+    else:
+        splits = [[chunk['content']] for chunk in chunks]
     
     end_time = time.time()
     
@@ -122,7 +128,10 @@ def process_context_with_params(context_text, doc_id, tokenizer, split_by_charac
     )
     
     if doc_id:
-        splits = [[chunk['content'], doc_id] for chunk in chunks]
+        splits = [
+            [chunk['content'], doc_id, chunk_id]
+            for chunk_id, chunk in enumerate(chunks, start=1)
+        ]
     else:
         splits = [[chunk['content']] for chunk in chunks]
     

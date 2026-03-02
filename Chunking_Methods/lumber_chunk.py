@@ -180,7 +180,13 @@ def process_context(context_text, doc_id):
 
     end_time = time.time()
     
-    splits = [[chunk, doc_id] for chunk in new_final_chunks]
+    if doc_id:
+        splits = [
+            [chunk, doc_id, chunk_id]
+            for chunk_id, chunk in enumerate(new_final_chunks, start=1)
+        ]
+    else:
+        splits = [[chunk] for chunk in new_final_chunks]
     
     return {
         'splits': splits,
@@ -242,7 +248,10 @@ def process_context_with_params(context_text, doc_id, model_type=MODEL_TYPE, ds_
     end_time = time.time()
     
     if doc_id:
-        splits = [[chunk, doc_id] for chunk in new_final_chunks]
+        splits = [
+            [chunk, doc_id, chunk_id]
+            for chunk_id, chunk in enumerate(new_final_chunks, start=1)
+        ]
     else:
         splits = [[chunk] for chunk in new_final_chunks]
     

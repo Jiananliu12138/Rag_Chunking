@@ -48,10 +48,10 @@ def process_context(context_text, doc_id, parser):
     nodes = parser.get_nodes_from_documents([doc], show_progress=False)
     
     splits = []
-    for node in nodes:
+    for chunk_id, node in enumerate(nodes, start=1):
         node_text = node.text if hasattr(node, 'text') else node.get_content()
         if doc_id:
-            splits.append([node_text, doc_id])
+            splits.append([node_text, doc_id, chunk_id])
         else:
             splits.append([node_text])
     
