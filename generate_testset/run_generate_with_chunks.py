@@ -3,10 +3,11 @@ from pathlib import Path
 from typing import Any, List, Sequence, Union
 
 from langchain_core.documents import Document
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from ragas.embeddings import HuggingFaceEmbeddings
 from ragas.llms import llm_factory
+from ragas.run_config import RunConfig
 from ragas.testset.synthesizers.generate import TestsetGenerator
 
 Chunk = Union[str, Document]
@@ -22,6 +23,8 @@ LLM_API_KEY = "EMPTY"
 LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 LLM_PROVIDER = "openai"
 LLM_ADAPTER = "auto"
+LLM_TIMEOUT_SECONDS = 120
+MAX_WORKERS = 4
 
 EMBEDDING_MODEL_PATH = Path(r"F:\models\bge-m3")
 EMBEDDING_DEVICE = "cuda"
@@ -116,7 +119,10 @@ def _normalize_chunks(items: Sequence[Any]) -> List[Chunk]:
 
 
 def _build_llm():
-    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    # Use async client so ragas async transforms do not block the event loop.
+    client = AsyncOpenAI(
+        api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT_SECONDS
+    )
     return llm_factory(
         model=LLM_MODEL,
         provider=LLM_PROVIDER,
@@ -151,7 +157,7 @@ def main():
         transforms_llm=None,
         transforms_embedding_model=None,
         query_distribution=None,
-        run_config=None,
+        run_config=RunConfig(max_workers=MAX_WORKERS),
         callbacks=None,
         token_usage_parser=None,
         with_debugging_logs=WITH_DEBUGGING_LOGS,
