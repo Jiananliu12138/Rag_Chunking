@@ -1,5 +1,6 @@
 import json
 import logging
+import statistics
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Union
 from urllib import request
@@ -52,6 +53,11 @@ QUIET_FILTER_WARNINGS = True
 
 EMBEDDING_MODEL_PATH = Path(r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5")
 EMBEDDING_DEVICE = "cuda"
+
+DEBUG_PRINT_NODE_STATS = True
+DEBUG_NODE_SAMPLE_SIZE = 3
+CHUNK_META_PREFIX = "<<<MC_META>>>"
+CHUNK_META_SUFFIX = "<<<END_MC_META>>>"
 
 
 def _load_chunks(path: Path) -> List[Chunk]:
@@ -110,7 +116,13 @@ def _normalize_split_tuples(
         if source_filepath:
             metadata["source_filepath"] = source_filepath
 
-        normalized.append(Document(page_content=text, metadata=metadata))
+        text_with_meta = _inject_chunk_meta_into_text(
+            text=text,
+            source_article_id=article_id,
+            source_chunk_id=chunk_id,
+            source_filepath=source_filepath or None,
+        )
+        normalized.append(Document(page_content=text_with_meta, metadata=metadata))
 
     return normalized
 
@@ -128,7 +140,18 @@ def _normalize_chunks(items: Sequence[Any]) -> List[Chunk]:
             page_content = item.get("page_content") or item.get("text") or ""
             metadata = item.get("metadata", {})
             if isinstance(page_content, str) and page_content.strip():
-                normalized.append(Document(page_content=page_content, metadata=metadata))
+                text = page_content.strip()
+                source_article_id = metadata.get("source_article_id")
+                source_chunk_id = metadata.get("source_chunk_id")
+                source_filepath = metadata.get("source_filepath")
+                if source_article_id is not None or source_chunk_id is not None or source_filepath:
+                    text = _inject_chunk_meta_into_text(
+                        text=text,
+                        source_article_id=source_article_id,
+                        source_chunk_id=source_chunk_id,
+                        source_filepath=source_filepath,
+                    )
+                normalized.append(Document(page_content=text, metadata=metadata))
             continue
 
         if isinstance(item, (list, tuple)) and len(item) >= 3:
@@ -142,62 +165,150 @@ def _normalize_chunks(items: Sequence[Any]) -> List[Chunk]:
     return normalized
 
 
-def _build_chunk_id_index(chunks: Sequence[Chunk]) -> Dict[str, List[Dict[str, Any]]]:
-    index: Dict[str, List[Dict[str, Any]]] = {}
-    for chunk in chunks:
-        if isinstance(chunk, Document):
-            chunk_text = chunk.page_content
-            meta = dict(chunk.metadata or {})
-            ref = {
-                "doc_id": meta.get("source_article_id"),
-                "chunk_id": meta.get("source_chunk_id"),
-                "source_filepath": meta.get("source_filepath"),
-            }
-        else:
-            chunk_text = chunk
-            ref = {"doc_id": None, "chunk_id": None, "source_filepath": None}
-
-        key = chunk_text
-        index.setdefault(key, []).append(ref)
-    return index
+def _inject_chunk_meta_into_text(
+    text: str,
+    source_article_id: Any = None,
+    source_chunk_id: Any = None,
+    source_filepath: Any = None,
+) -> str:
+    payload = {
+        "doc_id": source_article_id,
+        "chunk_id": source_chunk_id,
+        "source_filepath": source_filepath,
+    }
+    meta_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return f"{CHUNK_META_PREFIX}{meta_json}{CHUNK_META_SUFFIX}\n{text}"
 
 
-def _attach_reference_ids(rows: List[Dict[str, Any]], chunks: Sequence[Chunk]) -> None:
-    chunk_id_index = _build_chunk_id_index(chunks)
-    usage_cursor: Dict[str, int] = {}
+def extract_all_chunk_meta_from_text(text: str) -> Dict[str, Any]:
+    if not isinstance(text, str):
+        return {"metas": [], "content": text}
 
+    metas: List[Dict[str, Any]] = []
+    pieces: List[str] = []
+    cursor = 0
+    text_len = len(text)
+
+    while cursor < text_len:
+        prefix_pos = text.find(CHUNK_META_PREFIX, cursor)
+        if prefix_pos == -1:
+            pieces.append(text[cursor:])
+            break
+
+        pieces.append(text[cursor:prefix_pos])
+        suffix_pos = text.find(CHUNK_META_SUFFIX, prefix_pos + len(CHUNK_META_PREFIX))
+        if suffix_pos == -1:
+            # Broken marker: keep original tail to avoid data loss.
+            pieces.append(text[prefix_pos:])
+            break
+
+        meta_json = text[prefix_pos + len(CHUNK_META_PREFIX):suffix_pos]
+        try:
+            meta = json.loads(meta_json)
+            if isinstance(meta, dict):
+                metas.append(meta)
+        except json.JSONDecodeError:
+            pass
+
+        cursor = suffix_pos + len(CHUNK_META_SUFFIX)
+        if cursor < text_len and text[cursor] == "\n":
+            cursor += 1
+
+    content = "".join(pieces).lstrip("\n")
+    return {"metas": metas, "content": content}
+
+
+def _extract_reference_contexts_meta(rows: List[Dict[str, Any]]) -> None:
     for row in rows:
         contexts = row.get("reference_contexts")
         if not isinstance(contexts, list):
-            row["reference_context_ids"] = []
             continue
 
-        refs: List[Dict[str, Any]] = []
+        cleaned_contexts: List[Any] = []
+        context_metas: List[Any] = []
         for ctx in contexts:
             if not isinstance(ctx, str):
-                refs.append({"doc_id": None, "chunk_id": None, "matched": False})
+                cleaned_contexts.append(ctx)
+                context_metas.append(None)
                 continue
 
-            key = ctx
-            candidates = chunk_id_index.get(key, [])
-            if not candidates:
-                refs.append({"doc_id": None, "chunk_id": None, "matched": False})
-                continue
+            parsed = extract_all_chunk_meta_from_text(ctx)
+            cleaned_contexts.append(parsed["content"])
+            context_metas.append(parsed["metas"])
 
-            pos = usage_cursor.get(key, 0)
-            chosen = candidates[pos % len(candidates)]
-            usage_cursor[key] = pos + 1
+        row["reference_contexts"] = cleaned_contexts
+        existing_meta = row.get("meta")
+        if not isinstance(existing_meta, dict):
+            existing_meta = {}
+        existing_meta["reference_contexts"] = context_metas
+        row["meta"] = existing_meta
 
-            refs.append(
-                {
-                    "doc_id": chosen.get("doc_id"),
-                    "chunk_id": chosen.get("chunk_id"),
-                    "source_filepath": chosen.get("source_filepath"),
-                    "matched": True,
-                }
-            )
 
-        row["reference_context_ids"] = refs
+def _chunk_text(chunk: Chunk) -> str:
+    if isinstance(chunk, Document):
+        return chunk.page_content
+    return chunk
+
+
+def _print_chunk_stats(chunks: Sequence[Chunk]) -> None:
+    if not chunks:
+        print("[debug] chunks: empty")
+        return
+
+    lengths = [len(_chunk_text(c)) for c in chunks]
+    doc_count = sum(1 for c in chunks if isinstance(c, Document))
+    str_count = len(chunks) - doc_count
+    print(
+        "[debug] chunks stats: "
+        f"total={len(chunks)}, document={doc_count}, string={str_count}, "
+        f"len[min/avg/median/max]={min(lengths)}/{statistics.mean(lengths):.1f}/"
+        f"{statistics.median(lengths):.1f}/{max(lengths)}"
+    )
+
+
+def _split_testset_and_executor(result):
+    if isinstance(result, tuple) and len(result) == 2:
+        return result[0], result[1]
+    return result, None
+
+
+def _print_executor_graph_stats(executor: Any, sample_size: int = 3) -> None:
+    if executor is None:
+        print("[debug] executor: None (ragas did not return executor)")
+        return
+
+    graph = (
+        getattr(executor, "knowledge_graph", None)
+        or getattr(executor, "kg", None)
+        or getattr(executor, "graph", None)
+    )
+    if graph is None:
+        print(f"[debug] executor type={type(executor).__name__}, no graph attribute found")
+        return
+
+    nodes = getattr(graph, "nodes", None) or []
+    edges = (
+        getattr(graph, "relationships", None)
+        or getattr(graph, "edges", None)
+        or []
+    )
+    print(
+        "[debug] graph stats: "
+        f"graph_type={type(graph).__name__}, nodes={len(nodes)}, edges={len(edges)}"
+    )
+
+    for idx, node in enumerate(list(nodes)[:sample_size], 1):
+        node_type = getattr(node, "type", None)
+        if hasattr(node_type, "name"):
+            node_type = node_type.name
+        properties = getattr(node, "properties", None)
+        prop_keys: List[str] = []
+        if isinstance(properties, dict):
+            prop_keys = sorted(properties.keys())
+        print(
+            f"[debug] node[{idx}] "
+            f"type={node_type}, prop_count={len(prop_keys)}, prop_keys={prop_keys}"
+        )
 
 
 def _build_llm():
@@ -291,6 +402,9 @@ def main():
     _preflight_check_model_endpoint()
 
     chunks = _load_chunks(CHUNKS_FILE)
+    if DEBUG_PRINT_NODE_STATS:
+        _print_chunk_stats(chunks)
+
     llm = _build_llm()
     embedding_model = _build_embedding_model()
     transforms = _build_transforms(llm, embedding_model) if SKIP_CUSTOM_NODE_FILTER else None
@@ -300,7 +414,7 @@ def main():
         embedding_model=embedding_model,
     )
 
-    testset = generator.generate_with_chunks(
+    result = generator.generate_with_chunks(
         chunks=chunks,
         testset_size=TESTSET_SIZE,
         transforms=transforms,
@@ -317,11 +431,14 @@ def main():
         token_usage_parser=None,
         with_debugging_logs=WITH_DEBUGGING_LOGS,
         raise_exceptions=True,
-        return_executor=False,
+        return_executor=DEBUG_PRINT_NODE_STATS,
     )
+    testset, executor = _split_testset_and_executor(result)
+    if DEBUG_PRINT_NODE_STATS:
+        _print_executor_graph_stats(executor, sample_size=DEBUG_NODE_SAMPLE_SIZE)
 
     rows = testset.to_list()
-    _attach_reference_ids(rows, chunks)
+    _extract_reference_contexts_meta(rows)
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT_FILE.open("w", encoding="utf-8") as f:
         for row in rows:
