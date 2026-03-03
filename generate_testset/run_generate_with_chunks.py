@@ -267,9 +267,32 @@ def _print_chunk_stats(chunks: Sequence[Chunk]) -> None:
 
 
 def _split_testset_and_executor(result):
+    if hasattr(result, "to_list"):
+        return result, None
+
     if isinstance(result, tuple) and len(result) == 2:
-        return result[0], result[1]
-    return result, None
+        left, right = result
+        if hasattr(left, "to_list"):
+            return left, right
+        if hasattr(right, "to_list"):
+            return right, left
+
+    # Some ragas versions return Executor directly when return_executor=True.
+    executor = result
+    for method_name in ("results", "result", "get_results", "get_result"):
+        method = getattr(executor, method_name, None)
+        if callable(method):
+            try:
+                maybe_testset = method()
+            except Exception:
+                continue
+            if hasattr(maybe_testset, "to_list"):
+                return maybe_testset, executor
+
+    raise TypeError(
+        "Unable to resolve Testset from generate_with_chunks result. "
+        f"result_type={type(result).__name__}"
+    )
 
 
 def _print_executor_graph_stats(executor: Any, sample_size: int = 3) -> None:
@@ -436,7 +459,7 @@ def main():
     testset, executor = _split_testset_and_executor(result)
     if DEBUG_PRINT_NODE_STATS:
         _print_executor_graph_stats(executor, sample_size=DEBUG_NODE_SAMPLE_SIZE)
-
+        
     rows = testset.to_list()
     _extract_reference_contexts_meta(rows)
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
