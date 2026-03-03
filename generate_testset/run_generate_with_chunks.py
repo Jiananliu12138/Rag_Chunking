@@ -15,10 +15,12 @@ from ragas.testset.synthesizers.generate import TestsetGenerator
 from ragas.testset.transforms import (
     CosineSimilarityBuilder,
     EmbeddingExtractor,
-    NERExtractor,
     OverlapScoreBuilder,
     Parallel,
     SummaryExtractor,
+)
+from ragas.testset.transforms.extractors.llm_based import (
+    NERExtractor,
     ThemesExtractor,
 )
 
