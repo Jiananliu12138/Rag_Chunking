@@ -2,7 +2,7 @@ import json
 import logging
 import statistics
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Sequence, Union
 from urllib import request
 
 from langchain_core.documents import Document
@@ -54,8 +54,6 @@ QUIET_FILTER_WARNINGS = True
 EMBEDDING_MODEL_PATH = Path(r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5")
 EMBEDDING_DEVICE = "cuda"
 
-DEBUG_PRINT_NODE_STATS = True
-DEBUG_NODE_SAMPLE_SIZE = 3
 CHUNK_META_PREFIX = "<<<MC_META>>>"
 CHUNK_META_SUFFIX = "<<<END_MC_META>>>"
 
@@ -250,109 +248,6 @@ def _chunk_text(chunk: Chunk) -> str:
     return chunk
 
 
-def _print_chunk_stats(chunks: Sequence[Chunk]) -> None:
-    if not chunks:
-        print("[debug] chunks: empty")
-        return
-
-    lengths = [len(_chunk_text(c)) for c in chunks]
-    doc_count = sum(1 for c in chunks if isinstance(c, Document))
-    str_count = len(chunks) - doc_count
-    print(
-        "[debug] chunks stats: "
-        f"total={len(chunks)}, document={doc_count}, string={str_count}, "
-        f"len[min/avg/median/max]={min(lengths)}/{statistics.mean(lengths):.1f}/"
-        f"{statistics.median(lengths):.1f}/{max(lengths)}"
-    )
-
-
-def _sample_to_row(sample: Any) -> Dict[str, Any]:
-    if isinstance(sample, dict):
-        return sample
-    if hasattr(sample, "to_dict") and callable(getattr(sample, "to_dict")):
-        maybe = sample.to_dict()
-        if isinstance(maybe, dict):
-            return maybe
-    if hasattr(sample, "model_dump") and callable(getattr(sample, "model_dump")):
-        maybe = sample.model_dump()
-        if isinstance(maybe, dict):
-            return maybe
-    raise TypeError(
-        "Unsupported sample type. Expected dict or object with to_dict/model_dump, "
-        f"got {type(sample).__name__}"
-    )
-
-
-def _rows_from_generation_result(result: Any) -> Tuple[List[Dict[str, Any]], Any]:
-    if hasattr(result, "to_list") and callable(getattr(result, "to_list")):
-        return result.to_list(), None
-
-    executor = result
-    results_method = getattr(executor, "results", None)
-    if not callable(results_method):
-        raise TypeError(
-            "Expected Executor with callable .results(), "
-            f"got {type(result).__name__}"
-        )
-    eval_samples = results_method()
-    if eval_samples is None:
-        raise TypeError(
-            "Unable to resolve generation output from result. "
-            f"result_type={type(result).__name__}"
-        )
-
-    if hasattr(eval_samples, "to_list") and callable(getattr(eval_samples, "to_list")):
-        return eval_samples.to_list(), executor
-
-    if isinstance(eval_samples, list):
-        rows = [_sample_to_row(s) for s in eval_samples]
-        return rows, executor
-
-    raise TypeError(
-        "Unsupported eval_samples type from executor.results(). "
-        f"type={type(eval_samples).__name__}"
-    )
-
-
-def _print_executor_graph_stats(executor: Any, sample_size: int = 3) -> None:
-    if executor is None:
-        print("[debug] executor: None (ragas did not return executor)")
-        return
-
-    graph = (
-        getattr(executor, "knowledge_graph", None)
-        or getattr(executor, "kg", None)
-        or getattr(executor, "graph", None)
-    )
-    if graph is None:
-        print(f"[debug] executor type={type(executor).__name__}, no graph attribute found")
-        return
-
-    nodes = getattr(graph, "nodes", None) or []
-    edges = (
-        getattr(graph, "relationships", None)
-        or getattr(graph, "edges", None)
-        or []
-    )
-    print(
-        "[debug] graph stats: "
-        f"graph_type={type(graph).__name__}, nodes={len(nodes)}, edges={len(edges)}"
-    )
-
-    for idx, node in enumerate(list(nodes)[:sample_size], 1):
-        node_type = getattr(node, "type", None)
-        if hasattr(node_type, "name"):
-            node_type = node_type.name
-        properties = getattr(node, "properties", None)
-        prop_keys: List[str] = []
-        if isinstance(properties, dict):
-            prop_keys = sorted(properties.keys())
-        print(
-            f"[debug] node[{idx}] "
-            f"type={node_type}, prop_count={len(prop_keys)}, prop_keys={prop_keys}"
-        )
-
-
 def _build_llm():
     # Use async client so ragas async transforms do not block the event loop.
     client = AsyncOpenAI(
@@ -444,8 +339,6 @@ def main():
     _preflight_check_model_endpoint()
 
     chunks = _load_chunks(CHUNKS_FILE)
-    if DEBUG_PRINT_NODE_STATS:
-        _print_chunk_stats(chunks)
 
     llm = _build_llm()
     embedding_model = _build_embedding_model()
@@ -473,11 +366,14 @@ def main():
         token_usage_parser=None,
         with_debugging_logs=WITH_DEBUGGING_LOGS,
         raise_exceptions=True,
-        return_executor=DEBUG_PRINT_NODE_STATS,
+        return_executor=False,
     )
-    rows, executor = _rows_from_generation_result(result)
-    if DEBUG_PRINT_NODE_STATS:
-        _print_executor_graph_stats(executor, sample_size=DEBUG_NODE_SAMPLE_SIZE)
+    if not hasattr(result, "to_list") or not callable(getattr(result, "to_list")):
+        raise TypeError(
+            "Expected generation result with callable .to_list(), "
+            f"got {type(result).__name__}"
+        )
+    rows = result.to_list()
 
     _extract_reference_contexts_meta(rows)
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
