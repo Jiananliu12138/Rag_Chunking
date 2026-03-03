@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Union
 from urllib import request
@@ -141,15 +140,6 @@ def _normalize_chunks(items: Sequence[Any]) -> List[Chunk]:
     return normalized
 
 
-def _normalize_text_for_match(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _strip_passage_prefix(text: str) -> str:
-    # Handle strings like: "Passage 1:\n<chunk_text>"
-    return re.sub(r"^\s*Passage\s+\d+\s*:\s*", "", text, flags=re.IGNORECASE).strip()
-
-
 def _build_chunk_id_index(chunks: Sequence[Chunk]) -> Dict[str, List[Dict[str, Any]]]:
     index: Dict[str, List[Dict[str, Any]]] = {}
     for chunk in chunks:
@@ -165,7 +155,7 @@ def _build_chunk_id_index(chunks: Sequence[Chunk]) -> Dict[str, List[Dict[str, A
             chunk_text = chunk
             ref = {"doc_id": None, "chunk_id": None, "source_filepath": None}
 
-        key = _normalize_text_for_match(chunk_text)
+        key = chunk_text
         index.setdefault(key, []).append(ref)
     return index
 
@@ -186,8 +176,7 @@ def _attach_reference_ids(rows: List[Dict[str, Any]], chunks: Sequence[Chunk]) -
                 refs.append({"doc_id": None, "chunk_id": None, "matched": False})
                 continue
 
-            content = _strip_passage_prefix(ctx)
-            key = _normalize_text_for_match(content)
+            key = ctx
             candidates = chunk_id_index.get(key, [])
             if not candidates:
                 refs.append({"doc_id": None, "chunk_id": None, "matched": False})
