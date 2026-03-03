@@ -8,7 +8,7 @@ from llama_index.core.node_parser import SimpleNodeParser
 from llama_index.core import Document
 
 INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl" 
-OUTPUT_DIR = "/data/h50056789/Rag_Chunking/Chunk_Result/Llamaindex_Chunk"
+OUTPUT_DIR = "/data/h50056789/Rag_Chunking/test_database"
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
 NUM_WORKERS = 4

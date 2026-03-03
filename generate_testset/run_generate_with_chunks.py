@@ -26,14 +26,14 @@ from ragas.testset.transforms import (
 Chunk = Union[str, Document]
 
 # ===== Static config (edit directly) =====
-CHUNKS_FILE = Path("chunked_input.json")
-OUTPUT_FILE = Path("rag_testset.jsonl")
-TESTSET_SIZE = 20
-WITH_DEBUGGING_LOGS = False
+CHUNKS_FILE = Path("/data/h50056789/Rag_Chunking/test_database/2wikimqa_llamaindex_chunk.json")
+OUTPUT_FILE = Path("/data/h50056789/Rag_Chunking/test_database/rag_testset.jsonl")
+TESTSET_SIZE = 10
+WITH_DEBUGGING_LOGS = True
 
-LLM_BASE_URL = "http://127.0.0.1:8000/v1"
+LLM_BASE_URL = "http://127.0.0.1:8001/v1"
 LLM_API_KEY = "EMPTY"
-LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"
+LLM_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8"
 LLM_PROVIDER = "openai"
 LLM_ADAPTER = "auto"
 LLM_TIMEOUT_SECONDS = 120
@@ -49,7 +49,7 @@ RUN_TIMEOUT_SECONDS = 120
 SKIP_CUSTOM_NODE_FILTER = True
 QUIET_FILTER_WARNINGS = True
 
-EMBEDDING_MODEL_PATH = Path(r"F:\models\bge-m3")
+EMBEDDING_MODEL_PATH = Path(r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5")
 EMBEDDING_DEVICE = "cuda"
 
 
