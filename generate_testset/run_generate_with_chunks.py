@@ -2,7 +2,7 @@ import json
 import logging
 import statistics
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Union
+from typing import Any, Dict, List, Sequence, Tuple, Union
 from urllib import request
 
 from langchain_core.documents import Document
@@ -266,32 +266,51 @@ def _print_chunk_stats(chunks: Sequence[Chunk]) -> None:
     )
 
 
-def _split_testset_and_executor(result):
-    if hasattr(result, "to_list"):
-        return result, None
+def _sample_to_row(sample: Any) -> Dict[str, Any]:
+    if isinstance(sample, dict):
+        return sample
+    if hasattr(sample, "to_dict") and callable(getattr(sample, "to_dict")):
+        maybe = sample.to_dict()
+        if isinstance(maybe, dict):
+            return maybe
+    if hasattr(sample, "model_dump") and callable(getattr(sample, "model_dump")):
+        maybe = sample.model_dump()
+        if isinstance(maybe, dict):
+            return maybe
+    raise TypeError(
+        "Unsupported sample type. Expected dict or object with to_dict/model_dump, "
+        f"got {type(sample).__name__}"
+    )
 
-    if isinstance(result, tuple) and len(result) == 2:
-        left, right = result
-        if hasattr(left, "to_list"):
-            return left, right
-        if hasattr(right, "to_list"):
-            return right, left
 
-    # Some ragas versions return Executor directly when return_executor=True.
+def _rows_from_generation_result(result: Any) -> Tuple[List[Dict[str, Any]], Any]:
+    if hasattr(result, "to_list") and callable(getattr(result, "to_list")):
+        return result.to_list(), None
+
     executor = result
-    for method_name in ("results", "result", "get_results", "get_result"):
-        method = getattr(executor, method_name, None)
-        if callable(method):
-            try:
-                maybe_testset = method()
-            except Exception:
-                continue
-            if hasattr(maybe_testset, "to_list"):
-                return maybe_testset, executor
+    results_method = getattr(executor, "results", None)
+    if not callable(results_method):
+        raise TypeError(
+            "Expected Executor with callable .results(), "
+            f"got {type(result).__name__}"
+        )
+    eval_samples = results_method()
+    if eval_samples is None:
+        raise TypeError(
+            "Unable to resolve generation output from result. "
+            f"result_type={type(result).__name__}"
+        )
+
+    if hasattr(eval_samples, "to_list") and callable(getattr(eval_samples, "to_list")):
+        return eval_samples.to_list(), executor
+
+    if isinstance(eval_samples, list):
+        rows = [_sample_to_row(s) for s in eval_samples]
+        return rows, executor
 
     raise TypeError(
-        "Unable to resolve Testset from generate_with_chunks result. "
-        f"result_type={type(result).__name__}"
+        "Unsupported eval_samples type from executor.results(). "
+        f"type={type(eval_samples).__name__}"
     )
 
 
@@ -456,11 +475,10 @@ def main():
         raise_exceptions=True,
         return_executor=DEBUG_PRINT_NODE_STATS,
     )
-    testset, executor = _split_testset_and_executor(result)
+    rows, executor = _rows_from_generation_result(result)
     if DEBUG_PRINT_NODE_STATS:
         _print_executor_graph_stats(executor, sample_size=DEBUG_NODE_SAMPLE_SIZE)
-        
-    rows = testset.to_list()
+
     _extract_reference_contexts_meta(rows)
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT_FILE.open("w", encoding="utf-8") as f:
