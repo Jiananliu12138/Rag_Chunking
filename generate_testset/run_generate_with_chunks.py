@@ -1,6 +1,8 @@
 import json
 import logging
 import statistics
+import os
+
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Union
 from urllib import request
@@ -24,7 +26,7 @@ from ragas.testset.transforms.extractors.llm_based import (
     NERExtractor,
     ThemesExtractor,
 )
-
+os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache"
 Chunk = Union[str, Document]
 
 # ===== Static config (edit directly) =====
