@@ -10,7 +10,7 @@ from typing import Optional
 from llama_index.core import VectorStoreIndex, StorageContext, Settings
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.schema import TextNode
+from llama_index.core.schema import TextNode, NodeRelationship, RelatedNodeInfo
 from llama_index.core.vector_stores.types import VectorStoreQueryMode
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.vector_stores.milvus.utils import BM25BuiltInFunction
@@ -126,6 +126,17 @@ class MilvusRepository:
             **hybrid_kwargs,
         )
 
+    def _build_text_node(self, text: str, metadata: Optional[dict]) -> TextNode:
+        node_kwargs: dict = {"text": text}
+        if metadata:
+            node_kwargs["metadata"] = metadata
+        doc_id = metadata.get("doc_id") if isinstance(metadata, dict) else None
+        if doc_id is not None:
+            node_kwargs["relationships"] = {
+                NodeRelationship.SOURCE: RelatedNodeInfo(node_id=str(doc_id))
+            }
+        return TextNode(**node_kwargs)
+
     # ── 公开接口 ──────────────────────────────────────────────────────────────
 
     def collection_exists(self, collection_name: str) -> bool:
@@ -137,10 +148,11 @@ class MilvusRepository:
             name = db_file.stem
             size = db_file.stat().st_size
 
-            # 尝试读取同名 meta JSON，补充 filepaths / doc_ids 信息
+            # 尝试读取同名 meta JSON，补充 filepaths / doc_ids / doc_chunk_map 信息
             meta_path = self._data_dir / f"{name}_meta.json"
             filepaths: list[str] = []
             doc_ids: list[str] = []
+            doc_chunk_map: dict[str, list[str]] = {}
             if meta_path.exists():
                 try:
                     import json
@@ -148,10 +160,17 @@ class MilvusRepository:
                     raw = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
                     fps = raw.get("filepaths") or []
                     dids = raw.get("doc_ids") or []
+                    dc_map = raw.get("doc_chunk_map") or {}
                     if isinstance(fps, list):
                         filepaths = [str(x) for x in fps if isinstance(x, (str, int))]
                     if isinstance(dids, list):
                         doc_ids = [str(x) for x in dids if isinstance(x, (str, int))]
+                    if isinstance(dc_map, dict):
+                        for k, v in dc_map.items():
+                            if not isinstance(v, list):
+                                continue
+                            key = str(k)
+                            doc_chunk_map[key] = [str(x) for x in v if isinstance(x, (str, int))]
                 except Exception as exc:  # pragma: no cover - 读取失败不影响主流程
                     logger.warning("读取 collection meta JSON 失败: %s", exc)
 
@@ -162,6 +181,7 @@ class MilvusRepository:
                     "size_bytes": size,
                     "filepaths": filepaths,
                     "doc_ids": doc_ids,
+                    "doc_chunk_map": doc_chunk_map,
                 }
             )
         return collections
@@ -208,9 +228,10 @@ class MilvusRepository:
         predefined_fields = schema_field_names
         dynamic_fields = [f for f in all_fields if f not in schema_field_names]
 
-        # 额外：从 meta JSON 中读取该 collection 级别的 filepaths / doc_ids 信息
+        # 额外：从 meta JSON 中读取该 collection 级别的 filepaths / doc_ids / doc_chunk_map 信息
         meta_filepaths: list[str] = []
         meta_doc_ids: list[str] = []
+        meta_doc_chunk_map: dict[str, list[str]] = {}
         try:
             meta_path = self._data_dir / f"{collection_name}_meta.json"
             if meta_path.exists():
@@ -219,10 +240,17 @@ class MilvusRepository:
                 raw = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
                 fps = raw.get("filepaths") or []
                 dids = raw.get("doc_ids") or []
+                dc_map = raw.get("doc_chunk_map") or {}
                 if isinstance(fps, list):
                     meta_filepaths = [str(x) for x in fps if isinstance(x, (str, int))]
                 if isinstance(dids, list):
                     meta_doc_ids = [str(x) for x in dids if isinstance(x, (str, int))]
+                if isinstance(dc_map, dict):
+                    for k, v in dc_map.items():
+                        if not isinstance(v, list):
+                            continue
+                        key = str(k)
+                        meta_doc_chunk_map[key] = [str(x) for x in v if isinstance(x, (str, int))]
         except Exception as exc:  # pragma: no cover - 容错，不影响主流程
             logger.warning("inspect_collection 读取 meta JSON 失败: %s", exc)
 
@@ -234,6 +262,7 @@ class MilvusRepository:
             "dynamic_fields": dynamic_fields,
             "filepaths": meta_filepaths,
             "doc_ids": meta_doc_ids,
+            "doc_chunk_map": meta_doc_chunk_map,
         }
 
     def inspect_all_collections(self) -> list[dict]:
@@ -293,7 +322,7 @@ class MilvusRepository:
     ) -> None:
         """
         按 metadata 条件删除部分向量（不可逆）。
-        支持按 filepath / source_doc_id 批量删除。
+        支持按 file_path / doc_id 批量删除。
         """
         if filepath is None and (not doc_ids):
             # 参数校验错误，应该返回 422，而不是 500
@@ -319,7 +348,7 @@ class MilvusRepository:
         if filepath is not None:
             filter_list.append(
                 MetadataFilter(
-                    key="filepath",
+                    key="file_path",
                     value=str(filepath),
                     operator=FilterOperator.EQ,
                 )
@@ -327,7 +356,7 @@ class MilvusRepository:
         if doc_ids:
             filter_list.append(
                 MetadataFilter(
-                    key="source_doc_id",
+                    key="doc_id",
                     value=[str(d) for d in doc_ids],
                     operator=FilterOperator.IN,
                 )
@@ -352,24 +381,56 @@ class MilvusRepository:
                 raw_meta = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
                 existing_filepaths: set[str] = set()
                 existing_doc_ids: set[str] = set()
+                existing_doc_chunk_map: dict[str, list[str]] = {}
+                existing_file_doc_map: dict[str, list[str]] = {}
                 for fp in raw_meta.get("filepaths", []):
                     if isinstance(fp, str) and fp:
                         existing_filepaths.add(fp)
                 for d in raw_meta.get("doc_ids", []):
                     if isinstance(d, str) and d:
                         existing_doc_ids.add(d)
+                dc_map = raw_meta.get("doc_chunk_map") or {}
+                if isinstance(dc_map, dict):
+                    for k, v in dc_map.items():
+                        if not isinstance(v, list):
+                            continue
+                        key = str(k)
+                        existing_doc_chunk_map[key] = [str(x) for x in v if isinstance(x, (str, int))]
+                fd_map = raw_meta.get("file_doc_map") or {}
+                if isinstance(fd_map, dict):
+                    for k, v in fd_map.items():
+                        if not isinstance(v, list):
+                            continue
+                        key = str(k)
+                        existing_file_doc_map[key] = [str(x) for x in v if isinstance(x, (str, int))]
 
                 # 删除本次操作对应的 filepath / doc_ids
                 if filepath is not None:
-                    existing_filepaths.discard(str(filepath))
+                    filepath_key = str(filepath)
+                    existing_filepaths.discard(filepath_key)
+                    related_doc_ids = existing_file_doc_map.pop(filepath_key, [])
+                    for doc_key in related_doc_ids:
+                        existing_doc_ids.discard(doc_key)
+                        existing_doc_chunk_map.pop(doc_key, None)
                 if doc_ids:
                     for d in doc_ids:
-                        existing_doc_ids.discard(str(d))
+                        doc_key = str(d)
+                        existing_doc_ids.discard(doc_key)
+                        existing_doc_chunk_map.pop(doc_key, None)
+                        for fp_key in list(existing_file_doc_map.keys()):
+                            docs = [x for x in existing_file_doc_map[fp_key] if x != doc_key]
+                            if docs:
+                                existing_file_doc_map[fp_key] = docs
+                            else:
+                                existing_file_doc_map.pop(fp_key, None)
+                                existing_filepaths.discard(fp_key)
 
                 new_meta = {
                     "collection_name": collection_name,
                     "filepaths": sorted(existing_filepaths),
                     "doc_ids": sorted(existing_doc_ids),
+                    "doc_chunk_map": existing_doc_chunk_map,
+                    "file_doc_map": existing_file_doc_map,
                 }
                 meta_path.write_text(
                     json.dumps(new_meta, ensure_ascii=False, indent=2),
@@ -401,10 +462,7 @@ class MilvusRepository:
                         md = metadatas[idx]
                         if isinstance(md, dict) and md:
                             metadata = md
-                    if metadata:
-                        nodes.append(TextNode(text=text, metadata=metadata))
-                    else:
-                        nodes.append(TextNode(text=text))
+                    nodes.append(self._build_text_node(text=text, metadata=metadata))
             indexed = len(nodes)
 
             logger.info(
@@ -480,27 +538,54 @@ class MilvusRepository:
             logger.info("[Milvus] 索引构建完成，collection=%s，耗时 %.2fs", collection_name, elapsed)
 
             # 汇总 metadata，便于前端展示「本次索引涉及哪些文档 / doc_id」
-            unique_filepaths: set[str] = set()
-            unique_doc_ids: set[str] = set()
+            unique_filepaths: list[str] = []
+            unique_doc_ids: list[str] = []
+            doc_chunk_map: dict[str, list[str]] = {}
+            file_doc_map: dict[str, list[str]] = {}
+            _seen_filepaths: set[str] = set()
+            _seen_doc_ids: set[str] = set()
+            _seen_file_doc_pairs: set[tuple[str, str]] = set()
+            _seen_doc_chunk_pairs: set[tuple[str, str]] = set()
             if metadatas:
                 for md in metadatas:
                     if not isinstance(md, dict):
                         continue
-                    fp = md.get("filepath")
+                    fp = md.get("file_path")
                     if isinstance(fp, str) and fp:
-                        unique_filepaths.add(fp)
-                    doc = md.get("source_doc_id")
+                        if fp not in _seen_filepaths:
+                            _seen_filepaths.add(fp)
+                            unique_filepaths.append(fp)
+                    doc = md.get("doc_id")
+                    doc_str: Optional[str] = None
                     if doc is not None:
-                        # 统一转成字符串，兼容数字 / 字符串 doc_id
-                        unique_doc_ids.add(str(doc))
+                        doc_str = str(doc)
+                        if doc_str not in _seen_doc_ids:
+                            _seen_doc_ids.add(doc_str)
+                            unique_doc_ids.append(doc_str)
+                    cid = md.get("chunk_id")
+                    cid_str: Optional[str] = None
+                    if cid is not None:
+                        cid_str = str(cid)
+                    if doc_str is not None and isinstance(fp, str) and fp:
+                        pair = (fp, doc_str)
+                        if pair not in _seen_file_doc_pairs:
+                            _seen_file_doc_pairs.add(pair)
+                            file_doc_map.setdefault(fp, []).append(doc_str)
+                    if doc_str is not None and cid_str is not None:
+                        pair = (doc_str, cid_str)
+                        if pair not in _seen_doc_chunk_pairs:
+                            _seen_doc_chunk_pairs.add(pair)
+                            doc_chunk_map.setdefault(doc_str, []).append(cid_str)
 
             # 将本次构建涉及的 filepath / doc_ids 按 collection 维度写入一个 meta JSON，便于后续前端快速读取
             try:
                 meta_path = self._data_dir / f"{collection_name}_meta.json"
                 meta_data = {
                     "collection_name": collection_name,
-                    "filepaths": sorted(unique_filepaths),
-                    "doc_ids": sorted(unique_doc_ids),
+                    "filepaths": unique_filepaths,
+                    "doc_ids": unique_doc_ids,
+                    "doc_chunk_map": doc_chunk_map,
+                    "file_doc_map": file_doc_map,
                 }
                 import json
                 meta_path.write_text(json.dumps(meta_data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -513,8 +598,9 @@ class MilvusRepository:
                 "indexed_chunks": indexed,
                 "time_cost": elapsed,
                 "milvus_uri": self._db_path(collection_name),
-                "filepaths": sorted(unique_filepaths),
-                "doc_ids": sorted(unique_doc_ids),
+                "filepaths": unique_filepaths,
+                "doc_ids": unique_doc_ids,
+                "doc_chunk_map": doc_chunk_map,
             }
         except Exception as exc:
             logger.exception("索引构建失败: %s", exc)
@@ -540,10 +626,7 @@ class MilvusRepository:
                         md = metadatas[idx]
                         if isinstance(md, dict) and md:
                             metadata = md
-                    if metadata:
-                        nodes.append(TextNode(text=text, metadata=metadata))
-                    else:
-                        nodes.append(TextNode(text=text))
+                    nodes.append(self._build_text_node(text=text, metadata=metadata))
             added = len(nodes)
 
             logger.info(
@@ -587,39 +670,126 @@ class MilvusRepository:
                 "[Milvus] 数据追加完成，collection=%s，耗时 %.2fs", collection_name, elapsed
             )
 
-            unique_filepaths: set[str] = set()
-            unique_doc_ids: set[str] = set()
+            unique_filepaths: list[str] = []
+            unique_doc_ids: list[str] = []
+            doc_chunk_map: dict[str, list[str]] = {}
+            file_doc_map: dict[str, list[str]] = {}
+            _seen_filepaths: set[str] = set()
+            _seen_doc_ids: set[str] = set()
+            _seen_file_doc_pairs: set[tuple[str, str]] = set()
+            _seen_doc_chunk_pairs: set[tuple[str, str]] = set()
             if metadatas:
                 for md in metadatas:
                     if not isinstance(md, dict):
                         continue
-                    fp = md.get("filepath")
+                    fp = md.get("file_path")
                     if isinstance(fp, str) and fp:
-                        unique_filepaths.add(fp)
-                    doc = md.get("source_doc_id")
+                        if fp not in _seen_filepaths:
+                            _seen_filepaths.add(fp)
+                            unique_filepaths.append(fp)
+                    doc = md.get("doc_id")
+                    doc_str: Optional[str] = None
                     if doc is not None:
-                        unique_doc_ids.add(str(doc))
+                        doc_str = str(doc)
+                        if doc_str not in _seen_doc_ids:
+                            _seen_doc_ids.add(doc_str)
+                            unique_doc_ids.append(doc_str)
+                    cid = md.get("chunk_id")
+                    cid_str: Optional[str] = None
+                    if cid is not None:
+                        cid_str = str(cid)
+                    if doc_str is not None and isinstance(fp, str) and fp:
+                        pair = (fp, doc_str)
+                        if pair not in _seen_file_doc_pairs:
+                            _seen_file_doc_pairs.add(pair)
+                            file_doc_map.setdefault(fp, []).append(doc_str)
+                    if doc_str is not None and cid_str is not None:
+                        pair = (doc_str, cid_str)
+                        if pair not in _seen_doc_chunk_pairs:
+                            _seen_doc_chunk_pairs.add(pair)
+                            doc_chunk_map.setdefault(doc_str, []).append(cid_str)
 
             # 将本次追加涉及的 filepath / doc_ids 合并进 collection 的 meta JSON（若存在则增量合并）
             try:
                 meta_path = self._data_dir / f"{collection_name}_meta.json"
-                existing_filepaths: set[str] = set()
-                existing_doc_ids: set[str] = set()
+                existing_filepaths: list[str] = []
+                existing_doc_ids: list[str] = []
+                existing_doc_chunk_map: dict[str, list[str]] = {}
+                existing_file_doc_map: dict[str, list[str]] = {}
+                _seen_existing_filepaths: set[str] = set()
+                _seen_existing_doc_ids: set[str] = set()
                 if meta_path.exists():
                     import json
                     raw_meta = json.loads(meta_path.read_text(encoding="utf-8") or "{}")
                     for fp in raw_meta.get("filepaths", []):
                         if isinstance(fp, str) and fp:
-                            existing_filepaths.add(fp)
+                            if fp not in _seen_existing_filepaths:
+                                _seen_existing_filepaths.add(fp)
+                                existing_filepaths.append(fp)
                     for d in raw_meta.get("doc_ids", []):
                         if isinstance(d, str) and d:
-                            existing_doc_ids.add(d)
-                merged_filepaths = sorted(existing_filepaths.union(unique_filepaths))
-                merged_doc_ids = sorted(existing_doc_ids.union(unique_doc_ids))
+                            if d not in _seen_existing_doc_ids:
+                                _seen_existing_doc_ids.add(d)
+                                existing_doc_ids.append(d)
+                    raw_dc_map = raw_meta.get("doc_chunk_map") or {}
+                    if isinstance(raw_dc_map, dict):
+                        for k, v in raw_dc_map.items():
+                            if not isinstance(v, list):
+                                continue
+                            key = str(k)
+                            vals = [str(x) for x in v if isinstance(x, (str, int))]
+                            if vals:
+                                existing_doc_chunk_map[key] = vals
+                    raw_fd_map = raw_meta.get("file_doc_map") or {}
+                    if isinstance(raw_fd_map, dict):
+                        for k, v in raw_fd_map.items():
+                            if not isinstance(v, list):
+                                continue
+                            key = str(k)
+                            vals = [str(x) for x in v if isinstance(x, (str, int))]
+                            if vals:
+                                existing_file_doc_map[key] = vals
+
+                merged_filepaths = existing_filepaths[:]
+                for fp in unique_filepaths:
+                    if fp not in _seen_existing_filepaths:
+                        _seen_existing_filepaths.add(fp)
+                        merged_filepaths.append(fp)
+
+                merged_doc_ids = existing_doc_ids[:]
+                for d in unique_doc_ids:
+                    if d not in _seen_existing_doc_ids:
+                        _seen_existing_doc_ids.add(d)
+                        merged_doc_ids.append(d)
+
+                merged_doc_chunk_map: dict[str, list[str]] = {
+                    k: v[:] for k, v in existing_doc_chunk_map.items()
+                }
+                for d, cids in doc_chunk_map.items():
+                    target = merged_doc_chunk_map.setdefault(d, [])
+                    seen = set(target)
+                    for c in cids:
+                        if c not in seen:
+                            seen.add(c)
+                            target.append(c)
+
+                merged_file_doc_map: dict[str, list[str]] = {
+                    k: v[:] for k, v in existing_file_doc_map.items()
+                }
+                for fp, dids in file_doc_map.items():
+                    target = merged_file_doc_map.setdefault(fp, [])
+                    seen = set(target)
+                    for d in dids:
+                        if d not in seen:
+                            seen.add(d)
+                            target.append(d)
+
                 new_meta = {
                     "collection_name": collection_name,
                     "filepaths": merged_filepaths,
                     "doc_ids": merged_doc_ids,
+                    "doc_chunk_map": merged_doc_chunk_map,
+                    "file_doc_map": merged_file_doc_map,
                 }
                 import json as _json
                 meta_path.write_text(_json.dumps(new_meta, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -631,8 +801,9 @@ class MilvusRepository:
                 "added_chunks": added,
                 "time_cost": elapsed,
                 "milvus_uri": self._db_path(collection_name),
-                "filepaths": sorted(unique_filepaths),
-                "doc_ids": sorted(unique_doc_ids),
+                "filepaths": unique_filepaths,
+                "doc_ids": unique_doc_ids,
+                "doc_chunk_map": doc_chunk_map,
             }
         except Exception as exc:
             logger.exception("追加索引失败: %s", exc)
@@ -720,9 +891,13 @@ class MilvusRepository:
                         "score": float(node_with_score.score)
                         if node_with_score.score is not None
                         else None,
-                        "filepath": meta.get("filepath"),
-                        # 统一以字符串形式返回 doc_id，兼容数字 / 字符串
-                        "doc_id": str(meta["source_doc_id"]) if "source_doc_id" in meta else None,
+                        "filepath": meta.get("file_path"),
+                        "doc_id": str(getattr(node, "ref_doc_id", None))
+                        if getattr(node, "ref_doc_id", None) is not None
+                        else None,
+                        "chunk_id": str(meta.get("chunk_id"))
+                        if meta.get("chunk_id") is not None
+                        else None,
                     }
                 )
             return results
@@ -783,7 +958,7 @@ class MilvusRepository:
                     op = FilterOperator.EQ
                 filter_list.append(
                     MetadataFilter(
-                        key="filepath",
+                        key="file_path",
                         value=values,
                         operator=op,
                     )
@@ -799,7 +974,7 @@ class MilvusRepository:
                     op = FilterOperator.EQ
                 filter_list.append(
                     MetadataFilter(
-                        key="source_doc_id",
+                        key="doc_id",
                         value=values,
                         operator=op,
                     )
@@ -839,8 +1014,13 @@ class MilvusRepository:
                         "score": float(node_with_score.score)
                         if node_with_score.score is not None
                         else None,
-                        "filepath": meta.get("filepath"),
-                        "doc_id": str(meta["source_doc_id"]) if "source_doc_id" in meta else None,
+                        "filepath": meta.get("file_path"),
+                        "doc_id": str(getattr(node, "ref_doc_id", None))
+                        if getattr(node, "ref_doc_id", None) is not None
+                        else None,
+                        "chunk_id": str(meta.get("chunk_id"))
+                        if meta.get("chunk_id") is not None
+                        else None,
                     }
                 )
             return results

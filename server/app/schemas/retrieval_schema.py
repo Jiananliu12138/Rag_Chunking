@@ -1,4 +1,4 @@
-from typing import Optional
+﻿from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -45,6 +45,7 @@ class SearchResultItem(BaseModel):
     score: Optional[float] = Field(None, description="相似度分数（0-1，越高越相关）")
     filepath: Optional[str] = Field(None, description="该文本块的来源文件路径（如有）")
     doc_id: Optional[str] = Field(None, description="该文本块所属文档的 ID（如有）")
+    chunk_id: Optional[str] = Field(None, description="该文本块的分块 ID（如有）")
 
 
 class SearchResult(BaseModel):

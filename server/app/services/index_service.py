@@ -64,8 +64,9 @@ class IndexService:
         }
 
         其中：
-        - metadata["filepath"]      来自顶层 filepath
-        - metadata["source_doc_id"] 来自每个 split 的第二个元素（避免与 LlamaIndex 内置 doc_id 冲突）
+        - metadata["file_path"] 来自顶层 filepath
+        - metadata["doc_id"]    来自每个 split 的第二个元素（写入 LlamaIndex/Milvus 默认 doc_id 字段）
+        - metadata["chunk_id"]  来自每个 split 的第三个元素（自定义字段）
 
         其他兼容格式则退化为只有文本、metadata 为空字典。
         """
@@ -86,13 +87,16 @@ class IndexService:
                     if isinstance(item, list) and item:
                         text = item[0]
                         doc_id = item[1] if len(item) > 1 else None
+                        chunk_id = item[2] if len(item) > 2 else None
                         if isinstance(text, str) and text.strip():
                             chunks.append(text)
                             md: dict[str, Any] = {}
                             if isinstance(filepath, str) and filepath:
-                                md["filepath"] = filepath
+                                md["file_path"] = filepath
                             if doc_id is not None:
-                                md["source_doc_id"] = str(doc_id)  # 避免与 LlamaIndex doc_id 冲突
+                                md["doc_id"] = str(doc_id)
+                            if chunk_id is not None:
+                                md["chunk_id"] = str(chunk_id)
                             metadatas.append(md)
 
         # 其他通用格式：复用 FileRepository.parse_chunks_from_json，只返回文本
@@ -203,6 +207,7 @@ class IndexService:
             milvus_uri=info["milvus_uri"],
             filepaths=info.get("filepaths", []),
             doc_ids=info.get("doc_ids", []),
+            doc_chunk_map=info.get("doc_chunk_map", {}),
         )
 
     def list_collections(self) -> CollectionListResult:

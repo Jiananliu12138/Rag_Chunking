@@ -11,6 +11,7 @@ import os
 import json
 import asyncio
 from pathlib import Path
+from typing import Any
 
 # ============================================================
 # LlamaIndex 导入
@@ -18,7 +19,7 @@ from pathlib import Path
 from llama_index.core import VectorStoreIndex, StorageContext, Settings
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.schema import TextNode as Node
+from llama_index.core.schema import TextNode as Node, NodeRelationship, RelatedNodeInfo
 from llama_index.vector_stores.milvus import MilvusVectorStore
 from llama_index.embeddings.langchain import LangchainEmbedding
 
@@ -116,7 +117,15 @@ class BaseRetrieverLite(ABC):
             print(f"[Milvus] 检测到格式: 简单列表")
         
         elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
-            chunks = [{"text": item[0], "label": item[1] if len(item) > 1 else None} for item in data if isinstance(item, list) and len(item) > 0]
+            chunks = [
+                {
+                    "text": item[0],
+                    "doc_id": str(item[1]) if len(item) > 1 and item[1] is not None else None,
+                    "chunk_id": str(item[2]) if len(item) > 2 and item[2] is not None else None,
+                    "label": item[1] if len(item) > 1 else None,
+                }
+                for item in data if isinstance(item, list) and len(item) > 0
+            ]
             print(f"[Milvus] 检测到格式: 列表嵌套（提取第一个元素）")
         
         elif isinstance(data, dict):
@@ -124,10 +133,19 @@ class BaseRetrieverLite(ABC):
                 splits = data["splits"]
                 if isinstance(splits, list) and len(splits) > 0:
                     if isinstance(splits[0], list):
-                        chunks = [{"text": item[0], "label": item[1] if len(item) > 1 else None} for item in splits if isinstance(item, list) and len(item) > 0]
+                        chunks = [
+                            {
+                                "text": item[0],
+                                "doc_id": str(item[1]) if len(item) > 1 and item[1] is not None else None,
+                                "chunk_id": str(item[2]) if len(item) > 2 and item[2] is not None else None,
+                                "file_path": data.get("filepath"),
+                                "label": item[1] if len(item) > 1 else None,
+                            }
+                            for item in splits if isinstance(item, list) and len(item) > 0
+                        ]
                         print(f"[Milvus] 检测到格式: 字典+splits（列表嵌套）")
                     elif isinstance(splits[0], str):
-                        chunks = [{"text": chunk, "label": None} for chunk in splits]
+                        chunks = [{"text": chunk, "file_path": data.get("filepath"), "label": None} for chunk in splits]
                         print(f"[Milvus] 检测到格式: 字典+splits（简单列表）")
             
             elif "final_chunks" in data:
@@ -168,32 +186,49 @@ class BaseRetrieverLite(ABC):
         print(f"\n{'='*60}")
         print(f"示例文本块（前3个）:")
         print(f"{'='*60}")
-        for idx, chunk_text in enumerate(chunks[:3], 1):
+        for idx, chunk_item in enumerate(chunks[:3], 1):
+            chunk_text = chunk_item["text"] if isinstance(chunk_item, dict) else str(chunk_item)
             preview = chunk_text[:200] if len(chunk_text) > 200 else chunk_text
             print(f"\n[示例 {idx}] (长度: {len(chunk_text)} 字符)")
             print(f"{preview}...")
             print(f"{'-'*60}")
         
         # 创建节点并过滤短文本
-        filtered_labels = []
+        filtered_count = 0
         for chunk_item in chunks:
             chunk_text = chunk_item["text"]
-            chunk_label = chunk_item["label"]
+            chunk_doc_id = chunk_item.get("doc_id")
+            chunk_id = chunk_item.get("chunk_id")
+            file_path = chunk_item.get("file_path")
             
             if not isinstance(chunk_text, str):
-                filtered_labels.append(chunk_label)
+                filtered_count += 1
                 continue
             
             # if len(chunk_text.split(' ')) < 10:
             #     filtered_labels.append(chunk_label)
             #     continue
             
-            node1 = Node(text=chunk_text)
+            metadata = {}
+            if file_path:
+                metadata["file_path"] = file_path
+            if chunk_id is not None:
+                metadata["chunk_id"] = str(chunk_id)
+
+            node_kwargs = {"text": chunk_text}
+            if metadata:
+                node_kwargs["metadata"] = metadata
+            if chunk_doc_id:
+                node_kwargs["relationships"] = {
+                    NodeRelationship.SOURCE: RelatedNodeInfo(node_id=str(chunk_doc_id))
+                }
+
+            node1 = Node(**node_kwargs)
             nodes.append(node1)
         
         print(f"\n[Milvus] 过滤后剩余 {len(nodes)} 个有效文本块")
-        if filtered_labels:
-            print(f"[Milvus] 过滤了，labels: {filtered_labels[:5]}{'...' if len(filtered_labels) > 5 else ''}")
+        if filtered_count:
+            print(f"[Milvus] filtered invalid chunks: {filtered_count}")
         
         # 包装嵌入模型
         self.embed_model = LangchainEmbedding(self.embed_model)
