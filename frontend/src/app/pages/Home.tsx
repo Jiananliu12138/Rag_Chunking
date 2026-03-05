@@ -58,6 +58,7 @@ interface Message {
     score: number;
     filepath?: string;
     doc_id?: string;
+    chunk_id?: string;
   }>;
   timestamp: Date;
 }
@@ -367,21 +368,28 @@ export default function Home() {
                                         Score: {ctx.score.toFixed(4)}
                                       </span>
                                     </div>
-                                    <p className="text-slate-700">{ctx.text}</p>
-                                    <div className="mt-2 space-y-1">
+                                    <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                                       {ctx.filepath && (
-                                        <p className="text-slate-400 flex items-center gap-1">
+                                        <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 border border-slate-200">
                                           <FileText className="w-3 h-3" />
-                                          {ctx.filepath}
-                                        </p>
+                                          <span className="max-w-[320px] truncate" title={ctx.filepath}>
+                                            {ctx.filepath}
+                                          </span>
+                                        </span>
                                       )}
                                       {ctx.doc_id && (
-                                        <p className="text-slate-400 flex items-center gap-1">
+                                        <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 border border-slate-200">
                                           <Database className="w-3 h-3" />
-                                          {ctx.doc_id}
-                                        </p>
+                                          doc_id: {ctx.doc_id}
+                                        </span>
+                                      )}
+                                      {ctx.chunk_id && (
+                                        <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 border border-slate-200">
+                                          第 {ctx.chunk_id} 块
+                                        </span>
                                       )}
                                     </div>
+                                    <p className="text-slate-700">{ctx.text}</p>
                                   </div>
                                 ))}
                               </CollapsibleContent>
