@@ -1,4 +1,4 @@
-"""
+﻿"""
 检索与生成服务层。
 封装向量检索、RAG 生成两个核心能力。
 """
@@ -181,7 +181,8 @@ class RetrievalService:
     def rag_generate_file(self, request: RAGGenerateFileRequest) -> RAGGenerateFileResult:
         """
         仿照 eval/LongBench/retrieval_lite.py：从 jsonl 读入问题，逐条检索+生成，结果写入 JSON。
-        每行 JSON 需含 input（查询）、_id、answers 等；输出列表元素为 {_id, input, llm_ans, answers, retrieval_list}。
+        每行 JSON 需含 user_input/input/query、_id、answers 等；
+        输出列表元素为 {_id, input, llm_ans, answers, rag_retrieval, gold_reference}。
         """
         settings = get_settings()
         embed_model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
@@ -205,6 +206,52 @@ class RetrievalService:
         except Exception as exc:
             raise RetrievalException(f"读取输入文件失败: {exc}") from exc
 
+        def _flatten_reference_meta(meta_obj: object) -> list[dict]:
+            if not isinstance(meta_obj, dict):
+                return []
+            ref_ctx = meta_obj.get("reference_contexts")
+            if ref_ctx is None:
+                return []
+
+            out: list[dict] = []
+
+            def walk(x: object) -> None:
+                if isinstance(x, list):
+                    for it in x:
+                        walk(it)
+                    return
+                if isinstance(x, dict):
+                    doc_id = x.get("doc_id")
+                    chunk_id = x.get("chunk_id")
+                    source_filepath = x.get("source_filepath")
+                    if doc_id is not None or chunk_id is not None or source_filepath is not None:
+                        out.append(
+                            {
+                                "doc_id": str(doc_id) if doc_id is not None else None,
+                                "chunk_id": str(chunk_id) if chunk_id is not None else None,
+                                "filepath": str(source_filepath) if source_filepath is not None else None,
+                            }
+                        )
+
+            walk(ref_ctx)
+            return out
+
+        def _build_gold_reference_items(contexts: list[str], metas: list[dict]) -> list[dict]:
+            max_len = max(len(contexts), len(metas))
+            items: list[dict] = []
+            for i in range(max_len):
+                text = contexts[i] if i < len(contexts) else None
+                meta = metas[i] if i < len(metas) and isinstance(metas[i], dict) else {}
+                items.append(
+                    {
+                        "text": text,
+                        "filepath": meta.get("filepath"),
+                        "doc_id": meta.get("doc_id"),
+                        "chunk_id": meta.get("chunk_id"),
+                    }
+                )
+            return items
+
         with tqdm(total=len(lines), desc="检索+生成", unit="问题") as pbar:
             for line in lines:
                 line = line.strip()
@@ -219,7 +266,7 @@ class RetrievalService:
                     pbar.update(1)
                     continue
 
-                query = data.get("input") or data.get("query") or ""
+                query = data.get("user_input") or data.get("input") or data.get("query") or ""
                 if not query:
                     logger.warning("跳过无 input/query 的行 (id=%s)", data.get("_id"))
                     total_failed += 1
@@ -243,6 +290,27 @@ class RetrievalService:
                     context_items = [SearchResultItem(**r) for r in raw_results]
                     context_texts = [item.text for item in context_items]
                     context_str = "\n\n".join(context_texts)
+                    rag_retrieval = [
+                        {
+                            "text": item.text,
+                            "filepath": item.filepath,
+                            "doc_id": item.doc_id,
+                            "chunk_id": item.chunk_id,
+                        }
+                        for item in context_items
+                    ]
+                    reference_contexts = data.get("reference_contexts")
+                    if isinstance(reference_contexts, list):
+                        gold_reference_contexts = [str(x) for x in reference_contexts]
+                    elif reference_contexts is None:
+                        gold_reference_contexts = []
+                    else:
+                        gold_reference_contexts = [str(reference_contexts)]
+                    gold_reference_meta = _flatten_reference_meta(data.get("meta"))
+                    gold_reference = _build_gold_reference_items(
+                        gold_reference_contexts,
+                        gold_reference_meta,
+                    )
                     prompt = self._build_llm_prompt(context_str, query)
                     llm_ans = self._call_vllm(
                         prompt=prompt,
@@ -256,10 +324,8 @@ class RetrievalService:
                         "input": query,
                         "llm_ans": llm_ans,
                         "answers": data.get("answers", []),
-                        # 兼容原有字段：只包含纯文本
-                        "retrieval_list": context_texts,
-                        # 新增：完整的检索结果（含 score、filepath、doc_id）
-                        "retrieval_items": [item.model_dump() for item in context_items],
+                        "rag_retrieval": rag_retrieval,
+                        "gold_reference": gold_reference,
                     }
                     retrieval_save_list.append(save)
                 except Exception as e:
