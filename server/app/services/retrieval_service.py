@@ -7,6 +7,7 @@ import os
 
 from tqdm import tqdm
 
+
 from app.config import get_settings
 from app.core.exceptions import ModelLoadException, RetrievalException
 from app.core.logging_config import logger
