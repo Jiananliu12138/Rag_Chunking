@@ -385,7 +385,7 @@ export default function Home() {
                                       )}
                                       {ctx.chunk_id && (
                                         <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 border border-slate-200">
-                                          第 {ctx.chunk_id} 块
+                                          Chunk ID: {ctx.chunk_id} 
                                         </span>
                                       )}
                                     </div>
