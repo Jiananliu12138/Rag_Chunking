@@ -182,8 +182,8 @@ class RetrievalService:
     def rag_generate_file(self, request: RAGGenerateFileRequest) -> RAGGenerateFileResult:
         """
         仿照 eval/LongBench/retrieval_lite.py：从 jsonl 读入问题，逐条检索+生成，结果写入 JSON。
-        每行 JSON 需含 user_input/input/query、_id、answers 等；
-        输出列表元素为 {_id, input, llm_ans, answers, rag_retrieval, gold_reference}。
+        每行 JSON 需含 user_input/input/query，gold 参考可来自 reference_contexts + meta.reference_contexts。
+        输出列表元素为 {_id, input, llm_ans, answer, rag_retrieval, gold_reference}。
         """
         settings = get_settings()
         embed_model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
@@ -254,7 +254,7 @@ class RetrievalService:
             return items
 
         with tqdm(total=len(lines), desc="检索+生成", unit="问题") as pbar:
-            for line in lines:
+            for row_idx, line in enumerate(lines, start=1):
                 line = line.strip()
                 if not line:
                     pbar.update(1)
@@ -269,14 +269,15 @@ class RetrievalService:
 
                 query = data.get("user_input") or data.get("input") or data.get("query") or ""
                 if not query:
-                    logger.warning("跳过无 input/query 的行 (id=%s)", data.get("_id"))
+                    logger.warning("跳过无 input/query 的行 (auto_id=%s)", row_idx)
                     total_failed += 1
                     pbar.update(1)
                     continue
 
                 try:
+                    auto_id = row_idx
                     pbar.set_postfix(
-                        {"ID": data.get("_id", ""), "Query": query[:10] + "..." if len(query) > 30 else query}
+                        {"ID": auto_id, "Query": query[:10] + "..." if len(query) > 30 else query}
                     )
                     raw_results = self._repo.search(
                         collection_name=request.collection_name,
@@ -321,16 +322,16 @@ class RetrievalService:
                         max_new_tokens=request.max_new_tokens,
                     )
                     save = {
-                        "_id": data.get("_id"),
+                        "_id": auto_id,
                         "input": query,
                         "llm_ans": llm_ans,
-                        "answers": data.get("answers", []),
+                        "answer": data.get("reference"),
                         "rag_retrieval": rag_retrieval,
                         "gold_reference": gold_reference,
                     }
                     retrieval_save_list.append(save)
                 except Exception as e:
-                    logger.exception("处理单条失败 (ID=%s): %s", data.get("_id", "unknown"), e)
+                    logger.exception("处理单条失败 (auto_id=%s): %s", row_idx, e)
                     total_failed += 1
                 pbar.update(1)
 
