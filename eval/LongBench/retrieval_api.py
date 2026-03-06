@@ -27,6 +27,11 @@ class Config:
     EMBED_MODEL_PATH: str = r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
     EMBED_DIM: int = 1024
     TOP_K: int = 5
+    USE_HYBRID_SEARCH: bool | None = True
+    # NOTE:
+    # - 是否使用 Hybrid（dense+sparse）可在此脚本按请求控制（USE_HYBRID_SEARCH）。
+    # - RRF 的具体类型与参数（ranker/k）由服务端配置控制：
+    #   MILVUS_HYBRID_RANKER / MILVUS_HYBRID_RANKER_K。
     RERANK_ENABLED: bool = False
     RERANK_TYPE: str = "cross_encoder"
     RERANK_MODEL_PATH: str = ""
@@ -58,6 +63,7 @@ def main() -> None:
         "embed_model_path": Config.EMBED_MODEL_PATH,
         "embed_dim": Config.EMBED_DIM,
         "top_k": Config.TOP_K,
+        "use_hybrid_search": Config.USE_HYBRID_SEARCH,
         "rerank_enabled": Config.RERANK_ENABLED,
         "rerank_type": Config.RERANK_TYPE,
         "rerank_model_path": Config.RERANK_MODEL_PATH or None,
