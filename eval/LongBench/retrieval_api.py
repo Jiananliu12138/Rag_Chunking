@@ -27,6 +27,12 @@ class Config:
     EMBED_MODEL_PATH: str = r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
     EMBED_DIM: int = 1024
     TOP_K: int = 5
+    RERANK_ENABLED: bool = False
+    RERANK_TYPE: str = "cross_encoder"
+    RERANK_MODEL_PATH: str = ""
+    RERANK_DEVICE: str = "cpu"
+    RERANK_CANDIDATE_K: int | None = None
+    RERANK_TOP_K: int | None = None
 
     LLM_API_BASE: str = "http://localhost:8005/v1"
     LLM_MODEL_NAME: str = r"/data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct"
@@ -52,6 +58,12 @@ def main() -> None:
         "embed_model_path": Config.EMBED_MODEL_PATH,
         "embed_dim": Config.EMBED_DIM,
         "top_k": Config.TOP_K,
+        "rerank_enabled": Config.RERANK_ENABLED,
+        "rerank_type": Config.RERANK_TYPE,
+        "rerank_model_path": Config.RERANK_MODEL_PATH or None,
+        "rerank_device": Config.RERANK_DEVICE,
+        "rerank_candidate_k": Config.RERANK_CANDIDATE_K,
+        "rerank_top_k": Config.RERANK_TOP_K,
         "llm_api_base": Config.LLM_API_BASE,
         "llm_model_name": Config.LLM_MODEL_NAME,
         "temperature": Config.TEMPERATURE,

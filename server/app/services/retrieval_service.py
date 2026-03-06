@@ -4,6 +4,8 @@
 """
 import json
 import os
+from threading import Lock
+from typing import Any, Optional
 
 from tqdm import tqdm
 
@@ -22,6 +24,9 @@ from app.schemas.retrieval_schema import (
     SearchResultItem,
 )
 from app.services.index_service import IndexService
+
+_RERANKER_CACHE: dict[tuple[str, str], Any] = {}
+_RERANKER_CACHE_LOCK = Lock()
 
 
 class RetrievalService:
@@ -74,6 +79,95 @@ class RetrievalService:
         resp.raise_for_status()
         return resp.json()["choices"][0]["text"].strip()
 
+    @staticmethod
+    def _normalize_retrieve_and_final_top_k(
+        request_top_k: int,
+        rerank_candidate_k: Optional[int],
+        rerank_top_k: Optional[int],
+    ) -> tuple[int, int]:
+        final_top_k = int(rerank_top_k) if rerank_top_k is not None else int(request_top_k)
+        retrieve_top_k = int(rerank_candidate_k) if rerank_candidate_k is not None else final_top_k
+        retrieve_top_k = max(retrieve_top_k, final_top_k)
+        return retrieve_top_k, final_top_k
+
+    @staticmethod
+    def _to_search_result_items(raw_results: list[dict[str, Any]]) -> list[SearchResultItem]:
+        items: list[SearchResultItem] = []
+        for raw in raw_results:
+            item = SearchResultItem(**raw)
+            if item.retrieval_score is None and item.score is not None:
+                item = item.model_copy(update={"retrieval_score": float(item.score)})
+            items.append(item)
+        return items
+
+    @staticmethod
+    def _validate_rerank_type(rerank_type: str) -> str:
+        normalized = rerank_type.strip().lower()
+        if normalized != "cross_encoder":
+            raise RetrievalException(f"不支持的 rerank_type: {rerank_type}（当前仅支持 cross_encoder）")
+        return normalized
+
+    @staticmethod
+    def _load_cross_encoder(model_path: str, device: str) -> Any:
+        cache_key = (model_path, device)
+        with _RERANKER_CACHE_LOCK:
+            cached = _RERANKER_CACHE.get(cache_key)
+            if cached is not None:
+                return cached
+            try:
+                from sentence_transformers import CrossEncoder
+
+                model = CrossEncoder(model_name=model_path, device=device)
+            except Exception as exc:
+                raise RetrievalException(f"加载 rerank 模型失败: {exc}") from exc
+            _RERANKER_CACHE[cache_key] = model
+            return model
+
+    def _rerank_items_cross_encoder(
+        self,
+        *,
+        query: str,
+        context_items: list[SearchResultItem],
+        model_path: str,
+        device: str,
+        final_top_k: int,
+    ) -> list[SearchResultItem]:
+        if not context_items:
+            return []
+        model = self._load_cross_encoder(model_path=model_path, device=device)
+        pairs = [(query, item.text) for item in context_items]
+        try:
+            raw_scores = model.predict(pairs)
+        except Exception as exc:
+            raise RetrievalException(f"执行 rerank 失败: {exc}") from exc
+
+        if hasattr(raw_scores, "tolist"):
+            raw_scores = raw_scores.tolist()
+
+        scored: list[tuple[float, float, int, SearchResultItem]] = []
+        for idx, (item, raw_score) in enumerate(zip(context_items, raw_scores)):
+            rerank_score = float(raw_score)
+            retrieval_score = (
+                float(item.retrieval_score)
+                if item.retrieval_score is not None
+                else (float(item.score) if item.score is not None else float("-inf"))
+            )
+            scored.append((rerank_score, retrieval_score, idx, item))
+
+        scored.sort(key=lambda x: (-x[0], -x[1], x[2]))
+        reranked_items: list[SearchResultItem] = []
+        for rerank_score, retrieval_score, _, item in scored[:final_top_k]:
+            reranked_items.append(
+                item.model_copy(
+                    update={
+                        "score": rerank_score,
+                        "rerank_score": rerank_score,
+                        "retrieval_score": retrieval_score if retrieval_score != float("-inf") else None,
+                    }
+                )
+            )
+        return reranked_items
+
     # ── 公开接口 ──────────────────────────────────────────────────────────────
 
     def search(self, request: SearchRequest) -> SearchResult:
@@ -103,7 +197,7 @@ class RetrievalService:
                 doc_id=request.doc_id,
                 use_hybrid_search=request.use_hybrid_search,
             )
-        items = [SearchResultItem(**r) for r in raw_results]
+        items = self._to_search_result_items(raw_results)
         return SearchResult(
             query=request.query,
             results=items,
@@ -112,14 +206,18 @@ class RetrievalService:
         )
 
     def rag_generate(self, request: RAGRequest) -> RAGResult:
-        from app.schemas.retrieval_schema import SearchResultItem  # 避免循环导入
-
         # Step 1: （可选）向量检索 + 上下文构造
         if request.enable_rag:
             logger.info(
                 "RAG 生成: collection=%s, query=%s...",
                 request.collection_name,
                 request.query[:30],
+            )
+            settings = get_settings()
+            retrieve_top_k, final_top_k = self._normalize_retrieve_and_final_top_k(
+                request_top_k=request.top_k,
+                rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
+                rerank_top_k=request.rerank_top_k if request.rerank_enabled else None,
             )
             embed_model = IndexService._load_langchain_embed(request.embed_model_path)
 
@@ -129,7 +227,7 @@ class RetrievalService:
                     query=request.query,
                     langchain_embed=embed_model,
                     embed_dim=request.embed_dim,
-                    top_k=request.top_k,
+                    top_k=retrieve_top_k,
                     use_hybrid_search=request.use_hybrid_search,
                 )
             else:
@@ -138,13 +236,28 @@ class RetrievalService:
                     query=request.query,
                     langchain_embed=embed_model,
                     embed_dim=request.embed_dim,
-                    top_k=request.top_k,
+                    top_k=retrieve_top_k,
                     filepath=request.filepath,
                     doc_id=request.doc_id,
                     use_hybrid_search=request.use_hybrid_search,
                 )
 
-            context_items = [SearchResultItem(**r) for r in raw_results]
+            context_items = self._to_search_result_items(raw_results)
+            if request.rerank_enabled:
+                self._validate_rerank_type(request.rerank_type)
+                rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL_PATH
+                rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
+                if not rerank_model_path:
+                    raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
+                context_items = self._rerank_items_cross_encoder(
+                    query=request.query,
+                    context_items=context_items,
+                    model_path=rerank_model_path,
+                    device=rerank_device,
+                    final_top_k=final_top_k,
+                )
+            else:
+                context_items = context_items[:final_top_k]
             contexts = [item.text for item in context_items]
             context_str = "\n\n".join(contexts)
         else:
@@ -194,6 +307,17 @@ class RetrievalService:
             raise RetrievalException("未配置嵌入模型（DEFAULT_EMBEDDING_MODEL）")
         if not llm_model_name:
             raise RetrievalException("未配置 LLM 模型（DEFAULT_VLLM_MODEL_NAME）")
+        retrieve_top_k, final_top_k = self._normalize_retrieve_and_final_top_k(
+            request_top_k=request.top_k,
+            rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
+            rerank_top_k=request.rerank_top_k if request.rerank_enabled else None,
+        )
+        rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL_PATH
+        rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
+        if request.rerank_enabled:
+            self._validate_rerank_type(request.rerank_type)
+            if not rerank_model_path:
+                raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
 
         embed_model = IndexService._load_langchain_embed(embed_model_path)
         retrieval_save_list: list[dict] = []
@@ -284,17 +408,27 @@ class RetrievalService:
                         query=query,
                         langchain_embed=embed_model,
                         embed_dim=embed_dim,
-                        top_k=request.top_k,
+                        top_k=retrieve_top_k,
                     )
                     # 与在线 RAG 接口保持一致：既保留纯文本，也保留带 metadata 的完整结果
-                    from app.schemas.retrieval_schema import SearchResultItem  # 延迟导入避免循环依赖
-
-                    context_items = [SearchResultItem(**r) for r in raw_results]
+                    context_items = self._to_search_result_items(raw_results)
+                    if request.rerank_enabled:
+                        context_items = self._rerank_items_cross_encoder(
+                            query=query,
+                            context_items=context_items,
+                            model_path=rerank_model_path,
+                            device=rerank_device,
+                            final_top_k=final_top_k,
+                        )
+                    else:
+                        context_items = context_items[:final_top_k]
                     context_texts = [item.text for item in context_items]
                     context_str = "\n\n".join(context_texts)
                     rag_retrieval = [
                         {
                             "text": item.text,
+                            "retrieval_score": item.retrieval_score,
+                            "rerank_score": item.rerank_score,
                             "filepath": item.filepath,
                             "doc_id": item.doc_id,
                             "chunk_id": item.chunk_id,

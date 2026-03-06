@@ -43,6 +43,8 @@ class SearchRequest(BaseModel):
 class SearchResultItem(BaseModel):
     text: str = Field(..., description="检索到的文本内容")
     score: Optional[float] = Field(None, description="相似度分数（0-1，越高越相关）")
+    retrieval_score: Optional[float] = Field(None, description="原始检索分数（rerank 前）")
+    rerank_score: Optional[float] = Field(None, description="重排分数（rerank 后）")
     filepath: Optional[str] = Field(None, description="该文本块的来源文件路径（如有）")
     doc_id: Optional[str] = Field(None, description="该文本块所属文档的 ID（如有）")
     chunk_id: Optional[str] = Field(None, description="该文本块的分块 ID（如有）")
@@ -85,6 +87,34 @@ class RAGRequest(BaseModel):
         None,
         description="是否使用 Hybrid Search（dense+sparse）；未显式传时使用服务端默认配置。",
     )
+    rerank_enabled: bool = Field(
+        False,
+        description="是否启用 rerank（默认 false）。",
+    )
+    rerank_type: str = Field(
+        "cross_encoder",
+        description="rerank 类型，当前仅支持 cross_encoder。",
+    )
+    rerank_model_path: Optional[str] = Field(
+        None,
+        description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
+    )
+    rerank_device: str = Field(
+        "cpu",
+        description="rerank 设备（如 cpu / cuda:0）。",
+    )
+    rerank_candidate_k: Optional[int] = Field(
+        None,
+        ge=1,
+        le=200,
+        description="rerank 召回候选数；为空时使用 max(top_k, rerank_top_k)。",
+    )
+    rerank_top_k: Optional[int] = Field(
+        None,
+        ge=1,
+        le=100,
+        description="rerank 后保留条数；为空时使用 top_k。",
+    )
     filepath: str | list[str] | None = Field(
         None,
         description=(
@@ -124,6 +154,34 @@ class RAGGenerateFileRequest(BaseModel):
     embed_model_path: Optional[str] = Field(None, description="嵌入模型路径，空则从配置读取")
     embed_dim: Optional[int] = Field(None, ge=64, description="嵌入维度，空则从配置读取")
     top_k: int = Field(5, ge=1, le=100, description="检索 top-k")
+    rerank_enabled: bool = Field(
+        False,
+        description="是否启用 rerank（默认 false）。",
+    )
+    rerank_type: str = Field(
+        "cross_encoder",
+        description="rerank 类型，当前仅支持 cross_encoder。",
+    )
+    rerank_model_path: Optional[str] = Field(
+        None,
+        description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
+    )
+    rerank_device: str = Field(
+        "cpu",
+        description="rerank 设备（如 cpu / cuda:0）。",
+    )
+    rerank_candidate_k: Optional[int] = Field(
+        None,
+        ge=1,
+        le=200,
+        description="rerank 召回候选数；为空时使用 max(top_k, rerank_top_k)。",
+    )
+    rerank_top_k: Optional[int] = Field(
+        None,
+        ge=1,
+        le=100,
+        description="rerank 后保留条数；为空时使用 top_k。",
+    )
     llm_api_base: Optional[str] = Field(None, description="vLLM API 地址，空则从配置读取")
     llm_model_name: Optional[str] = Field(None, description="LLM 模型名，空则从配置读取")
     temperature: float = Field(0.1, ge=0.0, le=2.0, description="生成温度")

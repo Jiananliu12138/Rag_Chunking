@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     MILVUS_HYBRID_RANKER: str = "RRFRanker"
     # RRFRanker 的 k 参数（仅在使用 RRFRanker 时生效）
     MILVUS_HYBRID_RANKER_K: int = 60
+    DEFAULT_ENABLE_RERANK: bool = False
+    DEFAULT_RERANK_MODEL_PATH: str = ""
+    DEFAULT_RERANK_DEVICE: str = "cpu"
 
     # ── 分块 / tiktoken 默认配置 ─────────────────────────────────
     # 从环境变量中读取对应值（.env 中写 TIKTOKEN_CACHE_DIR / CHUNK_NUM_WORKERS 即可）
