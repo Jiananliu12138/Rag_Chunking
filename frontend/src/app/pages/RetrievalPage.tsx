@@ -9,7 +9,15 @@ import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/ui/collapsible';
-import { Loader2, Search, Sparkles, FileText, ChevronDown } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Loader2, Search, Sparkles, FileText, ChevronDown, Settings2 } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -29,7 +37,15 @@ export default function RetrievalPage() {
   const [topK, setTopK] = useState(5);
   const [filepath, setFilepath] = useState('');
   const [docId, setDocId] = useState('');
-  const [useHybridSearch, setUseHybridSearch] = useState(false);
+  const [useHybridSearch, setUseHybridSearch] = useState(true);
+
+  // Rerank params
+  const [rerankEnabled, setRerankEnabled] = useState(false);
+  const [rerankType, setRerankType] = useState<'rrf' | 'cross_encoder'>('rrf');
+  const [rerankModelPath, setRerankModelPath] = useState('');
+  const [rerankDevice, setRerankDevice] = useState('cpu');
+  const [rerankCandidateK, setRerankCandidateK] = useState(20);
+  const [rerankTopK, setRerankTopK] = useState(5);
 
   // RAG params
   const [llmApiBase, setLlmApiBase] = useState('');
@@ -99,6 +115,12 @@ export default function RetrievalPage() {
         embed_dim: embedDim,
         top_k: topK,
         use_hybrid_search: useHybridSearch,
+        rerank_enabled: rerankEnabled && rerankType === 'cross_encoder',
+        rerank_type: 'cross_encoder',
+        rerank_model_path: rerankEnabled && rerankType === 'cross_encoder' ? (rerankModelPath || undefined) : undefined,
+        rerank_device: rerankDevice,
+        rerank_candidate_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankCandidateK : undefined,
+        rerank_top_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankTopK : undefined,
         llm_api_base: llmApiBase || undefined,
         llm_model_name: llmModelName || undefined,
         temperature,
@@ -138,6 +160,12 @@ export default function RetrievalPage() {
         embed_dim: embedDim,
         top_k: topK,
         use_hybrid_search: useHybridSearch,
+        rerank_enabled: rerankEnabled && rerankType === 'cross_encoder',
+        rerank_type: 'cross_encoder',
+        rerank_model_path: rerankEnabled && rerankType === 'cross_encoder' ? (rerankModelPath || undefined) : undefined,
+        rerank_device: rerankDevice,
+        rerank_candidate_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankCandidateK : undefined,
+        rerank_top_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankTopK : undefined,
         llm_api_base: llmApiBase || undefined,
         llm_model_name: llmModelName || undefined,
         temperature,
@@ -158,9 +186,49 @@ export default function RetrievalPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">检索与 RAG</h1>
-        <p className="text-slate-600">向量检索和检索增强生成</p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">检索与 RAG</h1>
+          <p className="text-slate-600">向量检索和检索增强生成（对齐 retrieval_api.py）</p>
+        </div>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="icon" title="Retrieval Settings">
+              <Settings2 className="w-4 h-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Retrieval Model Settings</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Embedding 模型路径</Label>
+                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} placeholder="留空使用默认" />
+              </div>
+              <div>
+                <Label>Embed Dim</Label>
+                <Input type="number" value={embedDim} onChange={(e) => setEmbedDim(parseInt(e.target.value || '0'))} />
+              </div>
+              <div>
+                <Label>LLM API Base</Label>
+                <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} placeholder="http://localhost:8005/v1" />
+              </div>
+              <div>
+                <Label>LLM Model</Label>
+                <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} placeholder="Qwen2.5-7B-Instruct" />
+              </div>
+              <div>
+                <Label>CrossEncoder 模型路径</Label>
+                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} placeholder="留空使用服务端默认" />
+              </div>
+              <div>
+                <Label>Rerank Device</Label>
+                <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder="cpu / cuda:0" />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Tabs defaultValue="single">
@@ -242,15 +310,45 @@ export default function RetrievalPage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div>
-                      <Label className="text-sm">Hybrid Search</Label>
-                      <p className="text-xs text-slate-500">Dense + Sparse</p>
+                  <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm">RRF Rerank (Hybrid Search)</Label>
+                        <p className="text-xs text-slate-500">Dense + Sparse + RRF（服务端 ranker）</p>
+                      </div>
+                      <Switch checked={useHybridSearch} onCheckedChange={setUseHybridSearch} />
                     </div>
-                    <Switch
-                      checked={useHybridSearch}
-                      onCheckedChange={setUseHybridSearch}
-                    />
+
+                    <div className="border-t pt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <Label className="text-sm">CrossEncoder Rerank</Label>
+                          <p className="text-xs text-slate-500">对检索候选进行语义重排</p>
+                        </div>
+                        <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Rerank Type</Label>
+                          <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="rrf">RRF</SelectItem>
+                              <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Rerank Top K</Label>
+                          <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">Rerank Candidate K</Label>
+                          <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="border-t pt-4 mt-4">

@@ -18,6 +18,7 @@ const navItems = [
   { path: '/', label: 'RAG Chat', icon: MessageSquare },
   { path: '/chunking', label: 'Chunking', icon: FileText },
   { path: '/index', label: 'Index', icon: Database },
+  { path: '/retrieval', label: 'Retrieval', icon: Search },
   { path: '/eval', label: 'Evaluation', icon: BarChart3 },
   {
     path: '/component-eval',
