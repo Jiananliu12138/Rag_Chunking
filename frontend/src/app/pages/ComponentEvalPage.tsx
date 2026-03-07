@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Switch } from '../components/ui/switch';
 import { Slider } from '../components/ui/slider';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import { Tabs, TabsContent } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
 import {
   Dialog,
@@ -209,6 +209,8 @@ function StickinessConfigDialog({
 export default function ComponentEvalPage() {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
+  const initialTab = location.search.includes('section=retrieval') ? 'retrieval' : 'quality';
+  const [activeTab, setActiveTab] = useState<'quality' | 'stickiness' | 'retrieval'>(initialTab as 'quality' | 'stickiness' | 'retrieval');
 
   // ── Chunk Quality – Direct Input ────────────────────────────────────────────
   const [qualityChunksJson, setQualityChunksJson] = useState('');
@@ -275,6 +277,14 @@ export default function ComponentEvalPage() {
     observer.observe(graphContainerRef.current);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (location.search.includes('section=retrieval')) {
+      setActiveTab('retrieval');
+    } else if (activeTab === 'retrieval') {
+      setActiveTab('quality');
+    }
+  }, [location.search, activeTab]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const buildQualityData = useCallback(
@@ -527,12 +537,52 @@ export default function ComponentEvalPage() {
           <p className="text-slate-600">Evaluate chunk quality and stickiness with advanced visualizations</p>
         </div>
 
-        <Tabs defaultValue={location.search.includes('section=retrieval') ? 'retrieval' : 'quality'}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="quality">Chunk Quality</TabsTrigger>
-            <TabsTrigger value="stickiness">Chunk Stickiness</TabsTrigger>
-            <TabsTrigger value="retrieval">Retrieval Evaluation</TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'quality' | 'stickiness' | 'retrieval')}>
+          <div className="mb-6 space-y-3">
+            <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveTab(activeTab === 'retrieval' ? 'quality' : activeTab)}
+                className={activeTab === 'retrieval' ? 'text-slate-600' : 'bg-white shadow-sm text-slate-900'}
+              >
+                Chunk Evaluation
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveTab('retrieval')}
+                className={activeTab === 'retrieval' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600'}
+              >
+                Retrieval Evaluation
+              </Button>
+            </div>
+
+            {activeTab !== 'retrieval' && (
+              <div className="inline-flex p-1 rounded-xl bg-indigo-50 border border-indigo-100">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab('quality')}
+                  className={activeTab === 'quality' ? 'bg-white shadow-sm text-indigo-700' : 'text-indigo-600'}
+                >
+                  Chunk Quality
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab('stickiness')}
+                  className={activeTab === 'stickiness' ? 'bg-white shadow-sm text-indigo-700' : 'text-indigo-600'}
+                >
+                  Chunk Stickiness
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* ── Chunk Quality Tab ─────────────────────────────────────────── */}
           <TabsContent value="quality">

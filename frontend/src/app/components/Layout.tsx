@@ -86,7 +86,7 @@ export default function Layout() {
                 </Link>
 
                 {!collapsed && isSectionActive && item.children?.length ? (
-                  <div className="mt-1 ml-8 space-y-1">
+                  <div className="mt-2 ml-8 space-y-1 rounded-lg border border-slate-800/80 bg-slate-900/40 p-1.5">
                     {item.children.map((child: any) => {
                       const childActive = location.search.includes('section=retrieval')
                         ? child.path.includes('section=retrieval')
@@ -96,13 +96,14 @@ export default function Layout() {
                           key={child.path}
                           to={child.path}
                           className={cn(
-                            'block px-2 py-1.5 rounded text-xs transition-colors',
+                            'flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all',
                             childActive
-                              ? 'bg-slate-800 text-white'
-                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                              ? 'bg-blue-500/20 text-blue-100 border border-blue-400/30'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 border border-transparent'
                           )}
                         >
-                          {child.label}
+                          <span className={cn('h-1.5 w-1.5 rounded-full', childActive ? 'bg-blue-300' : 'bg-slate-500')} />
+                          <span>{child.label}</span>
                         </Link>
                       );
                     })}
