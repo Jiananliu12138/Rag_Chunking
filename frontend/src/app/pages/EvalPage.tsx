@@ -44,6 +44,17 @@ export default function EvalPage() {
   const [ragasDataJson, setRagasDataJson] = useState('');
   const [ragasResult, setRagasResult] = useState<any>(null);
 
+  // Retrieval Eval - Direct Input
+  const [retrievalDataJson, setRetrievalDataJson] = useState('');
+  const [retrievalResult, setRetrievalResult] = useState<any>(null);
+  const [retrievalCuts, setRetrievalCuts] = useState('1,3,5,10');
+  const [retrievalSkipEmptyGold, setRetrievalSkipEmptyGold] = useState(true);
+
+  // Retrieval Eval - File Input
+  const [tempRetrievalPath, setTempRetrievalPath] = useState('');
+  const [retrievalFilePaths, setRetrievalFilePaths] = useState<string[]>([]);
+  const retrievalFileRef = useRef<HTMLInputElement>(null);
+
   // RAGAS Eval - File Input
   const [tempRagasPath, setTempRagasPath] = useState('');
   const [ragasFilePaths, setRagasFilePaths] = useState<string[]>([]);
@@ -169,6 +180,67 @@ export default function EvalPage() {
     }
   };
 
+  const parseCuts = () => {
+    const values = retrievalCuts
+      .split(',')
+      .map((x) => Number(x.trim()))
+      .filter((x) => Number.isFinite(x) && x > 0);
+    return values.length ? values : [1, 3, 5, 10];
+  };
+
+  const handleRetrievalEval = async () => {
+    if (!retrievalDataJson.trim()) {
+      toast.error('Please enter retrieval eval data in JSON format');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const retrievalData = JSON.parse(retrievalDataJson);
+      const response = await api.retrievalEval({
+        test: retrievalData,
+        cuts: parseCuts(),
+        skip_empty_gold: retrievalSkipEmptyGold,
+      });
+
+      if (response.success) {
+        setRetrievalResult(response.data);
+        toast.success('Retrieval evaluation completed');
+      } else {
+        toast.error('Retrieval evaluation failed: ' + response.message);
+      }
+    } catch (error) {
+      toast.error('Invalid JSON format: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRetrievalFileEval = async () => {
+    if (!retrievalFilePaths.length) {
+      toast.error('Please add at least one file path');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await api.retrievalEvalFile({
+        input_path: retrievalFilePaths[0],
+        cuts: parseCuts(),
+        skip_empty_gold: retrievalSkipEmptyGold,
+      });
+
+      if (response.success) {
+        setRetrievalResult(response.data);
+        toast.success('Retrieval file evaluation completed');
+      } else {
+        toast.error('Retrieval file evaluation failed: ' + response.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-7xl mx-auto p-6">
@@ -181,6 +253,7 @@ export default function EvalPage() {
           <TabsList className="mb-6">
             <TabsTrigger value="traditional">Traditional Metrics</TabsTrigger>
             <TabsTrigger value="ragas">RAGAS Evaluation</TabsTrigger>
+            <TabsTrigger value="retrieval">Retrieval Evaluation</TabsTrigger>
           </TabsList>
 
           {/* Traditional Metrics Tab */}
@@ -786,6 +859,188 @@ export default function EvalPage() {
                   <div className="text-center py-12 text-slate-400">
                     <Sparkles className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>RAGAS results will appear here</p>
+                  </div>
+                )}
+              </Card>
+            </div>
+          </TabsContent>
+          {/* Retrieval Tab */}
+          <TabsContent value="retrieval">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-6">
+                <Card className="p-6">
+                  <h2 className="font-bold mb-4 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-600" />
+                    Direct JSON Input
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Retrieval Eval Data (JSON)</Label>
+                      <Textarea
+                        value={retrievalDataJson}
+                        onChange={(e) => setRetrievalDataJson(e.target.value)}
+                        placeholder={'[\n  {\n    "_id": "q1",\n    "rag_retrieval": [{"doc_id":"d1","chunk_id":"0","text":"...","score":0.92}],\n    "gold_reference": [{"doc_id":"d1","chunk_id":"0","text":"..."}]\n  }\n]'}
+                        className="min-h-[280px] font-mono text-xs"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label>Cut Points (comma separated)</Label>
+                        <Input
+                          value={retrievalCuts}
+                          onChange={(e) => setRetrievalCuts(e.target.value)}
+                          placeholder="1,3,5,10"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg self-end">
+                        <div>
+                          <Label className="text-sm">Skip Empty Gold</Label>
+                          <p className="text-xs text-slate-500">Ignore rows without gold_reference</p>
+                        </div>
+                        <Switch
+                          checked={retrievalSkipEmptyGold}
+                          onCheckedChange={setRetrievalSkipEmptyGold}
+                        />
+                      </div>
+                    </div>
+
+                    <Button onClick={handleRetrievalEval} disabled={loading} className="w-full">
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Evaluating...
+                        </>
+                      ) : (
+                        'Start Retrieval Evaluation'
+                      )}
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card className="p-6">
+                  <h2 className="font-bold mb-4 flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    File Evaluation
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Evaluation Data File Path</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={tempRetrievalPath}
+                          onChange={(e) => setTempRetrievalPath(e.target.value)}
+                          placeholder="/path/to/retrieval_eval_data.json or click + to browse"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && tempRetrievalPath.trim()) {
+                              setRetrievalFilePaths([...retrievalFilePaths, tempRetrievalPath.trim()]);
+                              setTempRetrievalPath('');
+                            }
+                          }}
+                        />
+                        <input
+                          type="file"
+                          ref={retrievalFileRef}
+                          accept=".json"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setRetrievalFilePaths([...retrievalFilePaths, file.name]);
+                              if (retrievalFileRef.current) retrievalFileRef.current.value = '';
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (tempRetrievalPath.trim()) {
+                              setRetrievalFilePaths([...retrievalFilePaths, tempRetrievalPath.trim()]);
+                              setTempRetrievalPath('');
+                            } else {
+                              retrievalFileRef.current?.click();
+                            }
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {tempRetrievalPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                      {retrievalFilePaths.length > 0 && (
+                        <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
+                          <div className="p-2 space-y-1">
+                            {retrievalFilePaths.map((path, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200"
+                              >
+                                <span className="text-xs font-mono truncate flex-1">{path}</span>
+                                <Button
+                                  type="button"
+                                  onClick={() => setRetrievalFilePaths(retrievalFilePaths.filter((_, i) => i !== idx))}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </div>
+
+                    <Button onClick={handleRetrievalFileEval} disabled={loading} className="w-full" variant="outline">
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Evaluating...
+                        </>
+                      ) : (
+                        'Evaluate Retrieval from File'
+                      )}
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+
+              <Card className="p-6">
+                <h2 className="font-bold mb-4">Retrieval Results</h2>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                  </div>
+                ) : retrievalResult ? (
+                  <ScrollArea className="h-[600px]">
+                    <div className="space-y-6">
+                      {retrievalResult.aggregated && (
+                        <div>
+                          <h3 className="text-sm font-medium mb-3">Aggregated Metrics</h3>
+                          <div className="grid grid-cols-2 gap-3">
+                            {Object.entries(retrievalResult.aggregated).map(([key, value]) => (
+                              <div key={key} className="p-3 bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200">
+                                <div className="text-xs text-slate-600 mb-1">{key}</div>
+                                <div className="text-xl font-bold text-indigo-900">{Number(value).toFixed(4)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">Complete Results</h3>
+                        <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto">
+                          {JSON.stringify(retrievalResult, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center py-12 text-slate-400">
+                    <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>Retrieval results will appear here</p>
                   </div>
                 )}
               </Card>

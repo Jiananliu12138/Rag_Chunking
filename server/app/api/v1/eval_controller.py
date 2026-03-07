@@ -8,6 +8,9 @@ from app.schemas.eval_schema import (
     RAGASEvalFileRequest,
     RAGASEvalRequest,
     RAGASEvalResult,
+    RetrievalEvalFileRequest,
+    RetrievalEvalRequest,
+    RetrievalEvalResult,
     TraditionalEvalFileRequest,
     TraditionalEvalRequest,
     TraditionalEvalResult,
@@ -160,6 +163,52 @@ def evaluate_ragas_file(
 ) -> BaseResponse[RAGASEvalResult]:
     try:
         result = service.evaluate_ragas_file(request)
+        return BaseResponse.ok(result)
+    except EvaluationException as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/retrieval",
+    response_model=BaseResponse[RetrievalEvalResult],
+    summary="检索质量评估（Retrieval）",
+    description=(
+        "评估检索结果与标注参考之间的一致性，输出 MAP / MRR / nDCG / R-Precision 以及 P@k、Recall@k、nDCG@k。\n\n"
+        "输入支持对象或对象列表，每项至少包含：`rag_retrieval` 与 `gold_reference`。"
+    ),
+    responses={422: _ERR_422, 500: _ERR_500},
+)
+def evaluate_retrieval(
+    request: RetrievalEvalRequest,
+    service: Annotated[EvalService, Depends(_get_eval_service)],
+) -> BaseResponse[RetrievalEvalResult]:
+    try:
+        result = service.evaluate_retrieval(request)
+        return BaseResponse.ok(result)
+    except EvaluationException as exc:
+        raise to_http_exception(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/retrieval-file",
+    response_model=BaseResponse[RetrievalEvalResult],
+    summary="检索质量评估（从文件读取）",
+    description=(
+        "从 JSON 文件读取检索结果并评估。\n\n"
+        "文件可为单个对象或对象列表，字段格式与 `/eval/retrieval` 一致。"
+    ),
+    responses={422: _ERR_422, 500: _ERR_500},
+)
+def evaluate_retrieval_file(
+    request: RetrievalEvalFileRequest,
+    service: Annotated[EvalService, Depends(_get_eval_service)],
+) -> BaseResponse[RetrievalEvalResult]:
+    try:
+        result = service.evaluate_retrieval_file(request)
         return BaseResponse.ok(result)
     except EvaluationException as exc:
         raise to_http_exception(exc)

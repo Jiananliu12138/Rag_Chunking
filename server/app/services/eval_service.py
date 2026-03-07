@@ -15,6 +15,9 @@ from app.schemas.eval_schema import (
     RAGASEvalResult,
     RAGASMetricSummary,
     RAGASSummary,
+    RetrievalEvalFileRequest,
+    RetrievalEvalRequest,
+    RetrievalEvalResult,
     TraditionalEvalFileRequest,
     TraditionalEvalRequest,
     TraditionalEvalResult,
@@ -290,3 +293,65 @@ class EvalService:
         except Exception as exc:
             logger.exception("RAGAS 文件评估失败: %s", exc)
             raise EvaluationException(f"RAGAS 文件评估失败: {exc}") from exc
+
+    # ── Retrieval 评估 ───────────────────────────────────────────────────────
+
+    def evaluate_retrieval(self, request: RetrievalEvalRequest) -> RetrievalEvalResult:
+        ensure_paths()
+        cuts = tuple(request.cuts) if request.cuts else (1, 3, 5, 10)
+        skip_empty_gold = (
+            request.skip_empty_gold
+            if request.skip_empty_gold is not None
+            else True
+        )
+
+        try:
+            from eval_retrieval import RetrievalEvaluator  # noqa: PLC0415
+
+            evaluator = RetrievalEvaluator(cuts=cuts, skip_empty_gold=skip_empty_gold)
+            rows = request.test if isinstance(request.test, list) else [request.test]
+            rows = [x for x in rows if isinstance(x, dict)]
+            if not rows:
+                raise EvaluationException("Retrieval 评估必须提供对象或对象列表格式的 test")
+
+            raw = evaluator.evaluate_rows(rows)
+            return RetrievalEvalResult(
+                meta=raw.get("meta", {}),
+                aggregated=raw.get("aggregated", {}),
+                per_query=raw.get("per_query", {}),
+                diagnostics=raw.get("diagnostics", []),
+            )
+        except Exception as exc:
+            logger.exception("Retrieval 评估失败: %s", exc)
+            raise EvaluationException(f"Retrieval 评估失败: {exc}") from exc
+
+    def evaluate_retrieval_file(self, request: RetrievalEvalFileRequest) -> RetrievalEvalResult:
+        ensure_paths()
+        cuts = tuple(request.cuts) if request.cuts else (1, 3, 5, 10)
+        skip_empty_gold = (
+            request.skip_empty_gold
+            if request.skip_empty_gold is not None
+            else True
+        )
+
+        try:
+            from eval_retrieval import RetrievalEvaluator  # noqa: PLC0415
+
+            evaluator = RetrievalEvaluator(cuts=cuts, skip_empty_gold=skip_empty_gold)
+            if request.output_path:
+                raw = evaluator.evaluate_file(request.input_path, request.output_path)
+            else:
+                rows = evaluator._load_rows(request.input_path)
+                raw = evaluator.evaluate_rows(rows)
+
+            return RetrievalEvalResult(
+                meta=raw.get("meta", {}),
+                aggregated=raw.get("aggregated", {}),
+                per_query=raw.get("per_query", {}),
+                diagnostics=raw.get("diagnostics", []),
+            )
+        except FileNotFoundError as exc:
+            raise EvaluationException(f"输入文件不存在: {exc}") from exc
+        except Exception as exc:
+            logger.exception("Retrieval 文件评估失败: %s", exc)
+            raise EvaluationException(f"Retrieval 文件评估失败: {exc}") from exc

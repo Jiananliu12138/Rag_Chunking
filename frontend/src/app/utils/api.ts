@@ -95,6 +95,14 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
+  retrievalEval: (data: any) => fetchApi('/eval/retrieval', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  retrievalEvalFile: (data: any) => fetchApi('/eval/retrieval-file', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
 
   // Component Eval
   chunkQuality: (data: any) => fetchApi('/component-eval/chunk-quality', {

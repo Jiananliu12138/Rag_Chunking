@@ -421,3 +421,74 @@ class TraditionalEvalFileRequest(BaseModel):
     bert_score_device: Optional[str] = Field(
         None, description="BERTScore 计算设备（可选，未提供时从配置读取 DEFAULT_BERT_SCORE_DEVICE）"
     )
+
+
+# ── 检索质量评估（Retrieval）──────────────────────────────────────────────────
+
+class RetrievalEvalRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "test": [
+                    {
+                        "_id": "q1",
+                        "rag_retrieval": [
+                            {"doc_id": "doc_1", "chunk_id": "0", "text": "...", "score": 0.92}
+                        ],
+                        "gold_reference": [
+                            {"doc_id": "doc_1", "chunk_id": "0", "text": "..."}
+                        ],
+                    }
+                ],
+                "cuts": [1, 3, 5, 10],
+                "skip_empty_gold": True,
+            }
+        }
+    )
+
+    test: Any = Field(
+        ...,
+        description=(
+            "必填：检索评估原始 JSON（对象或对象列表），每项至少包含 "
+            "rag_retrieval（检索结果列表）与 gold_reference（标注列表）。"
+        ),
+    )
+    cuts: Optional[list[int]] = Field(
+        None,
+        description="可选：评估 cut 点（如 [1,3,5,10]），未提供时使用服务端默认配置。",
+    )
+    skip_empty_gold: Optional[bool] = Field(
+        None,
+        description="可选：是否跳过 gold_reference 为空的样本，未提供时使用服务端默认配置。",
+    )
+
+
+class RetrievalEvalFileRequest(BaseModel):
+    """从 JSON 文件读取检索结果并评估。"""
+
+    input_path: str = Field(
+        ...,
+        description=(
+            "输入 JSON 文件路径（对象或对象列表），每项至少包含 "
+            "rag_retrieval 与 gold_reference 字段。"
+        ),
+    )
+    output_path: Optional[str] = Field(
+        None,
+        description="可选：若提供则将评估结果写入该 JSON 文件；未提供则仅返回结果。",
+    )
+    cuts: Optional[list[int]] = Field(
+        None,
+        description="可选：评估 cut 点（如 [1,3,5,10]），未提供时使用服务端默认配置。",
+    )
+    skip_empty_gold: Optional[bool] = Field(
+        None,
+        description="可选：是否跳过 gold_reference 为空的样本，未提供时使用服务端默认配置。",
+    )
+
+
+class RetrievalEvalResult(BaseModel):
+    meta: dict[str, Any]
+    aggregated: dict[str, float]
+    per_query: dict[str, dict[str, float]]
+    diagnostics: list[dict[str, Any]]
