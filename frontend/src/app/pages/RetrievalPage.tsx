@@ -627,15 +627,15 @@ export default function RetrievalPage() {
 
         {/* Batch Processing Tab */}
         <TabsContent value="batch">
-          <Card className="p-6 max-w-4xl mx-auto">
+          <Card className="p-6 max-w-5xl mx-auto">
             <h2 className="font-bold mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5" />
               Batch RAG Generation
             </h2>
             <div className="space-y-4 mb-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Input file path</Label>
+                  <Label>Input file path (.jsonl)</Label>
                   <Input
                     value={inputPath}
                     onChange={(e) => setInputPath(e.target.value)}
@@ -643,7 +643,7 @@ export default function RetrievalPage() {
                   />
                 </div>
                 <div>
-                  <Label>Output file path</Label>
+                  <Label>Output file path (.json)</Label>
                   <Input
                     value={outputPath}
                     onChange={(e) => setOutputPath(e.target.value)}
@@ -652,7 +652,7 @@ export default function RetrievalPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Collection Name</Label>
                   <Input
@@ -666,9 +666,101 @@ export default function RetrievalPage() {
                   <Input
                     type="number"
                     value={topK}
-                    onChange={(e) => setTopK(parseInt(e.target.value))}
+                    onChange={(e) => setTopK(parseInt(e.target.value || '1'))}
                   />
                 </div>
+                <div>
+                  <Label>Embed Dim</Label>
+                  <Input
+                    type="number"
+                    value={embedDim}
+                    onChange={(e) => setEmbedDim(parseInt(e.target.value || '1'))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Embedding model path (optional)</Label>
+                <Input
+                  value={embedModelPath}
+                  onChange={(e) => setEmbedModelPath(e.target.value)}
+                  placeholder="Leave empty to use server default"
+                />
+              </div>
+
+              <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">RRF Rerank (Hybrid Search)</Label>
+                    <p className="text-xs text-slate-500">Dense + Sparse + RRF (server ranker)</p>
+                  </div>
+                  <Switch checked={useHybridSearch} onCheckedChange={setUseHybridSearch} />
+                </div>
+
+                <div className="border-t pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <Label className="text-sm">CrossEncoder Rerank</Label>
+                      <p className="text-xs text-slate-500">Semantic rerank for retrieval candidates</p>
+                    </div>
+                    <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Rerank Type</Label>
+                      <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="rrf">RRF</SelectItem>
+                          <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Rerank Device</Label>
+                      <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder="cpu / cuda:0" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Rerank Top K</Label>
+                      <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Rerank Candidate K</Label>
+                      <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
+                    </div>
+                    <div className="col-span-2">
+                      <Label className="text-xs">CrossEncoder model path (optional)</Label>
+                      <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} placeholder="Leave empty to use server default" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                <div>
+                  <Label>LLM API Base (optional)</Label>
+                  <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} placeholder="http://localhost:8000/v1" />
+                </div>
+                <div>
+                  <Label>LLM Model Name (optional)</Label>
+                  <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} placeholder="Qwen2.5-7B-Instruct" />
+                </div>
+                <div>
+                  <Label>Temperature</Label>
+                  <Input type="number" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value || '0'))} />
+                </div>
+                <div>
+                  <Label>Max New Tokens</Label>
+                  <Input type="number" value={maxNewTokens} onChange={(e) => setMaxNewTokens(parseInt(e.target.value || '1'))} />
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg border bg-slate-50 text-xs text-slate-600">
+                Pipeline mapping:{' '}
+                <span className="font-medium">chunk-file output {'->'} index build input</span>
+                {' '}and{' '}
+                <span className="font-medium">retrieval output {'->'} retrieval eval</span>.
               </div>
             </div>
 
