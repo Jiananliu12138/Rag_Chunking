@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type KeyboardEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -75,6 +75,16 @@ export default function RetrievalPage() {
   const clearFilters = () => {
     setFilepath([]);
     setDocId([]);
+  };
+
+  const tabFill = (
+    setter: (value: string) => void,
+  ) => (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key !== 'Tab') return;
+    const current = e.currentTarget;
+    if (!current.value?.trim() && current.placeholder?.trim()) {
+      setter(current.placeholder);
+    }
   };
 
   useEffect(() => {
@@ -246,7 +256,7 @@ export default function RetrievalPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Embedding model path</Label>
-                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} placeholder="Leave empty to use server default" />
+                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} onKeyDown={tabFill(setEmbedModelPath)} placeholder="Leave empty to use server default" />
               </div>
               <div>
                 <Label>Embed Dim</Label>
@@ -254,15 +264,15 @@ export default function RetrievalPage() {
               </div>
               <div>
                 <Label>LLM API Base</Label>
-                <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} placeholder="http://localhost:8005/v1" />
+                <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder="http://localhost:8005/v1" />
               </div>
               <div>
                 <Label>LLM Model</Label>
-                <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} placeholder="Qwen2.5-7B-Instruct" />
+                <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} onKeyDown={tabFill(setLlmModelName)} placeholder="Qwen2.5-7B-Instruct" />
               </div>
               <div>
                 <Label>CrossEncoder model path</Label>
-                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} placeholder="Leave empty to use server default" />
+                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="Leave empty to use server default" />
               </div>
               <div>
                 <Label>Rerank Device</Label>
@@ -292,6 +302,7 @@ export default function RetrievalPage() {
                     <Textarea
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
+                      onKeyDown={tabFill(setQuery)}
                       placeholder="Type query..."
                       className="min-h-[100px]"
                     />
@@ -302,6 +313,7 @@ export default function RetrievalPage() {
                     <Input
                       value={collectionName}
                       onChange={(e) => setCollectionName(e.target.value)}
+                      onKeyDown={tabFill(setCollectionName)}
                       placeholder="my_collection"
                     />
                   </div>
@@ -311,6 +323,7 @@ export default function RetrievalPage() {
                     <Input
                       value={embedModelPath}
                       onChange={(e) => setEmbedModelPath(e.target.value)}
+                      onKeyDown={tabFill(setEmbedModelPath)}
                       placeholder="Leave empty to use server default"
                     />
                   </div>
@@ -473,6 +486,7 @@ export default function RetrievalPage() {
                         <Input
                           value={llmApiBase}
                           onChange={(e) => setLlmApiBase(e.target.value)}
+                          onKeyDown={tabFill(setLlmApiBase)}
                           placeholder="http://localhost:8000/v1"
                         />
                       </div>
@@ -481,6 +495,7 @@ export default function RetrievalPage() {
                         <Input
                           value={llmModelName}
                           onChange={(e) => setLlmModelName(e.target.value)}
+                          onKeyDown={tabFill(setLlmModelName)}
                           placeholder="gpt-3.5-turbo"
                         />
                       </div>
@@ -639,6 +654,7 @@ export default function RetrievalPage() {
                   <Input
                     value={inputPath}
                     onChange={(e) => setInputPath(e.target.value)}
+                    onKeyDown={tabFill(setInputPath)}
                     placeholder="/path/to/input.jsonl"
                   />
                 </div>
@@ -647,6 +663,7 @@ export default function RetrievalPage() {
                   <Input
                     value={outputPath}
                     onChange={(e) => setOutputPath(e.target.value)}
+                    onKeyDown={tabFill(setOutputPath)}
                     placeholder="/path/to/output.json"
                   />
                 </div>
@@ -658,6 +675,7 @@ export default function RetrievalPage() {
                   <Input
                     value={collectionName}
                     onChange={(e) => setCollectionName(e.target.value)}
+                    onKeyDown={tabFill(setCollectionName)}
                     placeholder="my_collection"
                   />
                 </div>
@@ -684,6 +702,7 @@ export default function RetrievalPage() {
                 <Input
                   value={embedModelPath}
                   onChange={(e) => setEmbedModelPath(e.target.value)}
+                  onKeyDown={tabFill(setEmbedModelPath)}
                   placeholder="Leave empty to use server default"
                 />
               </div>
@@ -719,7 +738,7 @@ export default function RetrievalPage() {
                     </div>
                     <div>
                       <Label className="text-xs">Rerank Device</Label>
-                      <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder="cpu / cuda:0" />
+                      <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder="cpu / cuda:0" />
                     </div>
                     <div>
                       <Label className="text-xs">Rerank Top K</Label>
@@ -731,7 +750,7 @@ export default function RetrievalPage() {
                     </div>
                     <div className="col-span-2">
                       <Label className="text-xs">CrossEncoder model path (optional)</Label>
-                      <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} placeholder="Leave empty to use server default" />
+                      <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="Leave empty to use server default" />
                     </div>
                   </div>
                 </div>
@@ -740,11 +759,11 @@ export default function RetrievalPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
                 <div>
                   <Label>LLM API Base (optional)</Label>
-                  <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} placeholder="http://localhost:8000/v1" />
+                  <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder="http://localhost:8000/v1" />
                 </div>
                 <div>
                   <Label>LLM Model Name (optional)</Label>
-                  <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} placeholder="Qwen2.5-7B-Instruct" />
+                  <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} onKeyDown={tabFill(setLlmModelName)} placeholder="Qwen2.5-7B-Instruct" />
                 </div>
                 <div>
                   <Label>Temperature</Label>
