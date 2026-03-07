@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -206,6 +207,7 @@ function StickinessConfigDialog({
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function ComponentEvalPage() {
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
 
   // ── Chunk Quality – Direct Input ────────────────────────────────────────────
@@ -525,7 +527,7 @@ export default function ComponentEvalPage() {
           <p className="text-slate-600">Evaluate chunk quality and stickiness with advanced visualizations</p>
         </div>
 
-        <Tabs defaultValue="quality">
+        <Tabs defaultValue={location.search.includes('section=retrieval') ? 'retrieval' : 'quality'}>
           <TabsList className="mb-6">
             <TabsTrigger value="quality">Chunk Quality</TabsTrigger>
             <TabsTrigger value="stickiness">Chunk Stickiness</TabsTrigger>

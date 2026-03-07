@@ -19,7 +19,15 @@ const navItems = [
   { path: '/chunking', label: 'Chunking', icon: FileText },
   { path: '/index', label: 'Index', icon: Database },
   { path: '/eval', label: 'Evaluation', icon: BarChart3 },
-  { path: '/component-eval', label: 'Component Eval', icon: Cpu },
+  {
+    path: '/component-eval',
+    label: 'Component Eval',
+    icon: Cpu,
+    children: [
+      { path: '/component-eval?section=chunk', label: 'Chunk Evaluation' },
+      { path: '/component-eval?section=retrieval', label: 'Retrieval Evaluation' },
+    ],
+  },
 ];
 
 export default function Layout() {
@@ -57,24 +65,50 @@ export default function Layout() {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
-            
+            const isSectionActive = location.pathname === '/component-eval' && item.path === '/component-eval';
+
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group",
-                  isActive
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                )}
-                title={collapsed ? item.label : undefined}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                {!collapsed && (
-                  <span className="text-sm font-medium">{item.label}</span>
-                )}
-              </Link>
+              <div key={item.path}>
+                <Link
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group",
+                    isActive
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  )}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  {!collapsed && (
+                    <span className="text-sm font-medium">{item.label}</span>
+                  )}
+                </Link>
+
+                {!collapsed && isSectionActive && item.children?.length ? (
+                  <div className="mt-1 ml-8 space-y-1">
+                    {item.children.map((child: any) => {
+                      const childActive = location.search.includes('section=retrieval')
+                        ? child.path.includes('section=retrieval')
+                        : child.path.includes('section=chunk');
+                      return (
+                        <Link
+                          key={child.path}
+                          to={child.path}
+                          className={cn(
+                            'block px-2 py-1.5 rounded text-xs transition-colors',
+                            childActive
+                              ? 'bg-slate-800 text-white'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                          )}
+                        >
+                          {child.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </nav>
