@@ -17,7 +17,7 @@ import {
   DialogTrigger,
 } from '../components/ui/dialog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, FolderOpen, Plus, X } from 'lucide-react';
+import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, FolderOpen, Plus, X, BarChart3, Sparkles } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -246,6 +246,15 @@ export default function ComponentEvalPage() {
   const [stickinessVllmApiBase, setStickinessVllmApiBase] = useState('http://localhost:8005/v1');
   const [stickinessVllmModelName, setStickinessVllmModelName] = useState('');
 
+  // ── Retrieval Eval ─────────────────────────────────────────────────────────
+  const [retrievalDataJson, setRetrievalDataJson] = useState('');
+  const [retrievalResult, setRetrievalResult] = useState<any>(null);
+  const [retrievalCuts, setRetrievalCuts] = useState('1,3,5,10');
+  const [retrievalSkipEmptyGold, setRetrievalSkipEmptyGold] = useState(true);
+  const [tempRetrievalPath, setTempRetrievalPath] = useState('');
+  const [retrievalFilePaths, setRetrievalFilePaths] = useState<string[]>([]);
+  const retrievalFileRef = useRef<HTMLInputElement>(null);
+
   // ── Force graph container sizing ───────────────────────────────────────────
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const [graphSize, setGraphSize] = useState({ width: 460, height: 480 });
@@ -394,6 +403,67 @@ export default function ComponentEvalPage() {
     }
   };
 
+  const parseCuts = () => {
+    const values = retrievalCuts
+      .split(',')
+      .map((x) => Number(x.trim()))
+      .filter((x) => Number.isFinite(x) && x > 0);
+    return values.length ? values : [1, 3, 5, 10];
+  };
+
+  const handleRetrievalEval = async () => {
+    if (!retrievalDataJson.trim()) {
+      toast.error('Please enter retrieval eval data in JSON format');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const retrievalData = JSON.parse(retrievalDataJson);
+      const response = await api.retrievalEval({
+        test: retrievalData,
+        cuts: parseCuts(),
+        skip_empty_gold: retrievalSkipEmptyGold,
+      });
+
+      if (response.success) {
+        setRetrievalResult(response.data);
+        toast.success('Retrieval evaluation completed');
+      } else {
+        toast.error('Retrieval evaluation failed: ' + response.message);
+      }
+    } catch (error) {
+      toast.error('Invalid JSON format: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRetrievalFileEval = async () => {
+    if (!retrievalFilePaths.length) {
+      toast.error('Please add at least one file path');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await api.retrievalEvalFile({
+        input_path: retrievalFilePaths[0],
+        cuts: parseCuts(),
+        skip_empty_gold: retrievalSkipEmptyGold,
+      });
+
+      if (response.success) {
+        setRetrievalResult(response.data);
+        toast.success('Retrieval file evaluation completed');
+      } else {
+        toast.error('Retrieval file evaluation failed: ' + response.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Auto re-evaluate on param change（仅在非 loading 状态下触发）
   useEffect(() => {
     if (!stickinessChunksJson || !stickinessResult || loading) return;
@@ -459,6 +529,7 @@ export default function ComponentEvalPage() {
           <TabsList className="mb-6">
             <TabsTrigger value="quality">Chunk Quality</TabsTrigger>
             <TabsTrigger value="stickiness">Chunk Stickiness</TabsTrigger>
+            <TabsTrigger value="retrieval">Retrieval Evaluation</TabsTrigger>
           </TabsList>
 
           {/* ── Chunk Quality Tab ─────────────────────────────────────────── */}
@@ -1033,6 +1104,134 @@ export default function ComponentEvalPage() {
                   </Card>
                 </>
               ) : null}
+            </div>
+          </TabsContent>
+
+          {/* ── Retrieval Evaluation Tab ─────────────────────────────────── */}
+          <TabsContent value="retrieval">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-6">
+                <Card className="p-6">
+                  <h2 className="font-bold mb-4 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-600" />
+                    Direct JSON Input
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Retrieval Eval Data (JSON)</Label>
+                      <Textarea
+                        value={retrievalDataJson}
+                        onChange={(e) => setRetrievalDataJson(e.target.value)}
+                        placeholder={'[\n  {\n    "_id": "q1",\n    "rag_retrieval": [{"doc_id":"d1","chunk_id":"0","text":"...","retrieval_score":0.92}],\n    "gold_reference": [{"doc_id":"d1","chunk_id":"0","text":"..."}]\n  }\n]'}
+                        className="min-h-[280px] font-mono text-xs"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label>Cut Points (comma separated)</Label>
+                        <Input value={retrievalCuts} onChange={(e) => setRetrievalCuts(e.target.value)} placeholder="1,3,5,10" />
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg self-end">
+                        <div>
+                          <Label className="text-sm">Skip Empty Gold</Label>
+                          <p className="text-xs text-slate-500">Ignore rows without gold_reference</p>
+                        </div>
+                        <Switch checked={retrievalSkipEmptyGold} onCheckedChange={setRetrievalSkipEmptyGold} />
+                      </div>
+                    </div>
+
+                    <Button onClick={handleRetrievalEval} disabled={loading} className="w-full">
+                      {loading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</>) : ('Start Retrieval Evaluation')}
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card className="p-6">
+                  <h2 className="font-bold mb-4 flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    File Evaluation
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Evaluation Data File Path</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={tempRetrievalPath}
+                          onChange={(e) => setTempRetrievalPath(e.target.value)}
+                          placeholder="/path/to/retrieval_eval_data.json or click + to browse"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && tempRetrievalPath.trim()) {
+                              setRetrievalFilePaths([...retrievalFilePaths, tempRetrievalPath.trim()]);
+                              setTempRetrievalPath('');
+                            }
+                          }}
+                        />
+                        <input
+                          type="file"
+                          ref={retrievalFileRef}
+                          accept=".json"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setRetrievalFilePaths([...retrievalFilePaths, file.name]);
+                              if (retrievalFileRef.current) retrievalFileRef.current.value = '';
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (tempRetrievalPath.trim()) {
+                              setRetrievalFilePaths([...retrievalFilePaths, tempRetrievalPath.trim()]);
+                              setTempRetrievalPath('');
+                            } else {
+                              retrievalFileRef.current?.click();
+                            }
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {tempRetrievalPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Button onClick={handleRetrievalFileEval} disabled={loading} className="w-full" variant="outline">
+                      {loading ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</>) : ('Evaluate Retrieval from File')}
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+
+              <Card className="p-6">
+                <h2 className="font-bold mb-4">Retrieval Results</h2>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>
+                ) : retrievalResult ? (
+                  <ScrollArea className="h-[600px]">
+                    <div className="space-y-6">
+                      {retrievalResult.aggregated && (
+                        <div>
+                          <h3 className="text-sm font-medium mb-3">Aggregated Metrics</h3>
+                          <div className="grid grid-cols-2 gap-3">
+                            {Object.entries(retrievalResult.aggregated).map(([key, value]) => (
+                              <div key={key} className="p-3 bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200">
+                                <div className="text-xs text-slate-600 mb-1">{key}</div>
+                                <div className="text-xl font-bold text-indigo-900">{Number(value).toFixed(4)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto">{JSON.stringify(retrievalResult, null, 2)}</pre>
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center py-12 text-slate-400"><BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Retrieval results will appear here</p></div>
+                )}
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
