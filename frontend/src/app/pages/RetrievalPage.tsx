@@ -726,34 +726,36 @@ export default function RetrievalPage() {
                     <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs">Rerank Type</Label>
-                      <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="rrf">RRF</SelectItem>
-                          <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  {rerankEnabled && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Rerank Type</Label>
+                        <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="rrf">RRF</SelectItem>
+                            <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Rerank Device</Label>
+                        <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder="cpu / cuda:0" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Rerank Top K</Label>
+                        <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Rerank Candidate K</Label>
+                        <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">CrossEncoder model path (optional)</Label>
+                        <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="Leave empty to use server default" />
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-xs">Rerank Device</Label>
-                      <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder="cpu / cuda:0" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Rerank Top K</Label>
-                      <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Rerank Candidate K</Label>
-                      <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
-                    </div>
-                    <div className="col-span-2">
-                      <Label className="text-xs">CrossEncoder model path (optional)</Label>
-                      <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="Leave empty to use server default" />
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 

@@ -745,54 +745,56 @@ export default function Home() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs">Rerank Type</Label>
-                          <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
-                            <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="rrf">RRF</SelectItem>
-                              <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
-                            </SelectContent>
-                          </Select>
+                      {rerankEnabled && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Rerank Type</Label>
+                            <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
+                              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="rrf">RRF</SelectItem>
+                                <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Rerank Device</Label>
+                            <Input
+                              value={rerankDevice}
+                              onChange={(e) => setRerankDevice(e.target.value)}
+                              placeholder="cpu / cuda:0"
+                              className="mt-1 h-8 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Candidate K</Label>
+                            <Input
+                              type="number"
+                              value={rerankCandidateK}
+                              onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))}
+                              className="mt-1 h-8 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Rerank Top K</Label>
+                            <Input
+                              type="number"
+                              value={rerankTopK}
+                              onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))}
+                              className="mt-1 h-8 text-xs"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">CrossEncoder Model Path</Label>
+                            <Input
+                              value={rerankModelPath}
+                              onChange={(e) => setRerankModelPath(e.target.value)}
+                              placeholder="Leave empty to use server default"
+                              className="mt-1 h-8 text-xs"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <Label className="text-xs">Rerank Device</Label>
-                          <Input
-                            value={rerankDevice}
-                            onChange={(e) => setRerankDevice(e.target.value)}
-                            placeholder="cpu / cuda:0"
-                            className="mt-1 h-8 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Candidate K</Label>
-                          <Input
-                            type="number"
-                            value={rerankCandidateK}
-                            onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))}
-                            className="mt-1 h-8 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Rerank Top K</Label>
-                          <Input
-                            type="number"
-                            value={rerankTopK}
-                            onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))}
-                            className="mt-1 h-8 text-xs"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <Label className="text-xs">CrossEncoder Model Path</Label>
-                          <Input
-                            value={rerankModelPath}
-                            onChange={(e) => setRerankModelPath(e.target.value)}
-                            placeholder="Leave empty to use server default"
-                            className="mt-1 h-8 text-xs"
-                          />
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
