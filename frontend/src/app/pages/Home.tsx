@@ -78,6 +78,12 @@ export default function Home() {
   const [topK, setTopK] = useState(5);
   const [enableRag, setEnableRag] = useState(true);
   const [useHybridSearch, setUseHybridSearch] = useState(false);
+  const [rerankEnabled, setRerankEnabled] = useState(false);
+  const [rerankType, setRerankType] = useState<'rrf' | 'cross_encoder'>('rrf');
+  const [rerankModelPath, setRerankModelPath] = useState('');
+  const [rerankDevice, setRerankDevice] = useState('cpu');
+  const [rerankCandidateK, setRerankCandidateK] = useState(20);
+  const [rerankTopK, setRerankTopK] = useState(5);
   const [llmApiBase, setLlmApiBase] = useState('http://localhost:8005/v1');
   const [llmModelName, setLlmModelName] = useState('');
   const [temperature, setTemperature] = useState(0.1);
@@ -188,6 +194,12 @@ export default function Home() {
         top_k: topK,
         enable_rag: enableRag,
         use_hybrid_search: useHybridSearch || undefined,
+        rerank_enabled: rerankEnabled && rerankType === 'cross_encoder',
+        rerank_type: 'cross_encoder',
+        rerank_model_path: rerankEnabled && rerankType === 'cross_encoder' ? (rerankModelPath || undefined) : undefined,
+        rerank_device: rerankDevice,
+        rerank_candidate_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankCandidateK : undefined,
+        rerank_top_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankTopK : undefined,
         filepath: filterFilepath.length > 0 ? filterFilepath : undefined,
         doc_id: filterDocId.length > 0 ? filterDocId : undefined,
         llm_api_base: llmApiBase,
@@ -709,15 +721,79 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div>
-                      <Label className="text-xs font-medium">Hybrid Search</Label>
-                      <p className="text-xs text-slate-500">Dense + Sparse</p>
+                  <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-xs font-medium">Hybrid Search (RRF)</Label>
+                        <p className="text-xs text-slate-500">Dense + Sparse + RRF rank fusion</p>
+                      </div>
+                      <Switch
+                        checked={useHybridSearch}
+                        onCheckedChange={setUseHybridSearch}
+                      />
                     </div>
-                    <Switch
-                      checked={useHybridSearch}
-                      onCheckedChange={setUseHybridSearch}
-                    />
+
+                    <div className="border-t pt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <Label className="text-xs font-medium">CrossEncoder Rerank</Label>
+                          <p className="text-xs text-slate-500">Enable semantic rerank for candidates</p>
+                        </div>
+                        <Switch
+                          checked={rerankEnabled}
+                          onCheckedChange={setRerankEnabled}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Rerank Type</Label>
+                          <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
+                            <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="rrf">RRF</SelectItem>
+                              <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Rerank Device</Label>
+                          <Input
+                            value={rerankDevice}
+                            onChange={(e) => setRerankDevice(e.target.value)}
+                            placeholder="cpu / cuda:0"
+                            className="mt-1 h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Candidate K</Label>
+                          <Input
+                            type="number"
+                            value={rerankCandidateK}
+                            onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))}
+                            className="mt-1 h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Rerank Top K</Label>
+                          <Input
+                            type="number"
+                            value={rerankTopK}
+                            onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))}
+                            className="mt-1 h-8 text-xs"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">CrossEncoder Model Path</Label>
+                          <Input
+                            value={rerankModelPath}
+                            onChange={(e) => setRerankModelPath(e.target.value)}
+                            placeholder="Leave empty to use server default"
+                            className="mt-1 h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

@@ -237,7 +237,8 @@ export default function RetrievalPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="h-full overflow-auto">
+      <div className="max-w-7xl mx-auto p-6 pb-12">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold mb-2">Retrieval & RAG</h1>
@@ -642,7 +643,7 @@ export default function RetrievalPage() {
 
         {/* Batch Processing Tab */}
         <TabsContent value="batch">
-          <Card className="p-6 max-w-5xl mx-auto">
+          <Card className="p-6">
             <h2 className="font-bold mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5" />
               Batch RAG Generation
@@ -812,6 +813,7 @@ export default function RetrievalPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }
