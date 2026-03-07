@@ -107,8 +107,8 @@ async def rag_generate(
     description=(
         "仿照 eval/LongBench/retrieval_lite.py：从 **jsonl 文件** 读入问题列表，逐条执行检索与 vLLM 生成，"
         "结果写入 **JSON 文件**。\n\n"
-        "**输入**：每行一个 JSON，需含 `input`（或 `query`）作为检索查询，以及 `_id`、`answers` 等。\n"
-        "**输出**：单个 JSON 数组，每项为 `{_id, input, llm_ans, answers, retrieval_list}`。\n\n"
+        "**输入**：每行一个 JSON，需含 `input`（或 `query`）作为检索查询，以及可选的 `reference_contexts` / `meta.reference_contexts`。\n"
+        "**输出**：单个 JSON 数组，每项为 `{_id, input, llm_ans, answer, rag_retrieval, gold_reference}`（与 retrieval_api.py 对齐）。\n\n"
         "嵌入模型、vLLM 地址/模型名等未填时从配置（.env）读取。"
     ),
     responses={404: _ERR_404, 500: _ERR_500},

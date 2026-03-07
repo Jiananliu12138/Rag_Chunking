@@ -26,6 +26,39 @@ from app.schemas.eval_schema import (
 
 class EvalService:
 
+    @staticmethod
+    def _normalize_retrieval_rows(rows: list[dict]) -> list[dict]:
+        """
+        对齐 retrieval_api.py / retrieval_service.py 生成格式：
+        - rag_retrieval 里若没有 score，则回退使用 rerank_score 或 retrieval_score
+        - 字段缺失时补默认空列表，保证评估器稳定
+        """
+        normalized: list[dict] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            rag_items = row.get("rag_retrieval") if isinstance(row.get("rag_retrieval"), list) else []
+            norm_rag: list[dict] = []
+            for item in rag_items:
+                if not isinstance(item, dict):
+                    continue
+                score = item.get("score")
+                if score is None:
+                    score = item.get("rerank_score")
+                if score is None:
+                    score = item.get("retrieval_score")
+                merged = dict(item)
+                if score is not None:
+                    merged["score"] = score
+                norm_rag.append(merged)
+
+            gold = row.get("gold_reference") if isinstance(row.get("gold_reference"), list) else []
+            merged_row = dict(row)
+            merged_row["rag_retrieval"] = norm_rag
+            merged_row["gold_reference"] = gold
+            normalized.append(merged_row)
+        return normalized
+
     # ── 传统指标 ──────────────────────────────────────────────────────────────
 
     def evaluate_traditional(self, request: TraditionalEvalRequest) -> TraditionalEvalResult:
@@ -311,6 +344,7 @@ class EvalService:
             evaluator = RetrievalEvaluator(cuts=cuts, skip_empty_gold=skip_empty_gold)
             rows = request.test if isinstance(request.test, list) else [request.test]
             rows = [x for x in rows if isinstance(x, dict)]
+            rows = self._normalize_retrieval_rows(rows)
             if not rows:
                 raise EvaluationException("Retrieval 评估必须提供对象或对象列表格式的 test")
 
@@ -338,11 +372,13 @@ class EvalService:
             from eval_retrieval import RetrievalEvaluator  # noqa: PLC0415
 
             evaluator = RetrievalEvaluator(cuts=cuts, skip_empty_gold=skip_empty_gold)
+            rows = evaluator._load_rows(request.input_path)
+            rows = self._normalize_retrieval_rows(rows)
+            raw = evaluator.evaluate_rows(rows)
             if request.output_path:
-                raw = evaluator.evaluate_file(request.input_path, request.output_path)
-            else:
-                rows = evaluator._load_rows(request.input_path)
-                raw = evaluator.evaluate_rows(rows)
+                with open(request.output_path, "w", encoding="utf-8") as f:
+                    import json
+                    json.dump(raw, f, ensure_ascii=False, indent=2)
 
             return RetrievalEvalResult(
                 meta=raw.get("meta", {}),

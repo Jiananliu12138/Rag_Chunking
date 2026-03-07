@@ -409,6 +409,7 @@ class RetrievalService:
                         langchain_embed=embed_model,
                         embed_dim=embed_dim,
                         top_k=retrieve_top_k,
+                        use_hybrid_search=request.use_hybrid_search,
                     )
                     # 与在线 RAG 接口保持一致：既保留纯文本，也保留带 metadata 的完整结果
                     context_items = self._to_search_result_items(raw_results)

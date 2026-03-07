@@ -154,6 +154,10 @@ class RAGGenerateFileRequest(BaseModel):
     embed_model_path: Optional[str] = Field(None, description="嵌入模型路径，空则从配置读取")
     embed_dim: Optional[int] = Field(None, ge=64, description="嵌入维度，空则从配置读取")
     top_k: int = Field(5, ge=1, le=100, description="检索 top-k")
+    use_hybrid_search: Optional[bool] = Field(
+        None,
+        description="是否使用 Hybrid Search（dense+sparse）；未显式传时使用服务端默认配置。",
+    )
     rerank_enabled: bool = Field(
         False,
         description="是否启用 rerank（默认 false）。",

@@ -137,6 +137,7 @@ export default function RetrievalPage() {
         embed_model_path: embedModelPath || undefined,
         embed_dim: embedDim,
         top_k: topK,
+        use_hybrid_search: useHybridSearch,
         llm_api_base: llmApiBase || undefined,
         llm_model_name: llmModelName || undefined,
         temperature,
