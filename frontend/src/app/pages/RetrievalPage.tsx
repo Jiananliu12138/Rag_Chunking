@@ -6,9 +6,12 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Switch } from '../components/ui/switch';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/ui/collapsible';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +20,7 @@ import {
   DialogTrigger,
 } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Loader2, Search, Sparkles, FileText, ChevronDown, Settings2 } from 'lucide-react';
+import { Loader2, Search, Sparkles, FileText, ChevronDown, Settings2, Filter, X, ChevronsUpDown } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -35,9 +38,14 @@ export default function RetrievalPage() {
   const [embedModelPath, setEmbedModelPath] = useState('');
   const [embedDim, setEmbedDim] = useState(768);
   const [topK, setTopK] = useState(5);
-  const [filepath, setFilepath] = useState('');
-  const [docId, setDocId] = useState('');
+  const [filepath, setFilepath] = useState<string[]>([]);
+  const [docId, setDocId] = useState<string[]>([]);
   const [useHybridSearch, setUseHybridSearch] = useState(true);
+
+  // Filter options aligned with Chat page (from collection metadata)
+  const [availableFilepaths, setAvailableFilepaths] = useState<string[]>([]);
+  const [availableDocIds, setAvailableDocIds] = useState<string[]>([]);
+  const [loadingCollectionData, setLoadingCollectionData] = useState(false);
 
   // Rerank params
   const [rerankEnabled, setRerankEnabled] = useState(false);
@@ -64,9 +72,43 @@ export default function RetrievalPage() {
   const [outputPath, setOutputPath] = useState('');
   const [fileResult, setFileResult] = useState<any>(null);
 
+  const clearFilters = () => {
+    setFilepath([]);
+    setDocId([]);
+  };
+
+  useEffect(() => {
+    const fetchCollectionData = async () => {
+      if (!collectionName) {
+        setAvailableFilepaths([]);
+        setAvailableDocIds([]);
+        return;
+      }
+      setLoadingCollectionData(true);
+      try {
+        const response = await api.listCollections();
+        if (response.success) {
+          const collection = response.data.collections.find((c: any) => c.name === collectionName);
+          if (collection) {
+            setAvailableFilepaths(collection.filepaths || []);
+            setAvailableDocIds(collection.doc_ids || []);
+          } else {
+            setAvailableFilepaths([]);
+            setAvailableDocIds([]);
+          }
+        }
+      } finally {
+        setLoadingCollectionData(false);
+      }
+    };
+
+    const timeoutId = setTimeout(fetchCollectionData, 300);
+    return () => clearTimeout(timeoutId);
+  }, [collectionName]);
+
   const handleSearch = async () => {
     if (!query || !collectionName) {
-      toast.error('请填写查询和集合名称');
+      toast.error('Please provide query and collection name');
       return;
     }
 
@@ -82,15 +124,15 @@ export default function RetrievalPage() {
         use_hybrid_search: useHybridSearch,
       };
 
-      if (filepath) data.filepath = filepath;
-      if (docId) data.doc_id = docId;
+      if (filepath.length > 0) data.filepath = filepath;
+      if (docId.length > 0) data.doc_id = docId;
 
       const response = await api.search(data);
       if (response.success) {
         setSearchResults(response.data.results || []);
-        toast.success(`找到 ${response.data.results?.length || 0} 条结果`);
+        toast.success(`Found ${response.data.results?.length || 0} results`);
       } else {
-        toast.error('检索失败: ' + response.message);
+        toast.error('Search failed: ' + response.message);
       }
     } finally {
       setLoading(false);
@@ -99,7 +141,7 @@ export default function RetrievalPage() {
 
   const handleGenerate = async () => {
     if (!query || !collectionName) {
-      toast.error('请填写查询和集合名称');
+      toast.error('Please provide query and collection name');
       return;
     }
 
@@ -127,17 +169,17 @@ export default function RetrievalPage() {
         max_new_tokens: maxNewTokens,
       };
 
-      if (filepath) data.filepath = filepath;
-      if (docId) data.doc_id = docId;
+      if (filepath.length > 0) data.filepath = filepath;
+      if (docId.length > 0) data.doc_id = docId;
 
       const response = await api.generate(data);
       if (response.success) {
         setRagAnswer(response.data.answer || '');
         setRagContexts(response.data.contexts || []);
         setRagContextItems(response.data.context_items || []);
-        toast.success('生成成功');
+        toast.success('Generation completed');
       } else {
-        toast.error('生成失败: ' + response.message);
+        toast.error('Generation failed: ' + response.message);
       }
     } finally {
       setLoading(false);
@@ -146,7 +188,7 @@ export default function RetrievalPage() {
 
   const handleGenerateFile = async () => {
     if (!inputPath || !outputPath || !collectionName) {
-      toast.error('请填写所有必需字段');
+      toast.error('Please fill all required fields');
       return;
     }
 
@@ -175,9 +217,9 @@ export default function RetrievalPage() {
       const response = await api.generateFile(data);
       if (response.success) {
         setFileResult(response.data);
-        toast.success(`批处理完成！处理了 ${response.data.total_processed} 条`);
+        toast.success(`Batch completed! Processed ${response.data.total_processed} items`);
       } else {
-        toast.error('批处理失败: ' + response.message);
+        toast.error('Batch run failed: ' + response.message);
       }
     } finally {
       setLoading(false);
@@ -188,8 +230,8 @@ export default function RetrievalPage() {
     <div className="max-w-7xl mx-auto">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold mb-2">检索与 RAG</h1>
-          <p className="text-slate-600">向量检索和检索增强生成（对齐 retrieval_api.py）</p>
+          <h1 className="text-3xl font-bold mb-2">Retrieval & RAG</h1>
+          <p className="text-slate-600">Vector retrieval and retrieval-augmented generation (aligned with retrieval_api.py)</p>
         </div>
         <Dialog>
           <DialogTrigger asChild>
@@ -203,8 +245,8 @@ export default function RetrievalPage() {
             </DialogHeader>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Embedding 模型路径</Label>
-                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} placeholder="留空使用默认" />
+                <Label>Embedding model path</Label>
+                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} placeholder="Leave empty to use server default" />
               </div>
               <div>
                 <Label>Embed Dim</Label>
@@ -219,8 +261,8 @@ export default function RetrievalPage() {
                 <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} placeholder="Qwen2.5-7B-Instruct" />
               </div>
               <div>
-                <Label>CrossEncoder 模型路径</Label>
-                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} placeholder="留空使用服务端默认" />
+                <Label>CrossEncoder model path</Label>
+                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} placeholder="Leave empty to use server default" />
               </div>
               <div>
                 <Label>Rerank Device</Label>
@@ -233,8 +275,8 @@ export default function RetrievalPage() {
 
       <Tabs defaultValue="single">
         <TabsList className="mb-6">
-          <TabsTrigger value="single">单次检索/生成</TabsTrigger>
-          <TabsTrigger value="batch">批量处理</TabsTrigger>
+          <TabsTrigger value="single">Single Run</TabsTrigger>
+          <TabsTrigger value="batch">Batch Run</TabsTrigger>
         </TabsList>
 
         {/* Single Query Tab */}
@@ -242,21 +284,21 @@ export default function RetrievalPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Configuration */}
             <Card className="p-6 lg:col-span-1">
-              <h2 className="font-bold mb-4">配置</h2>
+              <h2 className="font-bold mb-4">Configuration</h2>
               <ScrollArea className="h-[600px] pr-4">
                 <div className="space-y-4">
                   <div>
-                    <Label>查询</Label>
+                    <Label>Query</Label>
                     <Textarea
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="输入查询问题..."
+                      placeholder="Type query..."
                       className="min-h-[100px]"
                     />
                   </div>
 
                   <div>
-                    <Label>集合名称</Label>
+                    <Label>Collection Name</Label>
                     <Input
                       value={collectionName}
                       onChange={(e) => setCollectionName(e.target.value)}
@@ -265,11 +307,11 @@ export default function RetrievalPage() {
                   </div>
 
                   <div>
-                    <Label>Embedding 模型路径 (可选)</Label>
+                    <Label>Embedding model path (optional)</Label>
                     <Input
                       value={embedModelPath}
                       onChange={(e) => setEmbedModelPath(e.target.value)}
-                      placeholder="留空使用默认"
+                      placeholder="Leave empty to use server default"
                     />
                   </div>
 
@@ -292,29 +334,101 @@ export default function RetrievalPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label>文件路径过滤 (可选)</Label>
-                    <Input
-                      value={filepath}
-                      onChange={(e) => setFilepath(e.target.value)}
-                      placeholder="过滤特定文件"
-                    />
-                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                        <Filter className="w-3 h-3" />
+                        Metadata Filters (aligned with Chat)
+                      </div>
+                      {(filepath.length > 0 || docId.length > 0) && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-6 px-2 text-xs">
+                          <X className="w-3 h-3 mr-1" />Clear
+                        </Button>
+                      )}
+                    </div>
 
-                  <div>
-                    <Label>Doc ID 过滤 (可选)</Label>
-                    <Input
-                      value={docId}
-                      onChange={(e) => setDocId(e.target.value)}
-                      placeholder="过滤特定文档"
-                    />
+                    <div>
+                      <Label className="text-xs">Filepath</Label>
+                      {availableFilepaths.length > 0 ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between mt-1 h-auto min-h-9 text-xs" disabled={loadingCollectionData}>
+                              <span className="truncate">{filepath.length === 0 ? 'Select filepath(s)...' : `${filepath.length} selected`}</span>
+                              <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search filepath..." className="h-8 text-xs" />
+                              <CommandList>
+                                <CommandEmpty>No filepath found.</CommandEmpty>
+                                <CommandGroup>
+                                  {availableFilepaths.map((fp) => (
+                                    <CommandItem
+                                      key={fp}
+                                      onSelect={() => setFilepath(filepath.includes(fp) ? filepath.filter((x) => x !== fp) : [...filepath, fp])}
+                                      className="text-xs"
+                                    >
+                                      <Checkbox checked={filepath.includes(fp)} className="mr-2" />
+                                      <span className="truncate font-mono">{fp}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <div className="text-xs text-slate-400 mt-1 p-2 border rounded bg-slate-50">
+                          {loadingCollectionData ? 'Loading collection metadata...' : 'No filepath metadata available'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Doc ID</Label>
+                      {availableDocIds.length > 0 ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between mt-1 h-auto min-h-9 text-xs" disabled={loadingCollectionData}>
+                              <span className="truncate">{docId.length === 0 ? 'Select doc_id(s)...' : `${docId.length} selected`}</span>
+                              <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search doc_id..." className="h-8 text-xs" />
+                              <CommandList>
+                                <CommandEmpty>No doc_id found.</CommandEmpty>
+                                <CommandGroup>
+                                  {availableDocIds.map((id) => (
+                                    <CommandItem
+                                      key={id}
+                                      onSelect={() => setDocId(docId.includes(id) ? docId.filter((x) => x !== id) : [...docId, id])}
+                                      className="text-xs"
+                                    >
+                                      <Checkbox checked={docId.includes(id)} className="mr-2" />
+                                      <span className="truncate font-mono">{id}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <div className="text-xs text-slate-400 mt-1 p-2 border rounded bg-slate-50">
+                          {loadingCollectionData ? 'Loading collection metadata...' : 'No doc_id metadata available'}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex items-center justify-between">
                       <div>
                         <Label className="text-sm">RRF Rerank (Hybrid Search)</Label>
-                        <p className="text-xs text-slate-500">Dense + Sparse + RRF（服务端 ranker）</p>
+                        <p className="text-xs text-slate-500">Dense + Sparse + RRF (server ranker)</p>
                       </div>
                       <Switch checked={useHybridSearch} onCheckedChange={setUseHybridSearch} />
                     </div>
@@ -323,7 +437,7 @@ export default function RetrievalPage() {
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <Label className="text-sm">CrossEncoder Rerank</Label>
-                          <p className="text-xs text-slate-500">对检索候选进行语义重排</p>
+                          <p className="text-xs text-slate-500">Semantic rerank for retrieval candidates</p>
                         </div>
                         <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
                       </div>
@@ -352,10 +466,10 @@ export default function RetrievalPage() {
                   </div>
 
                   <div className="border-t pt-4 mt-4">
-                    <h3 className="font-medium mb-3 text-sm">LLM 配置 (RAG 需要)</h3>
+                    <h3 className="font-medium mb-3 text-sm">LLM Configuration (required for RAG)</h3>
                     <div className="space-y-3">
                       <div>
-                        <Label className="text-sm">API Base (可选)</Label>
+                        <Label className="text-sm">API Base (optional)</Label>
                         <Input
                           value={llmApiBase}
                           onChange={(e) => setLlmApiBase(e.target.value)}
@@ -363,7 +477,7 @@ export default function RetrievalPage() {
                         />
                       </div>
                       <div>
-                        <Label className="text-sm">模型名称 (可选)</Label>
+                        <Label className="text-sm">Model Name (optional)</Label>
                         <Input
                           value={llmModelName}
                           onChange={(e) => setLlmModelName(e.target.value)}
@@ -399,7 +513,7 @@ export default function RetrievalPage() {
                       variant="outline"
                     >
                       <Search className="w-4 h-4 mr-2" />
-                      只检索
+                      Search Only
                     </Button>
                     <Button
                       onClick={handleGenerate}
@@ -407,7 +521,7 @@ export default function RetrievalPage() {
                       className="bg-gradient-to-r from-purple-600 to-pink-600"
                     >
                       <Sparkles className="w-4 h-4 mr-2" />
-                      检索+生成
+                      Search + Generate
                     </Button>
                   </div>
                 </div>
@@ -420,7 +534,7 @@ export default function RetrievalPage() {
               <Card className="p-6">
                 <h2 className="font-bold mb-4 flex items-center gap-2">
                   <Search className="w-5 h-5" />
-                  检索结果
+                  Search Results
                   {useHybridSearch && (
                     <Badge className="bg-blue-600">Hybrid Search</Badge>
                   )}
@@ -463,7 +577,7 @@ export default function RetrievalPage() {
                 ) : (
                   <div className="text-center py-12 text-slate-400">
                     <Search className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>检索结果将显示在这里</p>
+                    <p>Search results will appear here</p>
                   </div>
                 )}
               </Card>
@@ -473,7 +587,7 @@ export default function RetrievalPage() {
                 <Card className="p-6">
                   <h2 className="font-bold mb-4 flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-purple-600" />
-                    RAG 生成答案
+                    RAG Answer
                   </h2>
                   <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200 mb-4">
                     <p className="text-slate-800 whitespace-pre-wrap">{ragAnswer}</p>
@@ -482,7 +596,7 @@ export default function RetrievalPage() {
                   <Collapsible>
                     <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
                       <ChevronDown className="w-4 h-4" />
-                      查看使用的上下文 ({ragContexts.length} 条)
+                      Show Used Contexts ({ragContexts.length} items)
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-4">
                       <div className="space-y-2">
@@ -516,12 +630,12 @@ export default function RetrievalPage() {
           <Card className="p-6 max-w-4xl mx-auto">
             <h2 className="font-bold mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              批量 RAG 生成
+              Batch RAG Generation
             </h2>
             <div className="space-y-4 mb-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>输入文件路径</Label>
+                  <Label>Input file path</Label>
                   <Input
                     value={inputPath}
                     onChange={(e) => setInputPath(e.target.value)}
@@ -529,7 +643,7 @@ export default function RetrievalPage() {
                   />
                 </div>
                 <div>
-                  <Label>输出文件路径</Label>
+                  <Label>Output file path</Label>
                   <Input
                     value={outputPath}
                     onChange={(e) => setOutputPath(e.target.value)}
@@ -540,7 +654,7 @@ export default function RetrievalPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>集合名称</Label>
+                  <Label>Collection Name</Label>
                   <Input
                     value={collectionName}
                     onChange={(e) => setCollectionName(e.target.value)}
@@ -566,21 +680,21 @@ export default function RetrievalPage() {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  批处理中...
+                  Running batch...
                 </>
               ) : (
-                '开始批量生成'
+                'Start Batch Generation'
               )}
             </Button>
 
             {fileResult && (
               <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <h3 className="font-medium mb-2 text-green-900">处理完成</h3>
+                <h3 className="font-medium mb-2 text-green-900">Completed</h3>
                 <div className="text-sm space-y-1 text-green-800">
-                  <p><strong>输出文件:</strong> {fileResult.output_file}</p>
-                  <p><strong>处理数量:</strong> {fileResult.total_processed}</p>
-                  <p><strong>失败数量:</strong> {fileResult.total_failed}</p>
-                  {fileResult.message && <p><strong>消息:</strong> {fileResult.message}</p>}
+                  <p><strong>Output file:</strong> {fileResult.output_file}</p>
+                  <p><strong>Processed:</strong> {fileResult.total_processed}</p>
+                  <p><strong>Failed:</strong> {fileResult.total_failed}</p>
+                  {fileResult.message && <p><strong>Message:</strong> {fileResult.message}</p>}
                 </div>
               </div>
             )}
