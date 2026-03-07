@@ -209,7 +209,8 @@ function StickinessConfigDialog({
 export default function ComponentEvalPage() {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
-  const initialTab = location.search.includes('section=retrieval') ? 'retrieval' : 'quality';
+  const isRetrievalSection = location.search.includes('section=retrieval');
+  const initialTab = isRetrievalSection ? 'retrieval' : 'quality';
   const [activeTab, setActiveTab] = useState<'quality' | 'stickiness' | 'retrieval'>(initialTab as 'quality' | 'stickiness' | 'retrieval');
 
   // ── Chunk Quality – Direct Input ────────────────────────────────────────────
@@ -534,33 +535,16 @@ export default function ComponentEvalPage() {
       <div className="max-w-7xl mx-auto p-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Component-Level Evaluation</h1>
-          <p className="text-slate-600">Evaluate chunk quality and stickiness with advanced visualizations</p>
+          <p className="text-slate-600">
+            {isRetrievalSection
+              ? 'Evaluate retrieval quality metrics (MAP/MRR/nDCG/Recall@k)'
+              : 'Evaluate chunk quality and stickiness with advanced visualizations'}
+          </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'quality' | 'stickiness' | 'retrieval')}>
           <div className="mb-6 space-y-3">
-            <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setActiveTab(activeTab === 'retrieval' ? 'quality' : activeTab)}
-                className={activeTab === 'retrieval' ? 'text-slate-600' : 'bg-white shadow-sm text-slate-900'}
-              >
-                Chunk Evaluation
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setActiveTab('retrieval')}
-                className={activeTab === 'retrieval' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600'}
-              >
-                Retrieval Evaluation
-              </Button>
-            </div>
-
-            {activeTab !== 'retrieval' && (
+            {!isRetrievalSection ? (
               <div className="inline-flex p-1 rounded-xl bg-indigo-50 border border-indigo-100">
                 <Button
                   type="button"
@@ -581,10 +565,15 @@ export default function ComponentEvalPage() {
                   Chunk Stickiness
                 </Button>
               </div>
+            ) : (
+              <div className="inline-flex p-1 rounded-xl bg-cyan-50 border border-cyan-100">
+                <span className="px-3 py-1.5 text-sm font-medium text-cyan-700">Retrieval Evaluation</span>
+              </div>
             )}
           </div>
 
           {/* ── Chunk Quality Tab ─────────────────────────────────────────── */}
+          {!isRetrievalSection && (
           <TabsContent value="quality">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Input column */}
@@ -828,8 +817,10 @@ export default function ComponentEvalPage() {
               </Card>
             </div>
           </TabsContent>
+          )}
 
           {/* ── Chunk Stickiness Tab ──────────────────────────────────────── */}
+          {!isRetrievalSection && (
           <TabsContent value="stickiness">
             <div className="space-y-6">
               {/* Input cards */}
@@ -1158,8 +1149,10 @@ export default function ComponentEvalPage() {
               ) : null}
             </div>
           </TabsContent>
+          )}
 
           {/* ── Retrieval Evaluation Tab ─────────────────────────────────── */}
+          {isRetrievalSection && (
           <TabsContent value="retrieval">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-6">
@@ -1286,6 +1279,7 @@ export default function ComponentEvalPage() {
               </Card>
             </div>
           </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>
