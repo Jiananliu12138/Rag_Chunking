@@ -227,6 +227,9 @@ export default function ComponentEvalPage() {
 
   const chunkMetricSources = [
     { label: 'MoC repository', url: 'https://github.com/IAAR-Shanghai/Meta-Chunking' },
+    { label: 'MoC paper (arXiv)', url: 'https://arxiv.org/abs/2503.09600' },
+    { label: 'Structural entropy background', url: 'https://en.wikipedia.org/wiki/Entropy_(information_theory)' },
+    { label: 'Cosine similarity background', url: 'https://en.wikipedia.org/wiki/Cosine_similarity' },
     { label: 'MoC metric script: chunk_eval.py', url: 'file:///F:/thesis/Meta-Chunking/MoC/our_metrics/chunk_eval.py' },
     { label: 'MoC metric script: relation_eval.py', url: 'file:///F:/thesis/Meta-Chunking/MoC/our_metrics/relation_eval.py' },
     { label: 'Project implementation: chunk_eval_refactored.py', url: 'file:///F:/thesis/Meta-Chunking/component_eval/chunk/chunk_eval_refactored.py' },

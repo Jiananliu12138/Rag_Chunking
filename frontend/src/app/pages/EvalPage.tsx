@@ -108,13 +108,17 @@ Format 2 - Current Eval Format:
   };
 
   const traditionalDefaultSources = [
-    { label: 'LongBench traditional evaluator (project)', url: 'https://github.com/THUDM/LongBench' },
+    { label: 'LongBench benchmark repository', url: 'https://github.com/THUDM/LongBench' },
+    { label: 'BLEU original paper (Papineni et al., 2002)', url: 'https://aclanthology.org/P02-1040/' },
+    { label: 'ROUGE package paper (Lin, 2004)', url: 'https://aclanthology.org/W04-1013/' },
+    { label: 'BERTScore paper (Zhang et al., 2020)', url: 'https://openreview.net/forum?id=SkeHuCVFDr' },
     { label: 'Project implementation: eval_lite.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_lite.py' },
   ];
 
   const ragasDefaultSources = [
     { label: 'Ragas GitHub Repository', url: 'https://github.com/explodinggradients/ragas' },
     { label: 'Ragas metrics documentation', url: 'https://docs.ragas.io/en/latest/concepts/metrics/available_metrics/' },
+    { label: 'RAGAS framework paper', url: 'https://arxiv.org/abs/2309.15217' },
     { label: 'Project implementation: eval_ragas.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_ragas.py' },
   ];
 
