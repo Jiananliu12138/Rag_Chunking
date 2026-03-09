@@ -406,6 +406,148 @@ Format 2 - Current Eval Format:
     }
   };
 
+  const renderMetricInfoDialog = (
+    selectedMetric: string | null,
+    setSelectedMetric: (metric: string | null) => void,
+    metricInfoMap: Record<string, MetricCardDoc>,
+    defaultSources: Array<{ label: string; url: string }>,
+    palette: {
+      formulaCard: string;
+      formulaText: string;
+      exampleCard: string;
+      exampleText: string;
+      sourceChip: string;
+      exampleBodyText: string;
+    },
+  ) => {
+    const metric = selectedMetric ? metricInfoMap[selectedMetric] : null;
+    const sources = metric?.sources ?? defaultSources;
+
+    return (
+      <Dialog open={!!selectedMetric} onOpenChange={(open) => !open && setSelectedMetric(null)}>
+        <DialogContent className="sm:max-w-[560px]">
+          {metric && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{metric.title}</DialogTitle>
+                <DialogDescription>{metric.blurb}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className={palette.formulaCard}>
+                  <div className={`mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] ${palette.formulaText}`}>
+                    <Sigma className="h-3.5 w-3.5" />
+                    Formula (LaTeX)
+                  </div>
+                  <div className="rounded-lg bg-white/80 p-3">
+                    <BlockMath math={metric.formulaLatex} />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Interpretation</div>
+                  <p className="text-sm text-slate-700">{metric.interpretation}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
+                  <ul className="space-y-1 list-disc pl-5 text-sm text-slate-700">
+                    {metric.variables.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className={palette.exampleCard}>
+                  <div className={`mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] ${palette.exampleText}`}>
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    Project-aligned example
+                  </div>
+                  <ul className={`space-y-1 list-disc pl-5 text-sm ${palette.exampleBodyText}`}>
+                    {metric.projectExample.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
+                  <div className="flex flex-wrap gap-2">
+                    {sources.map((source, idx) => (
+                      <a
+                        key={idx}
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`rounded-full border px-2 py-1 text-xs ${palette.sourceChip}`}
+                      >
+                        {source.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  const renderRagasConfigDialog = (embeddingPlaceholder = '/path/to/bge-large-en-v1.5') => (
+    <Dialog open={ragasConfigOpen} onOpenChange={setRagasConfigOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <Settings className="w-4 h-4 text-slate-500 transition-colors hover:text-purple-600" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>RAGAS Configuration</DialogTitle>
+          <DialogDescription>
+            Configure VLLM API and embedding model settings
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div>
+            <Label htmlFor="vllm-api-base-2">VLLM API Base URL</Label>
+            <Input
+              id="vllm-api-base-2"
+              value={vllmApiBase}
+              onChange={(e) => setVllmApiBase(e.target.value)}
+              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
+              placeholder="http://localhost:8005/v1"
+              className="mt-1.5"
+            />
+            <p className="mt-1 text-xs text-slate-500">The base URL for the VLLM API endpoint</p>
+          </div>
+          <div>
+            <Label htmlFor="vllm-model-name-2">VLLM Model Path</Label>
+            <Input
+              id="vllm-model-name-2"
+              value={vllmModelName}
+              onChange={(e) => setVllmModelName(e.target.value)}
+              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
+              placeholder="Qwen2.5-7B-Instruct"
+              className="mt-1.5"
+            />
+            <p className="mt-1 text-xs text-slate-500">Path to the VLLM model for evaluation</p>
+          </div>
+          <div>
+            <Label htmlFor="embedding-model-path-2">Embedding Model Path</Label>
+            <Input
+              id="embedding-model-path-2"
+              value={embeddingModelPath}
+              onChange={(e) => setEmbeddingModelPath(e.target.value)}
+              onKeyDown={(e) => fillPlaceholderOnTab(e, embeddingModelPath, e.currentTarget.placeholder, setEmbeddingModelPath)}
+              placeholder={embeddingPlaceholder}
+              className="mt-1.5"
+            />
+            <p className="mt-1 text-xs text-slate-500">Path to the embedding model for semantic evaluation</p>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={() => setRagasConfigOpen(false)}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-7xl mx-auto p-6">
@@ -600,58 +742,20 @@ Format 2 - Current Eval Format:
                     <h2 className="font-bold">Evaluation Results</h2>
                     <p className="text-xs text-slate-500 mt-1">Click a metric card to view a short explanation and formula.</p>
                   </div>
-                  <Dialog open={!!selectedTraditionalMetric} onOpenChange={(open) => !open && setSelectedTraditionalMetric(null)}>
-                    <DialogContent className="sm:max-w-[560px]">
-                      {selectedTraditionalMetric && traditionalMetricInfo[selectedTraditionalMetric] && (
-                        <>
-                          <DialogHeader>
-                            <DialogTitle>{traditionalMetricInfo[selectedTraditionalMetric].title}</DialogTitle>
-                            <DialogDescription>
-                              {traditionalMetricInfo[selectedTraditionalMetric].blurb}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
-                                <Sigma className="h-3.5 w-3.5" /> Formula (LaTeX)
-                              </div>
-                              <div className="rounded-lg bg-white/80 p-3 text-blue-950">
-                                <BlockMath math={traditionalMetricInfo[selectedTraditionalMetric].formulaLatex} />
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
-                              <p className="text-sm text-slate-700">{traditionalMetricInfo[selectedTraditionalMetric].interpretation}</p>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
-                              <ul className="space-y-1 text-sm text-slate-700 list-disc pl-5">
-                                {traditionalMetricInfo[selectedTraditionalMetric].variables.map((item, idx) => (
-                                  <li key={idx}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-blue-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
-                              <ul className="space-y-1 text-sm text-blue-900 list-disc pl-5">
-                                {traditionalMetricInfo[selectedTraditionalMetric].projectExample.map((item, idx) => (
-                                  <li key={idx}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
-                              <div className="flex flex-wrap gap-2">
-                                {(traditionalMetricInfo[selectedTraditionalMetric].sources ?? traditionalDefaultSources).map((s, idx) => (
-                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100">{s.label}</a>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </DialogContent>
-                  </Dialog>
+                  {renderMetricInfoDialog(
+                    selectedTraditionalMetric,
+                    setSelectedTraditionalMetric,
+                    traditionalMetricInfo,
+                    traditionalDefaultSources,
+                    {
+                      formulaCard: 'rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm',
+                      formulaText: 'text-blue-700',
+                      exampleCard: 'rounded-xl border border-blue-100 bg-blue-50/60 p-4',
+                      exampleText: 'text-blue-700',
+                      exampleBodyText: 'text-blue-900',
+                      sourceChip: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+                    },
+                  )}
                 </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
@@ -785,70 +889,7 @@ Format 2 - Current Eval Format:
                       <Sparkles className="w-5 h-5 text-purple-600" />
                       Direct JSON Input
                     </h2>
-                    <Dialog open={ragasConfigOpen} onOpenChange={setRagasConfigOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <Settings className="w-4 h-4 text-slate-500 hover:text-purple-600" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[500px]">
-                        <DialogHeader>
-                          <DialogTitle>RAGAS Configuration</DialogTitle>
-                          <DialogDescription>
-                            Configure VLLM API and embedding model settings
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div>
-                            <Label htmlFor="vllm-api-base-2">VLLM API Base URL</Label>
-                            <Input
-                              id="vllm-api-base-2"
-                              value={vllmApiBase}
-                              onChange={(e) => setVllmApiBase(e.target.value)}
-                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
-                              placeholder="http://localhost:8005/v1"
-                              className="mt-1.5"
-                            />
-                            <p className="text-xs text-slate-500 mt-1">
-                              The base URL for the VLLM API endpoint
-                            </p>
-                          </div>
-                          <div>
-                            <Label htmlFor="vllm-model-name-2">VLLM Model Path</Label>
-                            <Input
-                              id="vllm-model-name-2"
-                              value={vllmModelName}
-                              onChange={(e) => setVllmModelName(e.target.value)}
-                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
-                              placeholder="Qwen2.5-7B-Instruct"
-                              className="mt-1.5"
-                            />
-                            <p className="text-xs text-slate-500 mt-1">
-                              Path to the VLLM model for evaluation
-                            </p>
-                          </div>
-                          <div>
-                            <Label htmlFor="embedding-model-path-2">Embedding Model Path</Label>
-                            <Input
-                              id="embedding-model-path-2"
-                              value={embeddingModelPath}
-                              onChange={(e) => setEmbeddingModelPath(e.target.value)}
-                              onKeyDown={(e) => fillPlaceholderOnTab(e, embeddingModelPath, e.currentTarget.placeholder, setEmbeddingModelPath)}
-                              placeholder="/path/to/bge-large-en-v1.5"
-                              className="mt-1.5"
-                            />
-                            <p className="text-xs text-slate-500 mt-1">
-                              Path to the embedding model for semantic evaluation
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button onClick={() => setRagasConfigOpen(false)}>
-                            Done
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                    {renderRagasConfigDialog()}
                   </div>
                   <div className="space-y-4">
                     <div>
@@ -901,70 +942,7 @@ Format 2 - Current Eval Format:
                       <FileText className="w-5 h-5 text-purple-600" />
                       File Evaluation
                     </h2>
-                    <Dialog open={ragasConfigOpen} onOpenChange={setRagasConfigOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <Settings className="w-4 h-4 text-slate-500 hover:text-purple-600" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[500px]">
-                        <DialogHeader>
-                          <DialogTitle>RAGAS Configuration</DialogTitle>
-                          <DialogDescription>
-                            Configure VLLM API and embedding model settings
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div>
-                            <Label htmlFor="vllm-api-base-2">VLLM API Base URL</Label>
-                            <Input
-                              id="vllm-api-base-2"
-                              value={vllmApiBase}
-                              onChange={(e) => setVllmApiBase(e.target.value)}
-                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
-                              placeholder="http://localhost:8005/v1"
-                              className="mt-1.5"
-                            />
-                            <p className="text-xs text-slate-500 mt-1">
-                              The base URL for the VLLM API endpoint
-                            </p>
-                          </div>
-                          <div>
-                            <Label htmlFor="vllm-model-name-2">VLLM Model Path</Label>
-                            <Input
-                              id="vllm-model-name-2"
-                              value={vllmModelName}
-                              onChange={(e) => setVllmModelName(e.target.value)}
-                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
-                              placeholder="Qwen2.5-7B-Instruct"
-                              className="mt-1.5"
-                            />
-                            <p className="text-xs text-slate-500 mt-1">
-                              Path to the VLLM model for evaluation
-                            </p>
-                          </div>
-                          <div>
-                            <Label htmlFor="embedding-model-path-2">Embedding Model Path</Label>
-                            <Input
-                              id="embedding-model-path-2"
-                              value={embeddingModelPath}
-                              onChange={(e) => setEmbeddingModelPath(e.target.value)}
-                              onKeyDown={(e) => fillPlaceholderOnTab(e, embeddingModelPath, e.currentTarget.placeholder, setEmbeddingModelPath)}
-                              placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
-                              className="mt-1.5"
-                            />
-                            <p className="text-xs text-slate-500 mt-1">
-                              Path to the embedding model for semantic evaluation
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex justify-end">
-                          <Button onClick={() => setRagasConfigOpen(false)}>
-                            Done
-                          </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                    {renderRagasConfigDialog('/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5')}
                   </div>
                   <div className="space-y-4">
                     <div>
@@ -1084,58 +1062,20 @@ Format 2 - Current Eval Format:
                     <h2 className="font-bold">RAGAS Results</h2>
                     <p className="text-xs text-slate-500 mt-1">Click a summary card to view a short explanation and formula.</p>
                   </div>
-                  <Dialog open={!!selectedRagasMetric} onOpenChange={(open) => !open && setSelectedRagasMetric(null)}>
-                    <DialogContent className="sm:max-w-[560px]">
-                      {selectedRagasMetric && ragasMetricInfo[selectedRagasMetric] && (
-                        <>
-                          <DialogHeader>
-                            <DialogTitle>{ragasMetricInfo[selectedRagasMetric].title}</DialogTitle>
-                            <DialogDescription>
-                              {ragasMetricInfo[selectedRagasMetric].blurb}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 via-fuchsia-50 to-white p-4 shadow-sm">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-purple-700">
-                                <Sigma className="h-3.5 w-3.5" /> Formula (LaTeX)
-                              </div>
-                              <div className="rounded-lg bg-white/80 p-3 text-purple-950">
-                                <BlockMath math={ragasMetricInfo[selectedRagasMetric].formulaLatex} />
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
-                              <p className="text-sm text-slate-700">{ragasMetricInfo[selectedRagasMetric].interpretation}</p>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
-                              <ul className="space-y-1 text-sm text-slate-700 list-disc pl-5">
-                                {ragasMetricInfo[selectedRagasMetric].variables.map((item, idx) => (
-                                  <li key={idx}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="rounded-xl border border-purple-100 bg-purple-50/70 p-4">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-purple-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
-                              <ul className="space-y-1 text-sm text-purple-900 list-disc pl-5">
-                                {ragasMetricInfo[selectedRagasMetric].projectExample.map((item, idx) => (
-                                  <li key={idx}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
-                              <div className="flex flex-wrap gap-2">
-                                {(ragasMetricInfo[selectedRagasMetric].sources ?? ragasDefaultSources).map((s, idx) => (
-                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 hover:bg-purple-100">{s.label}</a>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </DialogContent>
-                  </Dialog>
+                  {renderMetricInfoDialog(
+                    selectedRagasMetric,
+                    setSelectedRagasMetric,
+                    ragasMetricInfo,
+                    ragasDefaultSources,
+                    {
+                      formulaCard: 'rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 via-fuchsia-50 to-white p-4 shadow-sm',
+                      formulaText: 'text-purple-700',
+                      exampleCard: 'rounded-xl border border-purple-100 bg-purple-50/70 p-4',
+                      exampleText: 'text-purple-700',
+                      exampleBodyText: 'text-purple-900',
+                      sourceChip: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100',
+                    },
+                  )}
                 </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">

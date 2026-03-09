@@ -663,6 +663,144 @@ export default function ComponentEvalPage() {
       .map((cut) => ({ cut, metrics: grouped[cut] }));
   }, [retrievalResult]);
 
+  const addPendingPath = (
+    value: string,
+    clearValue: (nextValue: string) => void,
+    updatePaths: (updater: (prev: string[]) => string[]) => void,
+  ) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return;
+    updatePaths((prev) => [...prev, trimmedValue]);
+    clearValue('');
+  };
+
+  const addSelectedFile = (
+    file: File | undefined,
+    updatePaths: (updater: (prev: string[]) => string[]) => void,
+    resetInput: () => void,
+  ) => {
+    if (!file) return;
+    updatePaths((prev) => [...prev, file.name]);
+    resetInput();
+  };
+
+  const removePathAtIndex = (
+    index: number,
+    updatePaths: (updater: (prev: string[]) => string[]) => void,
+  ) => {
+    updatePaths((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const renderSelectedPathList = (paths: string[], onRemove: (index: number) => void) => {
+    if (!paths.length) return null;
+
+    return (
+      <ScrollArea className="mt-2 h-20 rounded-md border border-slate-200 bg-slate-50">
+        <div className="space-y-1 p-2">
+          {paths.map((path, idx) => (
+            <div key={`${path}-${idx}`} className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-white p-1 px-2">
+              <span className="flex-1 truncate font-mono text-xs">{path}</span>
+              <Button
+                type="button"
+                onClick={() => onRemove(idx)}
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    );
+  };
+
+  const renderMetricInfoDialog = (
+    selectedMetric: string | null,
+    onOpenChange: (open: boolean) => void,
+    metricInfoMap: Record<string, ChunkMetricDoc>,
+    fallbackSources: Array<{ label: string; url: string }>,
+    palette: {
+      formulaCard: string;
+      formulaText: string;
+      exampleCard: string;
+      exampleText: string;
+      exampleBodyText: string;
+      sourceChip: string;
+    },
+  ) => {
+    const metric = selectedMetric ? metricInfoMap[selectedMetric] : null;
+    const sources = metric?.sources ?? fallbackSources;
+
+    return (
+      <Dialog open={!!selectedMetric} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[560px]">
+          {metric && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{metric.title}</DialogTitle>
+                <DialogDescription>{metric.blurb}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className={palette.formulaCard}>
+                  <div className={`mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] ${palette.formulaText}`}>
+                    <Sigma className="h-3.5 w-3.5" />
+                    Formula (LaTeX)
+                  </div>
+                  <div className="rounded-lg bg-white/80 p-3">
+                    <BlockMath math={metric.formulaLatex} />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Interpretation</div>
+                  <p className="text-sm text-slate-700">{metric.interpretation}</p>
+                </div>
+                {metric.variables?.length ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
+                    <ul className="space-y-1 list-disc pl-5 text-sm text-slate-700">
+                      {metric.variables.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <div className={palette.exampleCard}>
+                  <div className={`mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] ${palette.exampleText}`}>
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    Project-aligned example
+                  </div>
+                  <ul className={`space-y-1 list-disc pl-5 text-sm ${palette.exampleBodyText}`}>
+                    {metric.projectExample.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
+                  <div className="flex flex-wrap gap-2">
+                    {sources.map((source, idx) => (
+                      <a
+                        key={idx}
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`rounded-full border px-2 py-1 text-xs ${palette.sourceChip}`}
+                      >
+                        {source.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-full overflow-auto">
@@ -797,9 +935,8 @@ export default function ComponentEvalPage() {
                           onChange={(e) => setTempQualityPath(e.target.value)}
                           placeholder="/path/to/chunks.json or click + to browse"
                           onKeyPress={(e) => {
-                            if (e.key === 'Enter' && tempQualityPath.trim()) {
-                              setQualityFilePaths([...qualityFilePaths, tempQualityPath.trim()]);
-                              setTempQualityPath('');
+                            if (e.key === 'Enter') {
+                              addPendingPath(tempQualityPath, setTempQualityPath, setQualityFilePaths);
                             }
                           }}
                         />
@@ -809,11 +946,9 @@ export default function ComponentEvalPage() {
                           accept=".json"
                           className="hidden"
                           onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setQualityFilePaths([...qualityFilePaths, file.name]);
+                            addSelectedFile(e.target.files?.[0], setQualityFilePaths, () => {
                               if (qualityFileRef.current) qualityFileRef.current.value = '';
-                            }
+                            });
                           }}
                         />
                         <Button
@@ -822,8 +957,7 @@ export default function ComponentEvalPage() {
                           variant="outline"
                           onClick={() => {
                             if (tempQualityPath.trim()) {
-                              setQualityFilePaths([...qualityFilePaths, tempQualityPath.trim()]);
-                              setTempQualityPath('');
+                              addPendingPath(tempQualityPath, setTempQualityPath, setQualityFilePaths);
                             } else {
                               qualityFileRef.current?.click();
                             }
@@ -832,26 +966,7 @@ export default function ComponentEvalPage() {
                           {tempQualityPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
                         </Button>
                       </div>
-                      {qualityFilePaths.length > 0 && (
-                        <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
-                          <div className="p-2 space-y-1">
-                            {qualityFilePaths.map((path, idx) => (
-                              <div key={idx} className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200">
-                                <span className="text-xs font-mono truncate flex-1">{path}</span>
-                                <Button
-                                  type="button"
-                                  onClick={() => setQualityFilePaths(qualityFilePaths.filter((_, i) => i !== idx))}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      )}
+                      {renderSelectedPathList(qualityFilePaths, (idx) => removePathAtIndex(idx, setQualityFilePaths))}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
@@ -1081,9 +1196,8 @@ export default function ComponentEvalPage() {
                           onChange={(e) => setTempStickinessPath(e.target.value)}
                           placeholder="/path/to/chunks.json or click + to browse"
                           onKeyPress={(e) => {
-                            if (e.key === 'Enter' && tempStickinessPath.trim()) {
-                              setStickinessFilePaths([...stickinessFilePaths, tempStickinessPath.trim()]);
-                              setTempStickinessPath('');
+                            if (e.key === 'Enter') {
+                              addPendingPath(tempStickinessPath, setTempStickinessPath, setStickinessFilePaths);
                             }
                           }}
                         />
@@ -1093,11 +1207,9 @@ export default function ComponentEvalPage() {
                           accept=".json"
                           className="hidden"
                           onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setStickinessFilePaths([...stickinessFilePaths, file.name]);
+                            addSelectedFile(e.target.files?.[0], setStickinessFilePaths, () => {
                               if (stickinessFileRef.current) stickinessFileRef.current.value = '';
-                            }
+                            });
                           }}
                         />
                         <Button
@@ -1106,8 +1218,7 @@ export default function ComponentEvalPage() {
                           variant="outline"
                           onClick={() => {
                             if (tempStickinessPath.trim()) {
-                              setStickinessFilePaths([...stickinessFilePaths, tempStickinessPath.trim()]);
-                              setTempStickinessPath('');
+                              addPendingPath(tempStickinessPath, setTempStickinessPath, setStickinessFilePaths);
                             } else {
                               stickinessFileRef.current?.click();
                             }
@@ -1116,26 +1227,7 @@ export default function ComponentEvalPage() {
                           {tempStickinessPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
                         </Button>
                       </div>
-                      {stickinessFilePaths.length > 0 && (
-                        <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
-                          <div className="p-2 space-y-1">
-                            {stickinessFilePaths.map((path, idx) => (
-                              <div key={idx} className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200">
-                                <span className="text-xs font-mono truncate flex-1">{path}</span>
-                                <Button
-                                  type="button"
-                                  onClick={() => setStickinessFilePaths(stickinessFilePaths.filter((_, i) => i !== idx))}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      )}
+                      {renderSelectedPathList(stickinessFilePaths, (idx) => removePathAtIndex(idx, setStickinessFilePaths))}
                     </div>
                     <Button onClick={handleStickinessFileEval} disabled={loading} className="w-full" variant="outline">
                       {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</> : 'Evaluate from File'}
@@ -1208,46 +1300,20 @@ export default function ComponentEvalPage() {
                 </div>
               ) : stickinessResult ? (
                 <>
-                  <Dialog open={!!selectedChunkMetric} onOpenChange={(open) => !open && setSelectedChunkMetric(null)}>
-                    <DialogContent className="sm:max-w-[560px]">
-                      {selectedChunkMetric && chunkMetricInfo[selectedChunkMetric] && (
-                        <>
-                          <DialogHeader>
-                            <DialogTitle>{chunkMetricInfo[selectedChunkMetric].title}</DialogTitle>
-                            <DialogDescription>{chunkMetricInfo[selectedChunkMetric].blurb}</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50 to-white p-4 shadow-sm">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700"><Sigma className="h-3.5 w-3.5" />Formula (LaTeX)</div>
-                              <div className="rounded-lg bg-white/80 p-3 text-emerald-950">
-                                <BlockMath math={chunkMetricInfo[selectedChunkMetric].formulaLatex} />
-                              </div>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
-                              <p className="text-sm text-slate-700">{chunkMetricInfo[selectedChunkMetric].interpretation}</p>
-                            </div>
-                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
-                              <ul className="space-y-1 text-sm text-emerald-900 list-disc pl-5">
-                                {chunkMetricInfo[selectedChunkMetric].projectExample.map((item, idx) => (
-                                  <li key={idx}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
-                              <div className="flex flex-wrap gap-2">
-                                {(chunkMetricInfo[selectedChunkMetric].sources ?? chunkMetricSources).map((s, idx) => (
-                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700 hover:bg-emerald-100">{s.label}</a>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </DialogContent>
-                  </Dialog>
+                  {renderMetricInfoDialog(
+                    selectedChunkMetric,
+                    (open) => !open && setSelectedChunkMetric(null),
+                    chunkMetricInfo,
+                    chunkMetricSources,
+                    {
+                      formulaCard: 'rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50 to-white p-4 shadow-sm',
+                      formulaText: 'text-emerald-700',
+                      exampleCard: 'rounded-xl border border-emerald-100 bg-emerald-50/60 p-4',
+                      exampleText: 'text-emerald-700',
+                      exampleBodyText: 'text-emerald-900',
+                      sourceChip: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                    },
+                  )}
                   {/* Entropy Values */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <button
@@ -1452,9 +1518,8 @@ export default function ComponentEvalPage() {
                           onChange={(e) => setTempRetrievalPath(e.target.value)}
                           placeholder="/path/to/retrieval_eval_data.json or click + to browse"
                           onKeyPress={(e) => {
-                            if (e.key === 'Enter' && tempRetrievalPath.trim()) {
-                              setRetrievalFilePaths([...retrievalFilePaths, tempRetrievalPath.trim()]);
-                              setTempRetrievalPath('');
+                            if (e.key === 'Enter') {
+                              addPendingPath(tempRetrievalPath, setTempRetrievalPath, setRetrievalFilePaths);
                             }
                           }}
                         />
@@ -1464,19 +1529,16 @@ export default function ComponentEvalPage() {
                           accept=".json"
                           className="hidden"
                           onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setRetrievalFilePaths([...retrievalFilePaths, file.name]);
+                            addSelectedFile(e.target.files?.[0], setRetrievalFilePaths, () => {
                               if (retrievalFileRef.current) retrievalFileRef.current.value = '';
-                            }
+                            });
                           }}
                         />
                         <Button
                           type="button"
                           onClick={() => {
                             if (tempRetrievalPath.trim()) {
-                              setRetrievalFilePaths([...retrievalFilePaths, tempRetrievalPath.trim()]);
-                              setTempRetrievalPath('');
+                              addPendingPath(tempRetrievalPath, setTempRetrievalPath, setRetrievalFilePaths);
                             } else {
                               retrievalFileRef.current?.click();
                             }
@@ -1487,26 +1549,7 @@ export default function ComponentEvalPage() {
                           {tempRetrievalPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
                         </Button>
                       </div>
-                      {retrievalFilePaths.length > 0 && (
-                        <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
-                          <div className="p-2 space-y-1">
-                            {retrievalFilePaths.map((path, idx) => (
-                              <div key={idx} className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200">
-                                <span className="text-xs font-mono truncate flex-1">{path}</span>
-                                <Button
-                                  type="button"
-                                  onClick={() => setRetrievalFilePaths(retrievalFilePaths.filter((_, i) => i !== idx))}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      )}
+                      {renderSelectedPathList(retrievalFilePaths, (idx) => removePathAtIndex(idx, setRetrievalFilePaths))}
                     </div>
 
                     <div>
@@ -1540,48 +1583,20 @@ export default function ComponentEvalPage() {
                               <h3 className="text-sm font-medium">Aggregated Metrics by Cut@k</h3>
                               <p className="text-xs text-slate-500 mt-1">Collapsed by cut. Expand each panel to inspect Precision/Recall/MAP/MRR/nDCG.</p>
                             </div>
-                            <Dialog open={!!selectedRetrievalMetric} onOpenChange={(open) => !open && setSelectedRetrievalMetric(null)}>
-                              <DialogContent className="sm:max-w-[560px]">
-                                {selectedRetrievalMetric && retrievalMetricInfo[selectedRetrievalMetric] && (
-                                  <>
-                                    <DialogHeader>
-                                      <DialogTitle>{retrievalMetricInfo[selectedRetrievalMetric].title}</DialogTitle>
-                                      <DialogDescription>{retrievalMetricInfo[selectedRetrievalMetric].blurb}</DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-4">
-                                      <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-cyan-50 to-white p-4 shadow-sm">
-                                        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700"><Sigma className="h-3.5 w-3.5" />Formula (LaTeX)</div>
-                                        <div className="rounded-lg bg-white/80 p-3 text-indigo-950"><BlockMath math={retrievalMetricInfo[selectedRetrievalMetric].formulaLatex} /></div>
-                                      </div>
-                                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                        <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
-                                        <p className="text-sm text-slate-700">{retrievalMetricInfo[selectedRetrievalMetric].interpretation}</p>
-                                      </div>
-                                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                        <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
-                                        <ul className="space-y-1 text-sm text-slate-700 list-disc pl-5">
-                                          {(retrievalMetricInfo[selectedRetrievalMetric].variables ?? []).map((item, idx) => (<li key={idx}>{item}</li>))}
-                                        </ul>
-                                      </div>
-                                      <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
-                                        <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-indigo-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
-                                        <ul className="space-y-1 text-sm text-indigo-900 list-disc pl-5">
-                                          {retrievalMetricInfo[selectedRetrievalMetric].projectExample.map((item, idx) => (<li key={idx}>{item}</li>))}
-                                        </ul>
-                                      </div>
-                                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                                        <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
-                                        <div className="flex flex-wrap gap-2">
-                                          {(retrievalMetricInfo[selectedRetrievalMetric].sources ?? []).map((s, idx) => (
-                                            <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-indigo-700 hover:bg-indigo-100">{s.label}</a>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-                              </DialogContent>
-                            </Dialog>
+                            {renderMetricInfoDialog(
+                              selectedRetrievalMetric,
+                              (open) => !open && setSelectedRetrievalMetric(null),
+                              retrievalMetricInfo,
+                              [],
+                              {
+                                formulaCard: 'rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-cyan-50 to-white p-4 shadow-sm',
+                                formulaText: 'text-indigo-700',
+                                exampleCard: 'rounded-xl border border-indigo-100 bg-indigo-50/60 p-4',
+                                exampleText: 'text-indigo-700',
+                                exampleBodyText: 'text-indigo-900',
+                                sourceChip: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100',
+                              },
+                            )}
                           </div>
 
                           <div className="space-y-3">

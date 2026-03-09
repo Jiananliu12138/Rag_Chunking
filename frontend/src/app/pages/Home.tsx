@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
@@ -63,6 +63,23 @@ interface Message {
   timestamp: Date;
 }
 
+type MessageContext = NonNullable<Message['contexts']>[number];
+
+const toggleStringSelection = (values: string[], value: string) => (
+  values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value]
+);
+
+const removeStringSelection = (values: string[], value: string) => (
+  values.filter((item) => item !== value)
+);
+
+const getMessageContextKey = (context: MessageContext, index: number) => (
+  context.chunk_id
+  ?? `${context.doc_id ?? 'doc'}-${context.filepath ?? 'path'}-${index}`
+);
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -97,6 +114,9 @@ export default function Home() {
   const [availableFilepaths, setAvailableFilepaths] = useState<string[]>([]);
   const [availableDocIds, setAvailableDocIds] = useState<string[]>([]);
   const [loadingCollectionData, setLoadingCollectionData] = useState(false);
+
+  const selectedFilepathSet = useMemo(() => new Set(filterFilepath), [filterFilepath]);
+  const selectedDocIdSet = useMemo(() => new Set(filterDocId), [filterDocId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,10 +161,26 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [collectionName, enableRag]);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilterFilepath([]);
     setFilterDocId([]);
-  };
+  }, []);
+
+  const toggleFilterFilepath = useCallback((value: string) => {
+    setFilterFilepath((current) => toggleStringSelection(current, value));
+  }, []);
+
+  const removeFilterFilepath = useCallback((value: string) => {
+    setFilterFilepath((current) => removeStringSelection(current, value));
+  }, []);
+
+  const toggleFilterDocId = useCallback((value: string) => {
+    setFilterDocId((current) => toggleStringSelection(current, value));
+  }, []);
+
+  const removeFilterDocId = useCallback((value: string) => {
+    setFilterDocId((current) => removeStringSelection(current, value));
+  }, []);
 
   const tabFill = (
     setter: (value: string) => void,
@@ -253,11 +289,11 @@ export default function Home() {
     }
   };
 
-  const copyToClipboard = (text: string, id: string) => {
+  const copyToClipboard = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, []);
 
   return (
     <div className="flex h-full">
@@ -380,7 +416,7 @@ export default function Home() {
                               <CollapsibleContent className="mt-3 space-y-2">
                                 {message.contexts.map((ctx, idx) => (
                                   <div
-                                    key={idx}
+                                    key={getMessageContextKey(ctx, idx)}
                                     className="p-3 bg-slate-50 rounded-lg text-xs border border-slate-100"
                                   >
                                     <div className="flex items-center justify-between mb-2">
@@ -604,17 +640,11 @@ export default function Home() {
                                   {availableFilepaths.map((filepath) => (
                                     <CommandItem
                                       key={filepath}
-                                      onSelect={() => {
-                                        if (filterFilepath.includes(filepath)) {
-                                          setFilterFilepath(filterFilepath.filter((f) => f !== filepath));
-                                        } else {
-                                          setFilterFilepath([...filterFilepath, filepath]);
-                                        }
-                                      }}
+                                      onSelect={() => toggleFilterFilepath(filepath)}
                                       className="text-xs"
                                     >
                                       <Checkbox
-                                        checked={filterFilepath.includes(filepath)}
+                                        checked={selectedFilepathSet.has(filepath)}
                                         className="mr-2"
                                       />
                                       <span className="truncate font-mono">{filepath}</span>
@@ -641,7 +671,7 @@ export default function Home() {
                               {fp.split('/').pop()}
                               <X
                                 className="ml-1 h-2 w-2 cursor-pointer"
-                                onClick={() => setFilterFilepath(filterFilepath.filter((f) => f !== fp))}
+                                onClick={() => removeFilterFilepath(fp)}
                               />
                             </Badge>
                           ))}
@@ -677,17 +707,11 @@ export default function Home() {
                                   {availableDocIds.map((docId) => (
                                     <CommandItem
                                       key={docId}
-                                      onSelect={() => {
-                                        if (filterDocId.includes(docId)) {
-                                          setFilterDocId(filterDocId.filter((d) => d !== docId));
-                                        } else {
-                                          setFilterDocId([...filterDocId, docId]);
-                                        }
-                                      }}
+                                      onSelect={() => toggleFilterDocId(docId)}
                                       className="text-xs"
                                     >
                                       <Checkbox
-                                        checked={filterDocId.includes(docId)}
+                                        checked={selectedDocIdSet.has(docId)}
                                         className="mr-2"
                                       />
                                       <span className="truncate font-mono">{docId}</span>
@@ -714,7 +738,7 @@ export default function Home() {
                               {did}
                               <X
                                 className="ml-1 h-2 w-2 cursor-pointer"
-                                onClick={() => setFilterDocId(filterDocId.filter((d) => d !== did))}
+                                onClick={() => removeFilterDocId(did)}
                               />
                             </Badge>
                           ))}

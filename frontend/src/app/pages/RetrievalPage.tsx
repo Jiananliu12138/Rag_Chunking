@@ -1,4 +1,4 @@
-import { useState, useEffect, type KeyboardEvent } from 'react';
+import { useState, useEffect, useCallback, useMemo, type KeyboardEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -32,13 +32,41 @@ interface SearchResult {
   chunk_id?: string;
 }
 
+const DEFAULT_EMBED_DIM = 1024;
+const DEFAULT_TOP_K = 5;
+const DEFAULT_RERANK_CANDIDATE_K = 20;
+const DEFAULT_RERANK_TOP_K = 5;
+const DEFAULT_TEMPERATURE = 0.7;
+const DEFAULT_MAX_NEW_TOKENS = 512;
+
+const parseIntegerInput = (value: string, fallback: number) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseFloatInput = (value: string, fallback: number) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toggleStringSelection = (values: string[], value: string) => (
+  values.includes(value)
+    ? values.filter((item) => item !== value)
+    : [...values, value]
+);
+
+const getSearchResultKey = (result: SearchResult, index: number) => (
+  result.chunk_id
+  ?? `${result.doc_id ?? 'doc'}-${result.filepath ?? 'path'}-${index}`
+);
+
 export default function RetrievalPage() {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [collectionName, setCollectionName] = useState('');
   const [embedModelPath, setEmbedModelPath] = useState('');
-  const [embedDim, setEmbedDim] = useState(1024);
-  const [topK, setTopK] = useState(5);
+  const [embedDim, setEmbedDim] = useState(DEFAULT_EMBED_DIM);
+  const [topK, setTopK] = useState(DEFAULT_TOP_K);
   const [filepath, setFilepath] = useState<string[]>([]);
   const [docId, setDocId] = useState<string[]>([]);
   const [useHybridSearch, setUseHybridSearch] = useState(true);
@@ -53,14 +81,14 @@ export default function RetrievalPage() {
   const [rerankType, setRerankType] = useState<'cross_encoder'>('cross_encoder');
   const [rerankModelPath, setRerankModelPath] = useState('');
   const [rerankDevice, setRerankDevice] = useState('cpu');
-  const [rerankCandidateK, setRerankCandidateK] = useState(20);
-  const [rerankTopK, setRerankTopK] = useState(5);
+  const [rerankCandidateK, setRerankCandidateK] = useState(DEFAULT_RERANK_CANDIDATE_K);
+  const [rerankTopK, setRerankTopK] = useState(DEFAULT_RERANK_TOP_K);
 
   // RAG params
   const [llmApiBase, setLlmApiBase] = useState('');
   const [llmModelName, setLlmModelName] = useState('');
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxNewTokens, setMaxNewTokens] = useState(512);
+  const [temperature, setTemperature] = useState(DEFAULT_TEMPERATURE);
+  const [maxNewTokens, setMaxNewTokens] = useState(DEFAULT_MAX_NEW_TOKENS);
 
   // Results
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -73,10 +101,21 @@ export default function RetrievalPage() {
   const [outputPath, setOutputPath] = useState('');
   const [fileResult, setFileResult] = useState<any>(null);
 
-  const clearFilters = () => {
+  const selectedFilepathSet = useMemo(() => new Set(filepath), [filepath]);
+  const selectedDocIdSet = useMemo(() => new Set(docId), [docId]);
+
+  const clearFilters = useCallback(() => {
     setFilepath([]);
     setDocId([]);
-  };
+  }, []);
+
+  const toggleFilepath = useCallback((value: string) => {
+    setFilepath((current) => toggleStringSelection(current, value));
+  }, []);
+
+  const toggleDocId = useCallback((value: string) => {
+    setDocId((current) => toggleStringSelection(current, value));
+  }, []);
 
   const tabFill = (
     setter: (value: string) => void,
@@ -90,7 +129,8 @@ export default function RetrievalPage() {
 
   useEffect(() => {
     const fetchCollectionData = async () => {
-      if (!collectionName) {
+      const normalizedCollectionName = collectionName.trim();
+      if (!normalizedCollectionName) {
         setAvailableFilepaths([]);
         setAvailableDocIds([]);
         return;
@@ -99,7 +139,7 @@ export default function RetrievalPage() {
       try {
         const response = await api.listCollections();
         if (response.success) {
-          const collection = response.data.collections.find((c: any) => c.name === collectionName);
+          const collection = response.data.collections.find((c: any) => c.name === normalizedCollectionName);
           if (collection) {
             setAvailableFilepaths(collection.filepaths || []);
             setAvailableDocIds(collection.doc_ids || []);
@@ -117,8 +157,15 @@ export default function RetrievalPage() {
     return () => clearTimeout(timeoutId);
   }, [collectionName]);
 
+  useEffect(() => {
+    setFilepath((current) => current.filter((item) => availableFilepaths.includes(item)));
+    setDocId((current) => current.filter((item) => availableDocIds.includes(item)));
+  }, [availableDocIds, availableFilepaths]);
+
   const handleSearch = async () => {
-    if (!query || !collectionName) {
+    const normalizedQuery = query.trim();
+    const normalizedCollectionName = collectionName.trim();
+    if (!normalizedQuery || !normalizedCollectionName) {
       toast.error('Please provide query and collection name');
       return;
     }
@@ -127,8 +174,8 @@ export default function RetrievalPage() {
     setSearchResults([]);
     try {
       const data: any = {
-        query,
-        collection_name: collectionName,
+        query: normalizedQuery,
+        collection_name: normalizedCollectionName,
         embed_model_path: embedModelPath || undefined,
         embed_dim: embedDim,
         top_k: topK,
@@ -157,7 +204,9 @@ export default function RetrievalPage() {
   };
 
   const handleGenerate = async () => {
-    if (!query || !collectionName) {
+    const normalizedQuery = query.trim();
+    const normalizedCollectionName = collectionName.trim();
+    if (!normalizedQuery || !normalizedCollectionName) {
       toast.error('Please provide query and collection name');
       return;
     }
@@ -168,8 +217,8 @@ export default function RetrievalPage() {
     setRagContextItems([]);
     try {
       const data: any = {
-        query,
-        collection_name: collectionName,
+        query: normalizedQuery,
+        collection_name: normalizedCollectionName,
         embed_model_path: embedModelPath || undefined,
         embed_dim: embedDim,
         top_k: topK,
@@ -204,7 +253,10 @@ export default function RetrievalPage() {
   };
 
   const handleGenerateFile = async () => {
-    if (!inputPath || !outputPath || !collectionName) {
+    const normalizedInputPath = inputPath.trim();
+    const normalizedOutputPath = outputPath.trim();
+    const normalizedCollectionName = collectionName.trim();
+    if (!normalizedInputPath || !normalizedOutputPath || !normalizedCollectionName) {
       toast.error('Please fill all required fields');
       return;
     }
@@ -212,9 +264,9 @@ export default function RetrievalPage() {
     setLoading(true);
     try {
       const data: any = {
-        input_path: inputPath,
-        output_path: outputPath,
-        collection_name: collectionName,
+        input_path: normalizedInputPath,
+        output_path: normalizedOutputPath,
+        collection_name: normalizedCollectionName,
         embed_model_path: embedModelPath || undefined,
         embed_dim: embedDim,
         top_k: topK,
@@ -268,7 +320,7 @@ export default function RetrievalPage() {
               </div>
               <div>
                 <Label>Embed Dim</Label>
-                <Input type="number" value={embedDim} onChange={(e) => setEmbedDim(parseInt(e.target.value || '0'))} />
+                        <Input type="number" value={embedDim} onChange={(e) => setEmbedDim(parseIntegerInput(e.target.value, DEFAULT_EMBED_DIM))} />
               </div>
               <div>
                 <Label>LLM API Base</Label>
@@ -342,7 +394,7 @@ export default function RetrievalPage() {
                       <Input
                         type="number"
                         value={embedDim}
-                        onChange={(e) => setEmbedDim(parseInt(e.target.value))}
+                        onChange={(e) => setEmbedDim(parseIntegerInput(e.target.value, DEFAULT_EMBED_DIM))}
                       />
                     </div>
                     <div>
@@ -350,7 +402,7 @@ export default function RetrievalPage() {
                       <Input
                         type="number"
                         value={topK}
-                        onChange={(e) => setTopK(parseInt(e.target.value))}
+                        onChange={(e) => setTopK(parseIntegerInput(e.target.value, DEFAULT_TOP_K))}
                       />
                     </div>
                   </div>
@@ -387,10 +439,10 @@ export default function RetrievalPage() {
                                   {availableFilepaths.map((fp) => (
                                     <CommandItem
                                       key={fp}
-                                      onSelect={() => setFilepath(filepath.includes(fp) ? filepath.filter((x) => x !== fp) : [...filepath, fp])}
+                                      onSelect={() => toggleFilepath(fp)}
                                       className="text-xs"
                                     >
-                                      <Checkbox checked={filepath.includes(fp)} className="mr-2" />
+                                      <Checkbox checked={selectedFilepathSet.has(fp)} className="mr-2" />
                                       <span className="truncate font-mono">{fp}</span>
                                     </CommandItem>
                                   ))}
@@ -425,10 +477,10 @@ export default function RetrievalPage() {
                                   {availableDocIds.map((id) => (
                                     <CommandItem
                                       key={id}
-                                      onSelect={() => setDocId(docId.includes(id) ? docId.filter((x) => x !== id) : [...docId, id])}
+                                      onSelect={() => toggleDocId(id)}
                                       className="text-xs"
                                     >
-                                      <Checkbox checked={docId.includes(id)} className="mr-2" />
+                                      <Checkbox checked={selectedDocIdSet.has(id)} className="mr-2" />
                                       <span className="truncate font-mono">{id}</span>
                                     </CommandItem>
                                   ))}
@@ -476,11 +528,11 @@ export default function RetrievalPage() {
                           </div>
                           <div>
                             <Label className="text-xs">Rerank Top K</Label>
-                            <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
+                          <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseIntegerInput(e.target.value, DEFAULT_RERANK_TOP_K))} />
                           </div>
                           <div className="col-span-2">
                             <Label className="text-xs">Rerank Candidate K</Label>
-                            <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
+                          <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseIntegerInput(e.target.value, DEFAULT_RERANK_CANDIDATE_K))} />
                           </div>
                         </div>
                       )}
@@ -515,7 +567,7 @@ export default function RetrievalPage() {
                             type="number"
                             step="0.1"
                             value={temperature}
-                            onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                            onChange={(e) => setTemperature(parseFloatInput(e.target.value, DEFAULT_TEMPERATURE))}
                           />
                         </div>
                         <div>
@@ -523,7 +575,7 @@ export default function RetrievalPage() {
                           <Input
                             type="number"
                             value={maxNewTokens}
-                            onChange={(e) => setMaxNewTokens(parseInt(e.target.value))}
+                            onChange={(e) => setMaxNewTokens(parseIntegerInput(e.target.value, DEFAULT_MAX_NEW_TOKENS))}
                           />
                         </div>
                       </div>
@@ -575,7 +627,7 @@ export default function RetrievalPage() {
                     <div className="space-y-3">
                       {searchResults.map((result, index) => (
                         <div
-                          key={index}
+                          key={getSearchResultKey(result, index)}
                           className="p-4 bg-slate-50 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors"
                         >
                           <div className="flex items-start justify-between mb-2">
@@ -636,7 +688,7 @@ export default function RetrievalPage() {
                       <div className="space-y-2">
                         {ragContextItems.map((item, index) => (
                           <div
-                            key={index}
+                            key={getSearchResultKey(item, index)}
                             className="p-3 bg-white rounded border border-slate-200 text-sm"
                           >
                             <div className="flex items-center justify-between mb-1">
@@ -709,7 +761,7 @@ export default function RetrievalPage() {
                   <Input
                     type="number"
                     value={topK}
-                    onChange={(e) => setTopK(parseInt(e.target.value || '1'))}
+                    onChange={(e) => setTopK(parseIntegerInput(e.target.value, DEFAULT_TOP_K))}
                   />
                 </div>
                 <div>
@@ -717,7 +769,7 @@ export default function RetrievalPage() {
                   <Input
                     type="number"
                     value={embedDim}
-                    onChange={(e) => setEmbedDim(parseInt(e.target.value || '1'))}
+                    onChange={(e) => setEmbedDim(parseIntegerInput(e.target.value, DEFAULT_EMBED_DIM))}
                   />
                 </div>
               </div>
@@ -767,11 +819,11 @@ export default function RetrievalPage() {
                       </div>
                       <div>
                         <Label className="text-xs">Rerank Top K</Label>
-                        <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
+                        <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseIntegerInput(e.target.value, DEFAULT_RERANK_TOP_K))} />
                       </div>
                       <div>
                         <Label className="text-xs">Rerank Candidate K</Label>
-                        <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
+                        <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseIntegerInput(e.target.value, DEFAULT_RERANK_CANDIDATE_K))} />
                       </div>
                       <div className="col-span-2">
                         <Label className="text-xs">CrossEncoder model path (optional)</Label>
@@ -793,11 +845,11 @@ export default function RetrievalPage() {
                 </div>
                 <div>
                   <Label>Temperature</Label>
-                  <Input type="number" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value || '0'))} />
+                  <Input type="number" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloatInput(e.target.value, DEFAULT_TEMPERATURE))} />
                 </div>
                 <div>
                   <Label>Max New Tokens</Label>
-                  <Input type="number" value={maxNewTokens} onChange={(e) => setMaxNewTokens(parseInt(e.target.value || '1'))} />
+                  <Input type="number" value={maxNewTokens} onChange={(e) => setMaxNewTokens(parseIntegerInput(e.target.value, DEFAULT_MAX_NEW_TOKENS))} />
                 </div>
               </div>
 
