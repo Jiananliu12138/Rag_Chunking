@@ -133,6 +133,12 @@ export default function RetrievalPage() {
         embed_dim: embedDim,
         top_k: topK,
         use_hybrid_search: useHybridSearch,
+        rerank_enabled: rerankEnabled,
+        rerank_type: 'cross_encoder',
+        rerank_model_path: rerankEnabled ? (rerankModelPath || undefined) : undefined,
+        rerank_device: rerankDevice,
+        rerank_candidate_k: rerankEnabled ? rerankCandidateK : undefined,
+        rerank_top_k: rerankEnabled ? rerankTopK : undefined,
       };
 
       if (filepath.length > 0) data.filepath = filepath;

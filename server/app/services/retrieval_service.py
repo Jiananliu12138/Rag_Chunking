@@ -175,6 +175,12 @@ class RetrievalService:
             "执行检索: collection=%s, query=%s..., top_k=%d",
             request.collection_name, request.query[:30], request.top_k,
         )
+        settings = get_settings()
+        retrieve_top_k, final_top_k = self._normalize_retrieve_and_final_top_k(
+            request_top_k=request.top_k,
+            rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
+            rerank_top_k=request.rerank_top_k if request.rerank_enabled else None,
+        )
         embed_model = IndexService._load_langchain_embed(request.embed_model_path)
         # 没有过滤条件 → 普通全库检索；有条件 → 调用带 metadata 过滤的方法
         if request.filepath is None and request.doc_id is None:
@@ -183,7 +189,7 @@ class RetrievalService:
                 query=request.query,
                 langchain_embed=embed_model,
                 embed_dim=request.embed_dim,
-                top_k=request.top_k,
+                top_k=retrieve_top_k,
                 use_hybrid_search=request.use_hybrid_search,
             )
         else:
@@ -192,17 +198,32 @@ class RetrievalService:
                 query=request.query,
                 langchain_embed=embed_model,
                 embed_dim=request.embed_dim,
-                top_k=request.top_k,
+                top_k=retrieve_top_k,
                 filepath=request.filepath,
                 doc_id=request.doc_id,
                 use_hybrid_search=request.use_hybrid_search,
             )
         items = self._to_search_result_items(raw_results)
+        if request.rerank_enabled:
+            self._validate_rerank_type(request.rerank_type)
+            rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL_PATH
+            rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
+            if not rerank_model_path:
+                raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
+            items = self._rerank_items_cross_encoder(
+                query=request.query,
+                context_items=items,
+                model_path=rerank_model_path,
+                device=rerank_device,
+                final_top_k=final_top_k,
+            )
+        else:
+            items = items[:final_top_k]
         return SearchResult(
             query=request.query,
             results=items,
             collection_name=request.collection_name,
-            top_k=request.top_k,
+            top_k=final_top_k,
         )
 
     def rag_generate(self, request: RAGRequest) -> RAGResult:

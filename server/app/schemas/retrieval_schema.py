@@ -24,6 +24,34 @@ class SearchRequest(BaseModel):
         None,
         description="是否使用 Hybrid Search（dense+sparse）；未显式传时使用服务端默认配置。",
     )
+    rerank_enabled: bool = Field(
+        False,
+        description="是否启用 rerank（默认 false）。",
+    )
+    rerank_type: str = Field(
+        "cross_encoder",
+        description="rerank 类型，当前仅支持 cross_encoder。",
+    )
+    rerank_model_path: Optional[str] = Field(
+        None,
+        description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
+    )
+    rerank_device: str = Field(
+        "cpu",
+        description="rerank 设备（如 cpu / cuda:0）。",
+    )
+    rerank_candidate_k: Optional[int] = Field(
+        None,
+        ge=1,
+        le=200,
+        description="rerank 召回候选数；为空时使用 max(top_k, rerank_top_k)。",
+    )
+    rerank_top_k: Optional[int] = Field(
+        None,
+        ge=1,
+        le=100,
+        description="rerank 后保留条数；为空时使用 top_k。",
+    )
     filepath: str | list[str] | None = Field(
         None,
         description=(
