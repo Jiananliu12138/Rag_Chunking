@@ -36,7 +36,7 @@ export default function RetrievalPage() {
   const [query, setQuery] = useState('');
   const [collectionName, setCollectionName] = useState('');
   const [embedModelPath, setEmbedModelPath] = useState('');
-  const [embedDim, setEmbedDim] = useState(768);
+  const [embedDim, setEmbedDim] = useState(1024);
   const [topK, setTopK] = useState(5);
   const [filepath, setFilepath] = useState<string[]>([]);
   const [docId, setDocId] = useState<string[]>([]);
@@ -257,7 +257,7 @@ export default function RetrievalPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Embedding model path</Label>
-                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} onKeyDown={tabFill(setEmbedModelPath)} placeholder="Leave empty to use server default" />
+                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} onKeyDown={tabFill(setEmbedModelPath)} placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5" />
               </div>
               <div>
                 <Label>Embed Dim</Label>
@@ -273,11 +273,11 @@ export default function RetrievalPage() {
               </div>
               <div>
                 <Label>CrossEncoder model path</Label>
-                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="Leave empty to use server default" />
+                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3" />
               </div>
               <div>
                 <Label>Rerank Device</Label>
-                <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder="cpu / cuda:0" />
+                <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder="cuda:1" />
               </div>
             </div>
           </DialogContent>
@@ -315,7 +315,7 @@ export default function RetrievalPage() {
                       value={collectionName}
                       onChange={(e) => setCollectionName(e.target.value)}
                       onKeyDown={tabFill(setCollectionName)}
-                      placeholder="my_collection"
+                      placeholder="test"
                     />
                   </div>
 
@@ -325,7 +325,7 @@ export default function RetrievalPage() {
                       value={embedModelPath}
                       onChange={(e) => setEmbedModelPath(e.target.value)}
                       onKeyDown={tabFill(setEmbedModelPath)}
-                      placeholder="Leave empty to use server default"
+                      placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
                     />
                   </div>
 
@@ -456,25 +456,27 @@ export default function RetrievalPage() {
                         <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs">Rerank Type</Label>
-                          <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
-                            </SelectContent>
-                          </Select>
+                      {rerankEnabled && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Rerank Type</Label>
+                            <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Rerank Top K</Label>
+                            <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Rerank Candidate K</Label>
+                            <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
+                          </div>
                         </div>
-                        <div>
-                          <Label className="text-xs">Rerank Top K</Label>
-                          <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
-                        </div>
-                        <div className="col-span-2">
-                          <Label className="text-xs">Rerank Candidate K</Label>
-                          <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))} />
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
 
@@ -487,7 +489,7 @@ export default function RetrievalPage() {
                           value={llmApiBase}
                           onChange={(e) => setLlmApiBase(e.target.value)}
                           onKeyDown={tabFill(setLlmApiBase)}
-                          placeholder="http://localhost:8000/v1"
+                          placeholder="http://localhost:8005/v1"
                         />
                       </div>
                       <div>
@@ -496,7 +498,7 @@ export default function RetrievalPage() {
                           value={llmModelName}
                           onChange={(e) => setLlmModelName(e.target.value)}
                           onKeyDown={tabFill(setLlmModelName)}
-                          placeholder="gpt-3.5-turbo"
+                          placeholder="Qwen2.5-7B-Instruct"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -546,7 +548,7 @@ export default function RetrievalPage() {
             {/* Right: Results */}
             <div className="lg:col-span-2 space-y-6">
               {/* Search Results */}
-              <Card className="p-6">
+              <Card className="p-6 h-[648px] flex flex-col">
                 <h2 className="font-bold mb-4 flex items-center gap-2">
                   <Search className="w-5 h-5" />
                   Search Results
@@ -558,11 +560,11 @@ export default function RetrievalPage() {
                   )}
                 </h2>
                 {loading ? (
-                  <div className="flex items-center justify-center py-12">
+                  <div className="flex-1 flex items-center justify-center">
                     <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
                   </div>
                 ) : searchResults.length > 0 ? (
-                  <ScrollArea className="h-[400px]">
+                  <ScrollArea className="flex-1 min-h-0 pr-4">
                     <div className="space-y-3">
                       {searchResults.map((result, index) => (
                         <div
@@ -593,9 +595,11 @@ export default function RetrievalPage() {
                     </div>
                   </ScrollArea>
                 ) : (
-                  <div className="text-center py-12 text-slate-400">
-                    <Search className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Search results will appear here</p>
+                  <div className="flex-1 flex items-center justify-center text-slate-400">
+                    <div className="text-center">
+                      <Search className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Search results will appear here</p>
+                    </div>
                   </div>
                 )}
               </Card>
@@ -679,7 +683,7 @@ export default function RetrievalPage() {
                     value={collectionName}
                     onChange={(e) => setCollectionName(e.target.value)}
                     onKeyDown={tabFill(setCollectionName)}
-                    placeholder="my_collection"
+                    placeholder="test"
                   />
                 </div>
                 <div>
@@ -706,7 +710,7 @@ export default function RetrievalPage() {
                   value={embedModelPath}
                   onChange={(e) => setEmbedModelPath(e.target.value)}
                   onKeyDown={tabFill(setEmbedModelPath)}
-                  placeholder="Leave empty to use server default"
+                  placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
                 />
               </div>
 
@@ -714,7 +718,7 @@ export default function RetrievalPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="text-sm">RRF Rerank (Hybrid Search)</Label>
-                    <p className="text-xs text-slate-500">Dense + Sparse + RRF (server ranker)</p>
+                    <p className="text-xs text-slate-500">Dense + Sparse + RRF</p>
                   </div>
                   <Switch checked={useHybridSearch} onCheckedChange={setUseHybridSearch} />
                 </div>
@@ -741,7 +745,7 @@ export default function RetrievalPage() {
                       </div>
                       <div>
                         <Label className="text-xs">Rerank Device</Label>
-                        <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder="cpu / cuda:0" />
+                        <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder="cuda:1" />
                       </div>
                       <div>
                         <Label className="text-xs">Rerank Top K</Label>
@@ -753,7 +757,7 @@ export default function RetrievalPage() {
                       </div>
                       <div className="col-span-2">
                         <Label className="text-xs">CrossEncoder model path (optional)</Label>
-                        <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="Leave empty to use server default" />
+                        <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3" />
                       </div>
                     </div>
                   )}
@@ -763,7 +767,7 @@ export default function RetrievalPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
                 <div>
                   <Label>LLM API Base (optional)</Label>
-                  <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder="http://localhost:8000/v1" />
+                  <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder="http://localhost:8005/v1" />
                 </div>
                 <div>
                   <Label>LLM Model Name (optional)</Label>

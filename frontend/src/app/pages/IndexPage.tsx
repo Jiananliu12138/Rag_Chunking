@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -79,6 +79,16 @@ export default function IndexPage() {
   useEffect(() => {
     loadCollections();
   }, []);
+
+  const tabFill = (
+    setter: (value: string) => void,
+  ) => (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key !== 'Tab') return;
+    const current = e.currentTarget;
+    if (!current.value?.trim() && current.placeholder?.trim()) {
+      setter(current.placeholder);
+    }
+  };
 
   const loadCollections = async () => {
     setLoading(true);
@@ -300,7 +310,8 @@ export default function IndexPage() {
                 <Input
                   value={collectionName}
                   onChange={(e) => setCollectionName(e.target.value)}
-                  placeholder="my_collection"
+                  onKeyDown={tabFill(setCollectionName)}
+                  placeholder="test"
                 />
               </div>
               <div>
@@ -309,6 +320,7 @@ export default function IndexPage() {
                   <Input
                     value={tempDocPath}
                     onChange={(e) => setTempDocPath(e.target.value)}
+                    onKeyDown={tabFill(setTempDocPath)}
                     placeholder="/path/to/chunks.json or click + to browse"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && tempDocPath.trim()) {
@@ -375,7 +387,8 @@ export default function IndexPage() {
                 <Input
                   value={embedModelPath}
                   onChange={(e) => setEmbedModelPath(e.target.value)}
-                  placeholder="Optional: /path/to/embedding/model"
+                  onKeyDown={tabFill(setEmbedModelPath)}
+                  placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
                 />
               </div>
               <div>
@@ -384,11 +397,12 @@ export default function IndexPage() {
                   type="number"
                   value={embedDim}
                   onChange={(e) => setEmbedDim(e.target.value)}
-                  placeholder="e.g., 768"
+                  onKeyDown={tabFill(setEmbedDim)}
+                  placeholder="1024"
                 />
               </div>
               <div>
-                <Label>Batch Size</Label>
+                <Label>Batch Size(Optional)</Label>
                 <Input
                   type="number"
                   value={batchSize}
@@ -434,7 +448,8 @@ export default function IndexPage() {
                 <Input
                   value={addCollectionName}
                   onChange={(e) => setAddCollectionName(e.target.value)}
-                  placeholder="existing_collection"
+                  onKeyDown={tabFill(setAddCollectionName)}
+                  placeholder="test"
                 />
               </div>
               <div>
@@ -443,6 +458,7 @@ export default function IndexPage() {
                   <Input
                     value={tempAddDocPath}
                     onChange={(e) => setTempAddDocPath(e.target.value)}
+                    onKeyDown={tabFill(setTempAddDocPath)}
                     placeholder="/path/to/new_chunks.json or click + to browse"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && tempAddDocPath.trim()) {
@@ -505,7 +521,7 @@ export default function IndexPage() {
                 )}
               </div>
               <div>
-                <Label>Batch Size</Label>
+                <Label>Batch Size(Optional)</Label>
                 <Input
                   type="number"
                   value={addBatchSize}
@@ -517,7 +533,8 @@ export default function IndexPage() {
                 <Input
                   value={addEmbedModelPath}
                   onChange={(e) => setAddEmbedModelPath(e.target.value)}
-                  placeholder="Optional: /path/to/embedding/model"
+                  onKeyDown={tabFill(setAddEmbedModelPath)}
+                  placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
                 />
                 <div className="mt-2 space-y-1">
                   <p className="text-xs text-slate-500 flex items-center gap-1">
@@ -793,7 +810,8 @@ export default function IndexPage() {
                     <Input
                       value={selectedFilepath}
                       onChange={(e) => setSelectedFilepath(e.target.value)}
-                      placeholder="e.g., /path/to/document.pdf"
+                      onKeyDown={tabFill(setSelectedFilepath)}
+                      placeholder="e.g., /path/to/document"
                       className="mt-1"
                     />
                   )}
@@ -836,6 +854,7 @@ export default function IndexPage() {
                     <Input
                       value={selectedDocId}
                       onChange={(e) => setSelectedDocId(e.target.value)}
+                      onKeyDown={tabFill(setSelectedDocId)}
                       placeholder="e.g., doc_123"
                       className="mt-1"
                     />

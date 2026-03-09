@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type KeyboardEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -48,6 +48,16 @@ export default function ChunkingPage() {
     // Clear chunks when method changes
     setTextChunks([]);
   }, [selectedMethod]);
+
+  const tabFill = (
+    setter: (value: string) => void,
+  ) => (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key !== 'Tab') return;
+    const current = e.currentTarget;
+    if (!current.value?.trim() && current.placeholder?.trim()) {
+      setter(current.placeholder);
+    }
+  };
 
   const loadMethods = async () => {
     const response = await api.getChunkMethods();
@@ -161,6 +171,7 @@ export default function ChunkingPage() {
               <Input
                 value={params.split_by_character || '\\n\\n'}
                 onChange={(e) => setParams({ ...params, split_by_character: e.target.value })}
+                onKeyDown={tabFill((value) => setParams({ ...params, split_by_character: value }))}
                 placeholder="\\n\\n"
               />
             </div>
@@ -175,7 +186,8 @@ export default function ChunkingPage() {
               <Input
                 value={params.embed_model_path || ''}
                 onChange={(e) => setParams({ ...params, embed_model_path: e.target.value })}
-                placeholder="Leave empty for default"
+                onKeyDown={tabFill((value) => setParams({ ...params, embed_model_path: value }))}
+                placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
               />
             </div>
             <div>
@@ -227,6 +239,7 @@ export default function ChunkingPage() {
               <Input
                 value={params.llm_api_base || ''}
                 onChange={(e) => setParams({ ...params, llm_api_base: e.target.value })}
+                onKeyDown={tabFill((value) => setParams({ ...params, llm_api_base: value }))}
                 placeholder="http://localhost:8005/v1"
               />
             </div>
@@ -235,6 +248,7 @@ export default function ChunkingPage() {
               <Input
                 value={params.model_type || ''}
                 onChange={(e) => setParams({ ...params, model_type: e.target.value })}
+                onKeyDown={tabFill((value) => setParams({ ...params, model_type: value }))}
                 placeholder="Qwen2.5-7B-Instruct"
               />
             </div>
@@ -303,6 +317,7 @@ export default function ChunkingPage() {
                 <Textarea
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={tabFill(setInputText)}
                   placeholder="Enter text to chunk here..."
                   className="min-h-[200px] mb-4"
                 />
@@ -410,6 +425,7 @@ export default function ChunkingPage() {
                     <Input
                       value={inputPath}
                       onChange={(e) => setInputPath(e.target.value)}
+                      onKeyDown={tabFill(setInputPath)}
                       placeholder="/path/to/input.json"
                     />
                   </div>
@@ -418,6 +434,7 @@ export default function ChunkingPage() {
                     <Input
                       value={outputDir}
                       onChange={(e) => setOutputDir(e.target.value)}
+                      onKeyDown={tabFill(setOutputDir)}
                       placeholder="/path/to/output"
                     />
                   </div>
