@@ -18,7 +18,9 @@ import {
   DialogTrigger,
 } from '../components/ui/dialog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, FolderOpen, Plus, X, BarChart3, Sparkles } from 'lucide-react';
+import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, FolderOpen, Plus, X, BarChart3, Sparkles, Sigma, FlaskConical } from 'lucide-react';
+import { BlockMath } from 'react-katex';
+import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -212,6 +214,39 @@ export default function ComponentEvalPage() {
   const isRetrievalSection = location.search.includes('section=retrieval');
   const initialTab = isRetrievalSection ? 'retrieval' : 'quality';
   const [activeTab, setActiveTab] = useState<'quality' | 'stickiness' | 'retrieval'>(initialTab as 'quality' | 'stickiness' | 'retrieval');
+  const [selectedChunkMetric, setSelectedChunkMetric] = useState<string | null>(null);
+
+  type ChunkMetricDoc = {
+    title: string;
+    blurb: string;
+    formulaLatex: string;
+    interpretation: string;
+    projectExample: string[];
+  };
+
+  const chunkMetricInfo: Record<string, ChunkMetricDoc> = {
+    bc: {
+      title: 'Boundary Clarity (BC)',
+      blurb: 'Measures how clearly the boundary separates adjacent chunks using conditional perplexity ratio.',
+      formulaLatex: String.raw`BC_i=\frac{\mathrm{ppl}(c_{i+1}\mid c_i)}{\mathrm{ppl}(c_{i+1}\mid \varnothing)},\quad BC=\frac{1}{N-1}\sum_{i=1}^{N-1}BC_i`,
+      interpretation: 'Lower generally indicates weaker dependency across the boundary (clearer segmentation); values near 1 indicate stronger continuity.',
+      projectExample: ['In this project, each adjacent pair in `chunks` contributes one BC_i.', 'The UI reports `avg_boundary_clarity` from all valid adjacent pairs.'],
+    },
+    ds: {
+      title: 'Semantic Dissimilarity (DS)',
+      blurb: 'Measures semantic separation between adjacent chunks based on cosine similarity of embeddings.',
+      formulaLatex: String.raw`DS_i=1-\cos\left(\mathbf{e}(c_i),\mathbf{e}(c_{i+1})\right),\quad DS=\frac{1}{N-1}\sum_{i=1}^{N-1}DS_i`,
+      interpretation: 'Higher DS means adjacent chunks are semantically less similar; very low DS may indicate over-splitting around similar content.',
+      projectExample: ['`chunk_eval_refactored.py` computes normalized embeddings then uses 1 - cosine similarity.', 'The UI reports the dataset mean as `avg_semantic_dissimilarity`.'],
+    },
+    cs: {
+      title: 'Chunk Stickiness (CS, Structural-Entropy View)',
+      blurb: 'Quantifies global coupling pattern of chunk graph via structural entropy over thresholded edges.',
+      formulaLatex: String.raw`CS=H(G_\tau)=-\sum_{v\in V}p(v)\log_2 p(v),\quad p(v)=\frac{\deg(v)}{\sum_{u\in V}\deg(u)}`,
+      interpretation: 'Lower entropy indicates stronger cohesive structure (more concentrated connectivity). The page reports complete/incomplete graph variants.',
+      projectExample: ['`relation_eval_refactored.py` builds a normalized graph, keeps edges with weight > threshold, then computes node-degree entropy.', 'Displayed outputs: `structural_entropy_complete` and `structural_entropy_incomplete`.'],
+    },
+  };
 
   // ── Chunk Quality – Direct Input ────────────────────────────────────────────
   const [qualityChunksJson, setQualityChunksJson] = useState('');
@@ -744,7 +779,44 @@ export default function ComponentEvalPage() {
 
               {/* Results column */}
               <Card className="p-6">
-                <h2 className="font-bold mb-4">Quality Results</h2>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="font-bold">Quality Results</h2>
+                    <p className="text-xs text-slate-500 mt-1">Click BC/DS cards to open paper-style metric notes.</p>
+                  </div>
+                  <Dialog open={!!selectedChunkMetric} onOpenChange={(open) => !open && setSelectedChunkMetric(null)}>
+                    <DialogContent className="sm:max-w-[560px]">
+                      {selectedChunkMetric && chunkMetricInfo[selectedChunkMetric] && (
+                        <>
+                          <DialogHeader>
+                            <DialogTitle>{chunkMetricInfo[selectedChunkMetric].title}</DialogTitle>
+                            <DialogDescription>{chunkMetricInfo[selectedChunkMetric].blurb}</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700"><Sigma className="h-3.5 w-3.5" />Formula (LaTeX)</div>
+                              <div className="rounded-lg bg-white/80 p-3 text-blue-950">
+                                <BlockMath math={chunkMetricInfo[selectedChunkMetric].formulaLatex} />
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
+                              <p className="text-sm text-slate-700">{chunkMetricInfo[selectedChunkMetric].interpretation}</p>
+                            </div>
+                            <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-blue-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
+                              <ul className="space-y-1 text-sm text-blue-900 list-disc pl-5">
+                                {chunkMetricInfo[selectedChunkMetric].projectExample.map((item, idx) => (
+                                  <li key={idx}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
@@ -753,18 +825,30 @@ export default function ComponentEvalPage() {
                   <ScrollArea className="h-[600px]">
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
-                          <div className="text-sm text-slate-600 mb-1">Avg Boundary Clarity</div>
-                          <div className="text-2xl font-bold text-blue-900">
-                            {qualityResult.avg_boundary_clarity?.toFixed(4) || '-'}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedChunkMetric('bc')}
+                          className="p-4 text-left bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-blue-300"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="text-sm text-slate-600 mb-1">Avg Boundary Clarity</div>
+                            <span className="rounded-full border border-blue-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-blue-700">BC</span>
                           </div>
-                        </div>
-                        <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                          <div className="text-sm text-slate-600 mb-1">Avg Semantic Dissimilarity</div>
-                          <div className="text-2xl font-bold text-purple-900">
-                            {qualityResult.avg_semantic_dissimilarity?.toFixed(4) || '-'}
+                          <div className="text-2xl font-bold text-blue-900">{qualityResult.avg_boundary_clarity?.toFixed(4) || '-'}</div>
+                          <p className="mt-2 text-xs text-slate-600">Perplexity-ratio based boundary metric from MoC-style chunk evaluation.</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedChunkMetric('ds')}
+                          className="p-4 text-left bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-purple-300"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="text-sm text-slate-600 mb-1">Avg Semantic Dissimilarity</div>
+                            <span className="rounded-full border border-purple-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-purple-700">DS</span>
                           </div>
-                        </div>
+                          <div className="text-2xl font-bold text-purple-900">{qualityResult.avg_semantic_dissimilarity?.toFixed(4) || '-'}</div>
+                          <p className="mt-2 text-xs text-slate-600">Embedding cosine-separation metric over adjacent chunk pairs.</p>
+                        </button>
                       </div>
                       {qualityChartData.length > 0 && (
                         <div>
@@ -1017,8 +1101,55 @@ export default function ComponentEvalPage() {
                 </div>
               ) : stickinessResult ? (
                 <>
+                  <Dialog open={!!selectedChunkMetric} onOpenChange={(open) => !open && setSelectedChunkMetric(null)}>
+                    <DialogContent className="sm:max-w-[560px]">
+                      {selectedChunkMetric && chunkMetricInfo[selectedChunkMetric] && (
+                        <>
+                          <DialogHeader>
+                            <DialogTitle>{chunkMetricInfo[selectedChunkMetric].title}</DialogTitle>
+                            <DialogDescription>{chunkMetricInfo[selectedChunkMetric].blurb}</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50 to-white p-4 shadow-sm">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700"><Sigma className="h-3.5 w-3.5" />Formula (LaTeX)</div>
+                              <div className="rounded-lg bg-white/80 p-3 text-emerald-950">
+                                <BlockMath math={chunkMetricInfo[selectedChunkMetric].formulaLatex} />
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
+                              <p className="text-sm text-slate-700">{chunkMetricInfo[selectedChunkMetric].interpretation}</p>
+                            </div>
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-emerald-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
+                              <ul className="space-y-1 text-sm text-emerald-900 list-disc pl-5">
+                                {chunkMetricInfo[selectedChunkMetric].projectExample.map((item, idx) => (
+                                  <li key={idx}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </DialogContent>
+                  </Dialog>
                   {/* Entropy Values */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedChunkMetric('cs')}
+                      className="md:col-span-2 p-5 text-left rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50 to-white hover:shadow-md hover:border-emerald-300 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Chunk Graph Metric</div>
+                          <div className="text-base font-semibold text-slate-800 mt-1">Chunk Stickiness (CS)</div>
+                          <p className="text-xs text-slate-600 mt-1">Structural-entropy based global cohesion metric from MoC-style relation evaluation.</p>
+                        </div>
+                        <span className="rounded-full border border-emerald-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-emerald-700">CS Formula</span>
+                      </div>
+                    </button>
+
                     <Card className="p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <div className="p-2 bg-green-100 rounded-lg">
