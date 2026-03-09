@@ -28,6 +28,16 @@ def count_words(input_string):
     return round(1.2 * len(words))
 
 
+def sanitize_filename_component(value):
+    """Convert arbitrary model identifiers into a filesystem-safe filename part."""
+    text = str(value or "").strip()
+    if not text:
+        return "model"
+    text = text.replace("\\", "_").replace("/", "_").replace(":", "_")
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text)
+    return text.strip("._") or "model"
+
+
 def add_ids_(p, current_id):
     p = f'ID {current_id}: {p}'
     return p
@@ -348,7 +358,8 @@ def chunk_file(input_file: str, output_dir: str, model_type: str = MODEL_TYPE, d
         }
         
         input_basename = os.path.basename(input_file).replace('.jsonl', '')
-        output_file = os.path.join(output_dir, f"{input_basename}_lumber_chunk_{model_type}.json")
+        safe_model_type = sanitize_filename_component(model_type)
+        output_file = os.path.join(output_dir, f"{input_basename}_lumber_chunk_{safe_model_type}.json")
         with open(output_file, "w", encoding='utf-8') as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
         
@@ -434,7 +445,8 @@ def main():
     }
     
     input_basename = os.path.basename(INPUT_FILE).replace('.jsonl', '')
-    output_file = os.path.join(OUTPUT_DIR, f"{input_basename}_lumber_chunk_{MODEL_TYPE}.json")
+    safe_model_type = sanitize_filename_component(MODEL_TYPE)
+    output_file = os.path.join(OUTPUT_DIR, f"{input_basename}_lumber_chunk_{safe_model_type}.json")
     with open(output_file, "w", encoding='utf-8') as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
     
