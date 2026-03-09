@@ -873,16 +873,35 @@ class MilvusRepository:
             [{"text": ..., "score": ...}, ...]
         """
         try:
-            engine = self.load_query_engine(
-                collection_name,
-                langchain_embed,
-                embed_dim,
-                top_k,
-                use_hybrid_search=use_hybrid_search,
+            # 仅做向量检索时，直接走 retriever，避免 query_engine.query 触发
+            # response synthesizer（compact/refine）导致上下文窗口校验失败。
+            if not self.collection_exists(collection_name):
+                raise CollectionNotFoundException(
+                    f"Collection '{collection_name}' 不存在，请先构建索引"
+                )
+
+            self._make_embed_model(langchain_embed)
+            vector_store = self._build_vector_store_with_dim(
+                collection_name, embed_dim, overwrite=False
             )
-            response = engine.query(query)
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            vector_index = VectorStoreIndex([], storage_context=storage_context)
+
+            effective_use_hybrid = (
+                use_hybrid_search
+                if use_hybrid_search is not None
+                else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
+            )
+            effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+
+            retriever_kwargs = {"similarity_top_k": top_k}
+            if effective_use_hybrid:
+                retriever_kwargs["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
+
+            retriever = vector_index.as_retriever(**retriever_kwargs)
+            response_nodes = retriever.retrieve(query)
             results: list[dict] = []
-            for node_with_score in response.source_nodes:
+            for node_with_score in response_nodes:
                 node = node_with_score.node
                 meta = getattr(node, "metadata", {}) or {}
                 results.append(
