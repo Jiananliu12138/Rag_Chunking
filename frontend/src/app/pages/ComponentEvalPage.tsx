@@ -222,7 +222,16 @@ export default function ComponentEvalPage() {
     formulaLatex: string;
     interpretation: string;
     projectExample: string[];
+    sources?: Array<{ label: string; url: string }>;
   };
+
+  const chunkMetricSources = [
+    { label: 'MoC repository', url: 'https://github.com/IAAR-Shanghai/Meta-Chunking' },
+    { label: 'MoC metric script: chunk_eval.py', url: 'file:///F:/thesis/Meta-Chunking/MoC/our_metrics/chunk_eval.py' },
+    { label: 'MoC metric script: relation_eval.py', url: 'file:///F:/thesis/Meta-Chunking/MoC/our_metrics/relation_eval.py' },
+    { label: 'Project implementation: chunk_eval_refactored.py', url: 'file:///F:/thesis/Meta-Chunking/component_eval/chunk/chunk_eval_refactored.py' },
+    { label: 'Project implementation: relation_eval_refactored.py', url: 'file:///F:/thesis/Meta-Chunking/component_eval/chunk/relation_eval_refactored.py' },
+  ];
 
   const chunkMetricInfo: Record<string, ChunkMetricDoc> = {
     bc: {
@@ -811,6 +820,14 @@ export default function ComponentEvalPage() {
                                 ))}
                               </ul>
                             </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
+                              <div className="flex flex-wrap gap-2">
+                                {(chunkMetricInfo[selectedChunkMetric].sources ?? chunkMetricSources).map((s, idx) => (
+                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100">{s.label}</a>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         </>
                       )}
@@ -1127,6 +1144,14 @@ export default function ComponentEvalPage() {
                                   <li key={idx}>{item}</li>
                                 ))}
                               </ul>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
+                              <div className="flex flex-wrap gap-2">
+                                {(chunkMetricInfo[selectedChunkMetric].sources ?? chunkMetricSources).map((s, idx) => (
+                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700 hover:bg-emerald-100">{s.label}</a>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         </>

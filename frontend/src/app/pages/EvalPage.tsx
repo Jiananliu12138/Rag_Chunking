@@ -104,7 +104,19 @@ Format 2 - Current Eval Format:
     interpretation: string;
     variables: string[];
     projectExample: string[];
+    sources?: Array<{ label: string; url: string }>;
   };
+
+  const traditionalDefaultSources = [
+    { label: 'LongBench traditional evaluator (project)', url: 'https://github.com/THUDM/LongBench' },
+    { label: 'Project implementation: eval_lite.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_lite.py' },
+  ];
+
+  const ragasDefaultSources = [
+    { label: 'Ragas GitHub Repository', url: 'https://github.com/explodinggradients/ragas' },
+    { label: 'Ragas metrics documentation', url: 'https://docs.ragas.io/en/latest/concepts/metrics/available_metrics/' },
+    { label: 'Project implementation: eval_ragas.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_ragas.py' },
+  ];
 
   const traditionalMetricInfo: Record<string, MetricCardDoc> = {
     f1: {
@@ -623,6 +635,14 @@ Format 2 - Current Eval Format:
                                 ))}
                               </ul>
                             </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
+                              <div className="flex flex-wrap gap-2">
+                                {(traditionalMetricInfo[selectedTraditionalMetric].sources ?? traditionalDefaultSources).map((s, idx) => (
+                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100">{s.label}</a>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         </>
                       )}
@@ -1098,6 +1118,14 @@ Format 2 - Current Eval Format:
                                   <li key={idx}>{item}</li>
                                 ))}
                               </ul>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
+                              <div className="flex flex-wrap gap-2">
+                                {(ragasMetricInfo[selectedRagasMetric].sources ?? ragasDefaultSources).map((s, idx) => (
+                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 hover:bg-purple-100">{s.label}</a>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         </>
