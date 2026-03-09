@@ -23,7 +23,9 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Loader2, BarChart3, FileText, Sparkles, Settings, FolderOpen, Plus, X } from 'lucide-react';
+import { Loader2, BarChart3, FileText, Sparkles, Settings, FolderOpen, Plus, X, FlaskConical, Sigma } from 'lucide-react';
+import { BlockMath } from 'react-katex';
+import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -94,105 +96,146 @@ Format 2 - Current Eval Format:
     setValue(placeholderValue);
   };
 
-  const traditionalMetricInfo: Record<string, { title: string; blurb: string; formula: string; note: string }> = {
+  type MetricCardDoc = {
+    title: string;
+    blurb: string;
+    formulaLatex: string;
+    interpretation: string;
+    variables: string[];
+    projectExample: string[];
+  };
+
+  const traditionalMetricInfo: Record<string, MetricCardDoc> = {
     f1: {
-      title: 'F1 Score',
-      blurb: 'Balances precision and recall between the generated answer and the reference answer.',
-      formula: 'F1 = 2 * Precision * Recall / (Precision + Recall)',
-      note: 'Here it is computed at token level and uses the best score among references.',
+      title: 'F1 Score (Token-level, Max-over-References)',
+      blurb: 'Measures overlap between llm_ans and answer, balancing precision and recall.',
+      formulaLatex: String.raw`F1_i = \max_{g \in G_i} \frac{2\,P(\hat{y}_i,g)\,R(\hat{y}_i,g)}{P(\hat{y}_i,g)+R(\hat{y}_i,g)},\quad F1=\frac{1}{N}\sum_{i=1}^{N}F1_i`,
+      interpretation: 'Higher is better. Sensitive to missing key tokens and extra unsupported tokens.',
+      variables: ['\(\hat{y}_i\): generated answer (`llm_ans`)', '\(G_i\): reference set parsed from `answer`/`answers`', '\(N\): sample count'],
+      projectExample: ['样本中 llm_ans: “...brother was Thietgaud.”，reference 含 “...sister of Thietgaud...”。', '先按 token 算 P/R，再取该样本最佳参考分数，最后在全部样本上取均值。'],
     },
     rouge_l: {
-      title: 'ROUGE-L',
-      blurb: 'Measures overlap based on the longest common subsequence between prediction and reference.',
-      formula: 'ROUGE-L(F) = 2 * P_lcs * R_lcs / (P_lcs + R_lcs)',
-      note: 'Higher means the answer preserves more of the reference sequence structure.',
+      title: 'ROUGE-L (F-measure)',
+      blurb: 'Measures longest common subsequence consistency between prediction and reference.',
+      formulaLatex: String.raw`ROUGE\text{-}L_i = \max_{g \in G_i} \frac{(1+\beta^2)P_{LCS}(\hat{y}_i,g)R_{LCS}(\hat{y}_i,g)}{R_{LCS}(\hat{y}_i,g)+\beta^2P_{LCS}(\hat{y}_i,g)},\quad ROUGE\text{-}L=\frac{1}{N}\sum_i ROUGE\text{-}L_i`,
+      interpretation: 'Higher is better when answer sequence structure is close to reference wording.',
+      variables: ['\(P_{LCS}\), \(R_{LCS}\): based on LCS length', '\(\beta\): default balance factor in rouge implementation'],
+      projectExample: ['当 llm_ans 用相近语序复述 reference 时，该指标明显升高。'],
     },
     bleu_1: {
       title: 'BLEU-1',
-      blurb: 'Checks unigram overlap between prediction and references.',
-      formula: 'BLEU-1 = BP * exp(log p1)',
-      note: 'A simple lexical precision signal over single tokens.',
+      blurb: 'Unigram precision with brevity penalty.',
+      formulaLatex: String.raw`BLEU\text{-}1 = BP \cdot \exp(\log p_1)`,
+      interpretation: 'Higher favors lexical correctness at word level.',
+      variables: ['\(p_1\): modified 1-gram precision', '\(BP\): brevity penalty'],
+      projectExample: ['适合观察词项是否命中参考答案关键词。'],
     },
     bleu_2: {
       title: 'BLEU-2',
-      blurb: 'Checks up to bigram overlap between prediction and references.',
-      formula: 'BLEU-2 = BP * exp((log p1 + log p2) / 2)',
-      note: 'Rewards short phrase matching, not just single-token overlap.',
+      blurb: 'Up to bigram precision with smoothing.',
+      formulaLatex: String.raw`BLEU\text{-}2 = BP \cdot \exp\left(\frac{1}{2}(\log p_1 + \log p_2)\right)`,
+      interpretation: 'Higher rewards short phrase-level correctness.',
+      variables: ['\(p_2\): modified 2-gram precision'],
+      projectExample: ['当 “bishop of Trier” 这类短语被完整命中时，BLEU-2 提升更明显。'],
     },
     bleu_3: {
       title: 'BLEU-3',
-      blurb: 'Checks up to trigram overlap between prediction and references.',
-      formula: 'BLEU-3 = BP * exp((log p1 + log p2 + log p3) / 3)',
-      note: 'Higher values suggest more fluent multi-token phrase alignment.',
+      blurb: 'Up to trigram precision with smoothing.',
+      formulaLatex: String.raw`BLEU\text{-}3 = BP \cdot \exp\left(\frac{1}{3}(\log p_1 + \log p_2 + \log p_3)\right)`,
+      interpretation: 'Higher indicates better multi-token phrase fluency and alignment.',
+      variables: ['\(p_3\): modified 3-gram precision'],
+      projectExample: ['更适合判断回答短句是否和标准答案局部一致。'],
     },
     bleu_4: {
       title: 'BLEU-4',
-      blurb: 'Checks up to 4-gram overlap between prediction and references.',
-      formula: 'BLEU-4 = BP * exp((log p1 + log p2 + log p3 + log p4) / 4)',
-      note: 'This is the strictest BLEU variant in the panel and is sensitive to exact phrasing.',
+      blurb: 'Up to 4-gram precision; strict lexical-sequence match.',
+      formulaLatex: String.raw`BLEU\text{-}4 = BP \cdot \exp\left(\frac{1}{4}\sum_{n=1}^{4}\log p_n\right)`,
+      interpretation: 'Higher is harder to achieve; very sensitive to exact phrasing.',
+      variables: ['\(p_n\): modified n-gram precision for \(n=1..4\)'],
+      projectExample: ['适合比较不同 chunking 策略下生成语句是否更“贴标准答案表述”。'],
     },
     bert_score_f1: {
       title: 'BERTScore F1',
-      blurb: 'Measures semantic similarity using contextual embeddings instead of exact token overlap.',
-      formula: 'BERTScore(F1) = 2 * P_bert * R_bert / (P_bert + R_bert)',
-      note: 'Useful when wording differs but meaning stays close.',
+      blurb: 'Semantic similarity using contextual embeddings (beyond exact string overlap).',
+      formulaLatex: String.raw`BERTScore\text{-}F1 = \frac{2\,P_{bert}\,R_{bert}}{P_{bert}+R_{bert}}`,
+      interpretation: 'Higher is better for semantic faithfulness even with paraphrases.',
+      variables: ['\(P_{bert},R_{bert}\): token embedding alignment precision/recall'],
+      projectExample: ['当 llm_ans 与 reference 同义改写时，BERTScore 往往高于 BLEU/ROUGE。'],
     },
     sample_count: {
       title: 'Sample Count',
-      blurb: 'The number of evaluated examples included in this run.',
-      formula: 'sample_count = N',
-      note: 'This is not a quality metric. It tells you how many samples contributed to the summary.',
+      blurb: 'Number of evaluated records in current run.',
+      formulaLatex: String.raw`N = |\mathcal{D}|`,
+      interpretation: 'Not a quality metric; used to judge statistical stability of summary scores.',
+      variables: ['\(\mathcal{D}\): evaluation dataset after parsing'],
+      projectExample: ['样本越多，均值指标越稳定；少样本时建议联合查看样本级明细。'],
     },
   };
 
-  const ragasMetricInfo: Record<string, { title: string; blurb: string; formula: string; note: string }> = {
+  const ragasMetricInfo: Record<string, MetricCardDoc> = {
     ragas_score: {
-      title: 'RAGAS Score',
-      blurb: 'A local aggregate score used in this app to summarize the main positive RAGAS metrics.',
-      formula: 'ragas_score = mean(faithfulness, answer_relevancy, context_recall, context_precision, context_entity_recall)',
-      note: 'This is inferred from the local evaluator in this project. It excludes the two noise sensitivity metrics because lower is better for those.',
+      title: 'Project RAGAS Score (Local Aggregation)',
+      blurb: 'Project-specific aggregate implemented in eval_ragas.py, not an official single metric in Ragas.',
+      formulaLatex: String.raw`s_i=\frac{1}{|M_i^+|}\sum_{m\in M_i^+}m_i,\;M_i^+=\{m\in\{faithfulness,answer\_relevancy,context\_recall,context\_precision,context\_entity\_recall\}\mid m_i>0\};\quad ragas\_score_{mean}=\frac{1}{|S^+|}\sum_{i\in S^+}s_i`,
+      interpretation: 'Higher is better. Noise sensitivity metrics are excluded because they are lower-is-better.',
+      variables: ['\(s_i\): sample-level local aggregate', '\(S^+\): samples with valid positive aggregate'],
+      projectExample: ['对每条样本先聚合 5 个正向指标，再统计 mean/min/max 作为 summary。'],
     },
     faithfulness: {
-      title: 'Faithfulness',
-      blurb: 'Measures whether the response stays factually grounded in the retrieved context.',
-      formula: 'Faithfulness = supported claims in response / total claims in response',
-      note: 'Higher is better. A low score usually means hallucinated or unsupported statements.',
+      title: 'Faithfulness (Ragas)',
+      blurb: 'Checks whether response claims are supported by retrieved contexts.',
+      formulaLatex: String.raw`Faithfulness = \frac{\#\text{supported claims in response}}{\#\text{claims in response}}`,
+      interpretation: 'Higher is better; low values indicate hallucination risk.',
+      variables: ['claims 来自 `answer` 字段的语义声明', 'support 由 `contexts` 可归因判断'],
+      projectExample: ['若 llm_ans 提到“日期/实体关系”但 retrieval context 无证据，该值下降。'],
     },
     answer_relevancy: {
-      title: 'Answer Relevancy',
-      blurb: 'Measures how well the response addresses the original user question.',
-      formula: 'Answer Relevancy = (1 / N) * Σ cosine_similarity(E_gi, E_o)',
-      note: 'Ragas reverse-engineers synthetic questions from the answer, embeds them, and compares them with the original question embedding.',
+      title: 'Answer Relevancy (Ragas)',
+      blurb: 'Measures whether response addresses the original question intent.',
+      formulaLatex: String.raw`Answer\;Relevancy=\frac{1}{N}\sum_{j=1}^{N}\cos(E_{g_j},E_o)=\frac{1}{N}\sum_{j=1}^{N}\frac{E_{g_j}\cdot E_o}{\|E_{g_j}\|\,\|E_o\|}`,
+      interpretation: 'Higher is better for question-answer alignment, independent from factuality.',
+      variables: ['\(E_o\): embedding of user question', '\(E_{g_j}\): embedding of synthetic question reversed from response'],
+      projectExample: ['若回答只覆盖问题一半意图（如只答“地点”不答“时间”），得分会降低。'],
     },
     context_recall: {
-      title: 'Context Recall',
-      blurb: 'Measures how much of the ground-truth information is actually covered by the retrieved context.',
-      formula: 'Context Recall = attributable ground-truth claims / total ground-truth claims',
-      note: 'Higher is better. Good recall means the retriever brought back enough evidence to answer the question.',
+      title: 'Context Recall (Ragas)',
+      blurb: 'How much of reference-answer claims are covered by retrieved context.',
+      formulaLatex: String.raw`Context\;Recall=\frac{\#\text{reference claims supported by retrieved context}}{\#\text{claims in reference}}`,
+      interpretation: 'Higher is better; reflects retriever completeness.',
+      variables: ['reference 对应本项目的 `ground_truth`（由 answer/answers 转换）'],
+      projectExample: ['gold_reference 信息缺失时，该指标会直接受影响。'],
     },
     context_precision: {
-      title: 'Context Precision',
-      blurb: 'Measures how many of the retrieved chunks are actually relevant, especially near the top of the ranking.',
-      formula: 'Context Precision@K = Σ(Precision@k * v_k) / total relevant items in top K',
-      note: 'Higher is better. It rewards relevant chunks appearing early and penalizes noisy retrieval.',
+      title: 'Context Precision@K (Ragas)',
+      blurb: 'Whether relevant chunks appear early in retrieved list.',
+      formulaLatex: String.raw`Context\;Precision@K=\frac{\sum_{k=1}^{K}(Precision@k\cdot v_k)}{\sum_{k=1}^{K} v_k},\quad Precision@k=\frac{TP@k}{TP@k+FP@k}`,
+      interpretation: 'Higher is better; rewards ranking quality, penalizes early noise.',
+      variables: ['\(v_k\in\{0,1\}\): relevance at rank \(k\)', '\(K\): number of retrieved contexts'],
+      projectExample: ['如果 `rag_retrieval` 前几条就是关键信息块，该指标会更高。'],
     },
     context_entity_recall: {
-      title: 'Context Entity Recall',
-      blurb: 'Measures whether important entities from the reference answer are covered by the retrieved context.',
-      formula: 'Context Entity Recall = |RCE ∩ RE| / |RE|',
-      note: 'RE is the set of entities in the reference, and RCE is the set of entities in the retrieved contexts.',
+      title: 'Context Entity Recall (Ragas)',
+      blurb: 'Entity coverage from reference by retrieved contexts.',
+      formulaLatex: String.raw`Context\;Entity\;Recall=\frac{|RCE\cap RE|}{|RE|}`,
+      interpretation: 'Higher is better in entity-centric QA tasks.',
+      variables: ['\(RE\): entities from reference', '\(RCE\): entities from retrieved contexts'],
+      projectExample: ['如问题涉及人名/地点/年份，检索覆盖这些实体时得分上升。'],
     },
     noise_sensitivity_relevant: {
-      title: 'Noise Sensitivity (Relevant)',
-      blurb: 'Measures how often the system still makes incorrect claims even when it uses relevant retrieved context.',
-      formula: 'Noise Sensitivity = incorrect claims in response / total claims in response',
-      note: 'Lower is better. Even with good context, the model can still generate unsupported or incorrect details.',
+      title: 'Noise Sensitivity (Relevant mode)',
+      blurb: 'Error rate in response even when using relevant retrieved content.',
+      formulaLatex: String.raw`NoiseSensitivity_{relevant}=\frac{\#\text{incorrect claims in response}}{\#\text{claims in response}}`,
+      interpretation: 'Lower is better; reflects generation robustness under partially noisy evidence.',
+      variables: ['incorrectness judged against `ground_truth` and attributable contexts'],
+      projectExample: ['即便检索命中，模型若仍编造细节，该值会上升。'],
     },
     noise_sensitivity_irrelevant: {
-      title: 'Noise Sensitivity (Irrelevant)',
-      blurb: 'Measures how easily irrelevant retrieved context misleads the system into making wrong claims.',
-      formula: 'Noise Sensitivity = incorrect claims in response / total claims in response',
-      note: 'Lower is better. A high score suggests the model is vulnerable to retrieval noise.',
+      title: 'Noise Sensitivity (Irrelevant mode)',
+      blurb: 'How often irrelevant contexts mislead generation into incorrect claims.',
+      formulaLatex: String.raw`NoiseSensitivity_{irrelevant}=\frac{\#\text{incorrect claims triggered by irrelevant context}}{\#\text{claims in response}}`,
+      interpretation: 'Lower is better; high score indicates vulnerability to retrieval distraction.',
+      variables: ['irrelevant mode follows Ragas NoiseSensitivity(mode="irrelevant")'],
+      projectExample: ['若 context 中有强干扰片段且回答被带偏，该值会明显增大。'],
     },
   };
 
@@ -551,13 +594,33 @@ Format 2 - Current Eval Format:
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
-                            <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-blue-700 mb-2">Formula</div>
-                              <pre className="whitespace-pre-wrap font-mono text-sm text-blue-950">{traditionalMetricInfo[selectedTraditionalMetric].formula}</pre>
+                            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+                                <Sigma className="h-3.5 w-3.5" /> Formula (LaTeX)
+                              </div>
+                              <div className="rounded-lg bg-white/80 p-3 text-blue-950">
+                                <BlockMath math={traditionalMetricInfo[selectedTraditionalMetric].formulaLatex} />
+                              </div>
                             </div>
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">How To Read It</div>
-                              <p className="text-sm text-slate-700">{traditionalMetricInfo[selectedTraditionalMetric].note}</p>
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
+                              <p className="text-sm text-slate-700">{traditionalMetricInfo[selectedTraditionalMetric].interpretation}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
+                              <ul className="space-y-1 text-sm text-slate-700 list-disc pl-5">
+                                {traditionalMetricInfo[selectedTraditionalMetric].variables.map((item, idx) => (
+                                  <li key={idx}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-blue-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
+                              <ul className="space-y-1 text-sm text-blue-900 list-disc pl-5">
+                                {traditionalMetricInfo[selectedTraditionalMetric].projectExample.map((item, idx) => (
+                                  <li key={idx}>{item}</li>
+                                ))}
+                              </ul>
                             </div>
                           </div>
                         </>
@@ -951,13 +1014,33 @@ Format 2 - Current Eval Format:
                             </DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
-                            <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-purple-700 mb-2">Formula</div>
-                              <pre className="whitespace-pre-wrap font-mono text-sm text-purple-950">{ragasMetricInfo[selectedRagasMetric].formula}</pre>
+                            <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 via-fuchsia-50 to-white p-4 shadow-sm">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-purple-700">
+                                <Sigma className="h-3.5 w-3.5" /> Formula (LaTeX)
+                              </div>
+                              <div className="rounded-lg bg-white/80 p-3 text-purple-950">
+                                <BlockMath math={ragasMetricInfo[selectedRagasMetric].formulaLatex} />
+                              </div>
                             </div>
                             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">How To Read It</div>
-                              <p className="text-sm text-slate-700">{ragasMetricInfo[selectedRagasMetric].note}</p>
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
+                              <p className="text-sm text-slate-700">{ragasMetricInfo[selectedRagasMetric].interpretation}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-white p-4">
+                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
+                              <ul className="space-y-1 text-sm text-slate-700 list-disc pl-5">
+                                {ragasMetricInfo[selectedRagasMetric].variables.map((item, idx) => (
+                                  <li key={idx}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="rounded-xl border border-purple-100 bg-purple-50/70 p-4">
+                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-purple-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
+                              <ul className="space-y-1 text-sm text-purple-900 list-disc pl-5">
+                                {ragasMetricInfo[selectedRagasMetric].projectExample.map((item, idx) => (
+                                  <li key={idx}>{item}</li>
+                                ))}
+                              </ul>
                             </div>
                           </div>
                         </>
