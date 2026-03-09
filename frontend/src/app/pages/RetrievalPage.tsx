@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Loader2, Search, Sparkles, FileText, ChevronDown, Settings2, Filter, X, ChevronsUpDown } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
@@ -48,6 +49,7 @@ export default function RetrievalPage() {
 
   // Rerank params
   const [rerankEnabled, setRerankEnabled] = useState(false);
+  const [rerankType, setRerankType] = useState<'cross_encoder'>('cross_encoder');
   const [rerankModelPath, setRerankModelPath] = useState('');
   const [rerankDevice, setRerankDevice] = useState('cpu');
   const [rerankCandidateK, setRerankCandidateK] = useState(20);
@@ -456,6 +458,15 @@ export default function RetrievalPage() {
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
+                          <Label className="text-xs">Rerank Type</Label>
+                          <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
                           <Label className="text-xs">Rerank Top K</Label>
                           <Input type="number" value={rerankTopK} onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))} />
                         </div>
@@ -716,6 +727,15 @@ export default function RetrievalPage() {
 
                   {rerankEnabled && (
                     <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">Rerank Type</Label>
+                        <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div>
                         <Label className="text-xs">Rerank Device</Label>
                         <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder="cpu / cuda:0" />

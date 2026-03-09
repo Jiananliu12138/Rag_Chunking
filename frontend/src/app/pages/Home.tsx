@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
@@ -21,6 +21,13 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Checkbox } from '../components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import {
   Collapsible,
   CollapsibleContent,
@@ -72,6 +79,7 @@ export default function Home() {
   const [enableRag, setEnableRag] = useState(true);
   const [useHybridSearch, setUseHybridSearch] = useState(false);
   const [rerankEnabled, setRerankEnabled] = useState(false);
+  const [rerankType, setRerankType] = useState<'cross_encoder'>('cross_encoder');
   const [rerankModelPath, setRerankModelPath] = useState('');
   const [rerankDevice, setRerankDevice] = useState('cpu');
   const [rerankCandidateK, setRerankCandidateK] = useState(20);
@@ -136,6 +144,16 @@ export default function Home() {
   const clearFilters = () => {
     setFilterFilepath([]);
     setFilterDocId([]);
+  };
+
+  const tabFill = (
+    setter: (value: string) => void,
+  ) => (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key !== 'Tab') return;
+    const current = e.currentTarget;
+    if (!current.value?.trim() && current.placeholder?.trim()) {
+      setter(current.placeholder);
+    }
   };
 
   const handleSend = async () => {
@@ -440,6 +458,7 @@ export default function Home() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
+                  onKeyDown={tabFill(setInput)}
                   placeholder="Ask me anything..."
                   className="pr-12 h-12 text-base"
                   disabled={loading}
@@ -499,7 +518,8 @@ export default function Home() {
                     <Input
                       value={collectionName}
                       onChange={(e) => setCollectionName(e.target.value)}
-                      placeholder="my_collection"
+                      onKeyDown={tabFill(setCollectionName)}
+                      placeholder="test"
                       className="mt-1"
                     />
                   </div>
@@ -510,7 +530,8 @@ export default function Home() {
                     <Input
                       value={embedModelPath}
                       onChange={(e) => setEmbedModelPath(e.target.value)}
-                      placeholder="/path/to/bge-large-en-v1.5"
+                      onKeyDown={tabFill(setEmbedModelPath)}
+                      placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
                       className="mt-1"
                     />
                   </div>
@@ -740,11 +761,21 @@ export default function Home() {
                       {rerankEnabled && (
                         <div className="grid grid-cols-2 gap-2">
                           <div>
+                            <Label className="text-xs">Rerank Type</Label>
+                            <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
+                              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
                             <Label className="text-xs">Rerank Device</Label>
                             <Input
                               value={rerankDevice}
                               onChange={(e) => setRerankDevice(e.target.value)}
-                              placeholder="cpu / cuda:0"
+                              onKeyDown={tabFill(setRerankDevice)}
+                              placeholder="cuda:1"
                               className="mt-1 h-8 text-xs"
                             />
                           </div>
@@ -771,7 +802,8 @@ export default function Home() {
                             <Input
                               value={rerankModelPath}
                               onChange={(e) => setRerankModelPath(e.target.value)}
-                              placeholder="Leave empty to use server default"
+                              onKeyDown={tabFill(setRerankModelPath)}
+                              placeholder="/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3"
                               className="mt-1 h-8 text-xs"
                             />
                           </div>
@@ -795,6 +827,7 @@ export default function Home() {
                   <Input
                     value={llmApiBase}
                     onChange={(e) => setLlmApiBase(e.target.value)}
+                    onKeyDown={tabFill(setLlmApiBase)}
                     placeholder="http://localhost:8005/v1"
                     className="mt-1"
                   />
@@ -806,7 +839,8 @@ export default function Home() {
                   <Input
                     value={llmModelName}
                     onChange={(e) => setLlmModelName(e.target.value)}
-                    placeholder="/path/to/Qwen2.5-7B-Instruct"
+                    onKeyDown={tabFill(setLlmModelName)}
+                    placeholder="Qwen2.5-7B-Instruct"
                     className="mt-1"
                   />
                 </div>
