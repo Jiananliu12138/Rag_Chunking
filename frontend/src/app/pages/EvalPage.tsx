@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Loader2, BarChart3, FileText, Sparkles, Settings, FolderOpen, Plus, X, FlaskConical, Sigma } from 'lucide-react';
+import { Loader2, BarChart3, FileText, Sparkles, Settings, FolderOpen, Plus, X, FlaskConical, Sigma, ChevronDown, ChevronUp } from 'lucide-react';
 import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
@@ -33,6 +33,7 @@ export default function EvalPage() {
   const [loading, setLoading] = useState(false);
   const [selectedTraditionalMetric, setSelectedTraditionalMetric] = useState<string | null>(null);
   const [selectedRagasMetric, setSelectedRagasMetric] = useState<string | null>(null);
+  const [bleuExpanded, setBleuExpanded] = useState(false);
 
   const traditionalPlaceholder = `[
 \t{
@@ -112,7 +113,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`F1_i = \max_{g \in G_i} \frac{2\,P(\hat{y}_i,g)\,R(\hat{y}_i,g)}{P(\hat{y}_i,g)+R(\hat{y}_i,g)},\quad F1=\frac{1}{N}\sum_{i=1}^{N}F1_i`,
       interpretation: 'Higher is better. Sensitive to missing key tokens and extra unsupported tokens.',
       variables: ['\(\hat{y}_i\): generated answer (`llm_ans`)', '\(G_i\): reference set parsed from `answer`/`answers`', '\(N\): sample count'],
-      projectExample: ['样本中 llm_ans: “...brother was Thietgaud.”，reference 含 “...sister of Thietgaud...”。', '先按 token 算 P/R，再取该样本最佳参考分数，最后在全部样本上取均值。'],
+      projectExample: ['Sample llm_ans: "...brother was Thietgaud." while the reference includes "...sister of Thietgaud...".', 'Compute token-level precision/recall per reference, keep the best reference score for each sample, then average across all samples.'],
     },
     rouge_l: {
       title: 'ROUGE-L (F-measure)',
@@ -120,7 +121,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`ROUGE\text{-}L_i = \max_{g \in G_i} \frac{(1+\beta^2)P_{LCS}(\hat{y}_i,g)R_{LCS}(\hat{y}_i,g)}{R_{LCS}(\hat{y}_i,g)+\beta^2P_{LCS}(\hat{y}_i,g)},\quad ROUGE\text{-}L=\frac{1}{N}\sum_i ROUGE\text{-}L_i`,
       interpretation: 'Higher is better when answer sequence structure is close to reference wording.',
       variables: ['\(P_{LCS}\), \(R_{LCS}\): based on LCS length', '\(\beta\): default balance factor in rouge implementation'],
-      projectExample: ['当 llm_ans 用相近语序复述 reference 时，该指标明显升高。'],
+      projectExample: ['This score increases when llm_ans preserves the key sequence structure of the reference.'],
     },
     bleu_1: {
       title: 'BLEU-1',
@@ -128,7 +129,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`BLEU\text{-}1 = BP \cdot \exp(\log p_1)`,
       interpretation: 'Higher favors lexical correctness at word level.',
       variables: ['\(p_1\): modified 1-gram precision', '\(BP\): brevity penalty'],
-      projectExample: ['适合观察词项是否命中参考答案关键词。'],
+      projectExample: ['Useful for checking whether key reference terms are present in the generated answer.'],
     },
     bleu_2: {
       title: 'BLEU-2',
@@ -136,7 +137,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`BLEU\text{-}2 = BP \cdot \exp\left(\frac{1}{2}(\log p_1 + \log p_2)\right)`,
       interpretation: 'Higher rewards short phrase-level correctness.',
       variables: ['\(p_2\): modified 2-gram precision'],
-      projectExample: ['当 “bishop of Trier” 这类短语被完整命中时，BLEU-2 提升更明显。'],
+      projectExample: ['BLEU-2 improves when short phrases (e.g., "bishop of Trier") are matched exactly.'],
     },
     bleu_3: {
       title: 'BLEU-3',
@@ -144,7 +145,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`BLEU\text{-}3 = BP \cdot \exp\left(\frac{1}{3}(\log p_1 + \log p_2 + \log p_3)\right)`,
       interpretation: 'Higher indicates better multi-token phrase fluency and alignment.',
       variables: ['\(p_3\): modified 3-gram precision'],
-      projectExample: ['更适合判断回答短句是否和标准答案局部一致。'],
+      projectExample: ['Better for measuring local phrase-level alignment beyond unigram overlap.'],
     },
     bleu_4: {
       title: 'BLEU-4',
@@ -152,7 +153,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`BLEU\text{-}4 = BP \cdot \exp\left(\frac{1}{4}\sum_{n=1}^{4}\log p_n\right)`,
       interpretation: 'Higher is harder to achieve; very sensitive to exact phrasing.',
       variables: ['\(p_n\): modified n-gram precision for \(n=1..4\)'],
-      projectExample: ['适合比较不同 chunking 策略下生成语句是否更“贴标准答案表述”。'],
+      projectExample: ['Helpful for comparing whether different chunking strategies produce phrasing closer to reference wording.'],
     },
     bert_score_f1: {
       title: 'BERTScore F1',
@@ -160,7 +161,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`BERTScore\text{-}F1 = \frac{2\,P_{bert}\,R_{bert}}{P_{bert}+R_{bert}}`,
       interpretation: 'Higher is better for semantic faithfulness even with paraphrases.',
       variables: ['\(P_{bert},R_{bert}\): token embedding alignment precision/recall'],
-      projectExample: ['当 llm_ans 与 reference 同义改写时，BERTScore 往往高于 BLEU/ROUGE。'],
+      projectExample: ['When llm_ans is a paraphrase of the reference, BERTScore is often higher than BLEU/ROUGE.'],
     },
     sample_count: {
       title: 'Sample Count',
@@ -168,7 +169,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`N = |\mathcal{D}|`,
       interpretation: 'Not a quality metric; used to judge statistical stability of summary scores.',
       variables: ['\(\mathcal{D}\): evaluation dataset after parsing'],
-      projectExample: ['样本越多，均值指标越稳定；少样本时建议联合查看样本级明细。'],
+      projectExample: ['Larger sample size improves stability of mean scores; with small N, inspect sample-level details together.'],
     },
   };
 
@@ -179,15 +180,15 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`s_i=\frac{1}{|M_i^+|}\sum_{m\in M_i^+}m_i,\;M_i^+=\{m\in\{faithfulness,answer\_relevancy,context\_recall,context\_precision,context\_entity\_recall\}\mid m_i>0\};\quad ragas\_score_{mean}=\frac{1}{|S^+|}\sum_{i\in S^+}s_i`,
       interpretation: 'Higher is better. Noise sensitivity metrics are excluded because they are lower-is-better.',
       variables: ['\(s_i\): sample-level local aggregate', '\(S^+\): samples with valid positive aggregate'],
-      projectExample: ['对每条样本先聚合 5 个正向指标，再统计 mean/min/max 作为 summary。'],
+      projectExample: ['For each sample, aggregate the five positive-direction metrics first, then report dataset-level mean/min/max.'],
     },
     faithfulness: {
       title: 'Faithfulness (Ragas)',
       blurb: 'Checks whether response claims are supported by retrieved contexts.',
       formulaLatex: String.raw`Faithfulness = \frac{\#\text{supported claims in response}}{\#\text{claims in response}}`,
       interpretation: 'Higher is better; low values indicate hallucination risk.',
-      variables: ['claims 来自 `answer` 字段的语义声明', 'support 由 `contexts` 可归因判断'],
-      projectExample: ['若 llm_ans 提到“日期/实体关系”但 retrieval context 无证据，该值下降。'],
+      variables: ['Claims are decomposed from the generated response text in `answer`', 'Support is judged by attribution to evidence in `contexts`'],
+      projectExample: ['If llm_ans includes an unsupported date/entity relation not found in retrieved context, this score drops.'],
     },
     answer_relevancy: {
       title: 'Answer Relevancy (Ragas)',
@@ -195,15 +196,15 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`Answer\;Relevancy=\frac{1}{N}\sum_{j=1}^{N}\cos(E_{g_j},E_o)=\frac{1}{N}\sum_{j=1}^{N}\frac{E_{g_j}\cdot E_o}{\|E_{g_j}\|\,\|E_o\|}`,
       interpretation: 'Higher is better for question-answer alignment, independent from factuality.',
       variables: ['\(E_o\): embedding of user question', '\(E_{g_j}\): embedding of synthetic question reversed from response'],
-      projectExample: ['若回答只覆盖问题一半意图（如只答“地点”不答“时间”），得分会降低。'],
+      projectExample: ['If the response addresses only part of the intent (e.g., place but not time), the score decreases.'],
     },
     context_recall: {
       title: 'Context Recall (Ragas)',
       blurb: 'How much of reference-answer claims are covered by retrieved context.',
       formulaLatex: String.raw`Context\;Recall=\frac{\#\text{reference claims supported by retrieved context}}{\#\text{claims in reference}}`,
       interpretation: 'Higher is better; reflects retriever completeness.',
-      variables: ['reference 对应本项目的 `ground_truth`（由 answer/answers 转换）'],
-      projectExample: ['gold_reference 信息缺失时，该指标会直接受影响。'],
+      variables: ['In this project, `ground_truth` is normalized from `answer`/`answers` before scoring'],
+      projectExample: ['If `gold_reference` is incomplete, retrieval coverage decreases and recall is directly affected.'],
     },
     context_precision: {
       title: 'Context Precision@K (Ragas)',
@@ -211,7 +212,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`Context\;Precision@K=\frac{\sum_{k=1}^{K}(Precision@k\cdot v_k)}{\sum_{k=1}^{K} v_k},\quad Precision@k=\frac{TP@k}{TP@k+FP@k}`,
       interpretation: 'Higher is better; rewards ranking quality, penalizes early noise.',
       variables: ['\(v_k\in\{0,1\}\): relevance at rank \(k\)', '\(K\): number of retrieved contexts'],
-      projectExample: ['如果 `rag_retrieval` 前几条就是关键信息块，该指标会更高。'],
+      projectExample: ['This score is higher when the top-ranked `rag_retrieval` chunks already contain key evidence.'],
     },
     context_entity_recall: {
       title: 'Context Entity Recall (Ragas)',
@@ -219,15 +220,15 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`Context\;Entity\;Recall=\frac{|RCE\cap RE|}{|RE|}`,
       interpretation: 'Higher is better in entity-centric QA tasks.',
       variables: ['\(RE\): entities from reference', '\(RCE\): entities from retrieved contexts'],
-      projectExample: ['如问题涉及人名/地点/年份，检索覆盖这些实体时得分上升。'],
+      projectExample: ['For entity-heavy questions (people/locations/years), coverage of those entities in retrieval increases the score.'],
     },
     noise_sensitivity_relevant: {
       title: 'Noise Sensitivity (Relevant mode)',
       blurb: 'Error rate in response even when using relevant retrieved content.',
       formulaLatex: String.raw`NoiseSensitivity_{relevant}=\frac{\#\text{incorrect claims in response}}{\#\text{claims in response}}`,
       interpretation: 'Lower is better; reflects generation robustness under partially noisy evidence.',
-      variables: ['incorrectness judged against `ground_truth` and attributable contexts'],
-      projectExample: ['即便检索命中，模型若仍编造细节，该值会上升。'],
+      variables: ['Incorrectness is judged against `ground_truth` and evidence-attributable contexts'],
+      projectExample: ['Even with relevant retrieval, this score rises if the model still fabricates unsupported details.'],
     },
     noise_sensitivity_irrelevant: {
       title: 'Noise Sensitivity (Irrelevant mode)',
@@ -235,7 +236,7 @@ Format 2 - Current Eval Format:
       formulaLatex: String.raw`NoiseSensitivity_{irrelevant}=\frac{\#\text{incorrect claims triggered by irrelevant context}}{\#\text{claims in response}}`,
       interpretation: 'Lower is better; high score indicates vulnerability to retrieval distraction.',
       variables: ['irrelevant mode follows Ragas NoiseSensitivity(mode="irrelevant")'],
-      projectExample: ['若 context 中有强干扰片段且回答被带偏，该值会明显增大。'],
+      projectExample: ['This value increases when irrelevant context distracts generation into incorrect claims.'],
     },
   };
 
@@ -637,8 +638,46 @@ Format 2 - Current Eval Format:
                     <div className="space-y-6">
                       {/* Metrics Grid */}
                       <div className="grid grid-cols-2 gap-4">
-                        {Object.entries(traditionalResult).map(([key, value]) => {
-                          if (typeof value === 'number') {
+                        {Object.entries(traditionalResult)
+                          .filter(([key, value]) => typeof value === 'number' && !['bleu_2', 'bleu_3', 'bleu_4'].includes(key))
+                          .map(([key, value]) => {
+                            if (key === 'bleu_1') {
+                              const bleuKeys = ['bleu_1', 'bleu_2', 'bleu_3', 'bleu_4'];
+                              return (
+                                <div key="bleu_family" className="col-span-2 p-4 text-left bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                                  <button
+                                    type="button"
+                                    className="w-full flex items-center justify-between"
+                                    onClick={() => setBleuExpanded((v) => !v)}
+                                  >
+                                    <div>
+                                      <div className="text-sm text-slate-600 mb-1">BLEU FAMILY (1-4)</div>
+                                      <div className="text-2xl font-bold text-blue-900">{Number(traditionalResult.bleu_4 ?? traditionalResult.bleu_1).toFixed(4)}</div>
+                                      <p className="mt-1 text-xs text-slate-600">Collapsed view for BLEU-1/2/3/4. Click to expand details.</p>
+                                    </div>
+                                    {bleuExpanded ? <ChevronUp className="w-4 h-4 text-blue-700" /> : <ChevronDown className="w-4 h-4 text-blue-700" />}
+                                  </button>
+                                  {bleuExpanded && (
+                                    <div className="mt-3 grid grid-cols-2 gap-2">
+                                      {bleuKeys.map((bleuKey) => (
+                                        typeof traditionalResult[bleuKey] === 'number' ? (
+                                          <button
+                                            key={bleuKey}
+                                            type="button"
+                                            onClick={() => setSelectedTraditionalMetric(bleuKey)}
+                                            className="rounded-md border border-blue-200 bg-white/80 px-3 py-2 text-left hover:bg-white"
+                                          >
+                                            <div className="text-xs text-slate-600 uppercase">{bleuKey.replace('_', '-')}</div>
+                                            <div className="text-sm font-semibold text-blue-900">{Number(traditionalResult[bleuKey]).toFixed(4)}</div>
+                                          </button>
+                                        ) : null
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
                             const metricInfo = traditionalMetricInfo[key];
                             return (
                               <button
@@ -649,28 +688,16 @@ Format 2 - Current Eval Format:
                                 disabled={!metricInfo}
                               >
                                 <div className="flex items-start justify-between gap-3">
-                                  <div className="text-sm text-slate-600 mb-1">
-                                    {key.replace(/_/g, ' ').toUpperCase()}
-                                  </div>
+                                  <div className="text-sm text-slate-600 mb-1">{key.replace(/_/g, ' ').toUpperCase()}</div>
                                   {metricInfo && (
-                                    <span className="rounded-full border border-blue-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-blue-700">
-                                      Formula
-                                    </span>
+                                    <span className="rounded-full border border-blue-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-blue-700">Formula</span>
                                   )}
                                 </div>
-                                <div className="text-2xl font-bold text-blue-900">
-                                  {key === 'sample_count' ? Math.round(value as number) : (value as number).toFixed(4)}
-                                </div>
-                                {metricInfo && (
-                                  <p className="mt-2 text-xs leading-5 text-slate-600">
-                                    {metricInfo.blurb}
-                                  </p>
-                                )}
+                                <div className="text-2xl font-bold text-blue-900">{key === 'sample_count' ? Math.round(value as number) : (value as number).toFixed(4)}</div>
+                                {metricInfo && <p className="mt-2 text-xs leading-5 text-slate-600">{metricInfo.blurb}</p>}
                               </button>
                             );
-                          }
-                          return null;
-                        })}
+                          })}
                       </div>
 
                       {/* Raw JSON */}
