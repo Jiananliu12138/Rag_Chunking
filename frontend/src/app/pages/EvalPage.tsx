@@ -29,6 +29,8 @@ import { toast } from 'sonner';
 
 export default function EvalPage() {
   const [loading, setLoading] = useState(false);
+  const [selectedTraditionalMetric, setSelectedTraditionalMetric] = useState<string | null>(null);
+  const [selectedRagasMetric, setSelectedRagasMetric] = useState<string | null>(null);
 
   const traditionalPlaceholder = `[
 \t{
@@ -92,6 +94,108 @@ Format 2 - Current Eval Format:
     setValue(placeholderValue);
   };
 
+  const traditionalMetricInfo: Record<string, { title: string; blurb: string; formula: string; note: string }> = {
+    f1: {
+      title: 'F1 Score',
+      blurb: 'Balances precision and recall between the generated answer and the reference answer.',
+      formula: 'F1 = 2 * Precision * Recall / (Precision + Recall)',
+      note: 'Here it is computed at token level and uses the best score among references.',
+    },
+    rouge_l: {
+      title: 'ROUGE-L',
+      blurb: 'Measures overlap based on the longest common subsequence between prediction and reference.',
+      formula: 'ROUGE-L(F) = 2 * P_lcs * R_lcs / (P_lcs + R_lcs)',
+      note: 'Higher means the answer preserves more of the reference sequence structure.',
+    },
+    bleu_1: {
+      title: 'BLEU-1',
+      blurb: 'Checks unigram overlap between prediction and references.',
+      formula: 'BLEU-1 = BP * exp(log p1)',
+      note: 'A simple lexical precision signal over single tokens.',
+    },
+    bleu_2: {
+      title: 'BLEU-2',
+      blurb: 'Checks up to bigram overlap between prediction and references.',
+      formula: 'BLEU-2 = BP * exp((log p1 + log p2) / 2)',
+      note: 'Rewards short phrase matching, not just single-token overlap.',
+    },
+    bleu_3: {
+      title: 'BLEU-3',
+      blurb: 'Checks up to trigram overlap between prediction and references.',
+      formula: 'BLEU-3 = BP * exp((log p1 + log p2 + log p3) / 3)',
+      note: 'Higher values suggest more fluent multi-token phrase alignment.',
+    },
+    bleu_4: {
+      title: 'BLEU-4',
+      blurb: 'Checks up to 4-gram overlap between prediction and references.',
+      formula: 'BLEU-4 = BP * exp((log p1 + log p2 + log p3 + log p4) / 4)',
+      note: 'This is the strictest BLEU variant in the panel and is sensitive to exact phrasing.',
+    },
+    bert_score_f1: {
+      title: 'BERTScore F1',
+      blurb: 'Measures semantic similarity using contextual embeddings instead of exact token overlap.',
+      formula: 'BERTScore(F1) = 2 * P_bert * R_bert / (P_bert + R_bert)',
+      note: 'Useful when wording differs but meaning stays close.',
+    },
+    sample_count: {
+      title: 'Sample Count',
+      blurb: 'The number of evaluated examples included in this run.',
+      formula: 'sample_count = N',
+      note: 'This is not a quality metric. It tells you how many samples contributed to the summary.',
+    },
+  };
+
+  const ragasMetricInfo: Record<string, { title: string; blurb: string; formula: string; note: string }> = {
+    ragas_score: {
+      title: 'RAGAS Score',
+      blurb: 'A local aggregate score used in this app to summarize the main positive RAGAS metrics.',
+      formula: 'ragas_score = mean(faithfulness, answer_relevancy, context_recall, context_precision, context_entity_recall)',
+      note: 'This is inferred from the local evaluator in this project. It excludes the two noise sensitivity metrics because lower is better for those.',
+    },
+    faithfulness: {
+      title: 'Faithfulness',
+      blurb: 'Measures whether the response stays factually grounded in the retrieved context.',
+      formula: 'Faithfulness = supported claims in response / total claims in response',
+      note: 'Higher is better. A low score usually means hallucinated or unsupported statements.',
+    },
+    answer_relevancy: {
+      title: 'Answer Relevancy',
+      blurb: 'Measures how well the response addresses the original user question.',
+      formula: 'Answer Relevancy = (1 / N) * Σ cosine_similarity(E_gi, E_o)',
+      note: 'Ragas reverse-engineers synthetic questions from the answer, embeds them, and compares them with the original question embedding.',
+    },
+    context_recall: {
+      title: 'Context Recall',
+      blurb: 'Measures how much of the ground-truth information is actually covered by the retrieved context.',
+      formula: 'Context Recall = attributable ground-truth claims / total ground-truth claims',
+      note: 'Higher is better. Good recall means the retriever brought back enough evidence to answer the question.',
+    },
+    context_precision: {
+      title: 'Context Precision',
+      blurb: 'Measures how many of the retrieved chunks are actually relevant, especially near the top of the ranking.',
+      formula: 'Context Precision@K = Σ(Precision@k * v_k) / total relevant items in top K',
+      note: 'Higher is better. It rewards relevant chunks appearing early and penalizes noisy retrieval.',
+    },
+    context_entity_recall: {
+      title: 'Context Entity Recall',
+      blurb: 'Measures whether important entities from the reference answer are covered by the retrieved context.',
+      formula: 'Context Entity Recall = |RCE ∩ RE| / |RE|',
+      note: 'RE is the set of entities in the reference, and RCE is the set of entities in the retrieved contexts.',
+    },
+    noise_sensitivity_relevant: {
+      title: 'Noise Sensitivity (Relevant)',
+      blurb: 'Measures how often the system still makes incorrect claims even when it uses relevant retrieved context.',
+      formula: 'Noise Sensitivity = incorrect claims in response / total claims in response',
+      note: 'Lower is better. Even with good context, the model can still generate unsupported or incorrect details.',
+    },
+    noise_sensitivity_irrelevant: {
+      title: 'Noise Sensitivity (Irrelevant)',
+      blurb: 'Measures how easily irrelevant retrieved context misleads the system into making wrong claims.',
+      formula: 'Noise Sensitivity = incorrect claims in response / total claims in response',
+      note: 'Lower is better. A high score suggests the model is vulnerable to retrieval noise.',
+    },
+  };
+
   // Traditional Eval - Direct Input
   const [testDataJson, setTestDataJson] = useState('');
   const [enableBertScore, setEnableBertScore] = useState(false);
@@ -99,6 +203,7 @@ Format 2 - Current Eval Format:
 
   // Traditional Eval - File Input
   const [tempTraditionalPath, setTempTraditionalPath] = useState('');
+  const [traditionalOutputPath, setTraditionalOutputPath] = useState('');
   const [traditionalFilePaths, setTraditionalFilePaths] = useState<string[]>([]);
   const traditionalFileRef = useRef<HTMLInputElement>(null);
 
@@ -108,6 +213,7 @@ Format 2 - Current Eval Format:
 
   // RAGAS Eval - File Input
   const [tempRagasPath, setTempRagasPath] = useState('');
+  const [ragasOutputPath, setRagasOutputPath] = useState('');
   const [ragasFilePaths, setRagasFilePaths] = useState<string[]>([]);
   const ragasFileRef = useRef<HTMLInputElement>(null);
 
@@ -158,11 +264,18 @@ Format 2 - Current Eval Format:
         input_path: traditionalFilePaths[0],
         enable_bert_score: enableBertScore,
       };
+      if (traditionalOutputPath.trim()) {
+        data.output_path = traditionalOutputPath.trim();
+      }
 
       const response = await api.traditionalEvalFile(data);
       if (response.success) {
         setTraditionalResult(response.data);
-        toast.success('Evaluation completed');
+        toast.success(
+          traditionalOutputPath.trim()
+            ? `Evaluation completed. Summary saved to ${traditionalOutputPath.trim()}`
+            : 'Evaluation completed'
+        );
       } else {
         toast.error('Evaluation failed: ' + response.message);
       }
@@ -181,6 +294,7 @@ Format 2 - Current Eval Format:
     try {
       const response = await api.ragasEvalFile({
         input_path: ragasFilePaths[0],
+        output_path: ragasOutputPath.trim() || undefined,
         vllm_api_base: vllmApiBase,
         vllm_model_name: vllmModelName,
         embedding_model_path: embeddingModelPath,
@@ -188,7 +302,11 @@ Format 2 - Current Eval Format:
 
       if (response.success) {
         setRagasResult(response.data);
-        toast.success('RAGAS evaluation completed');
+        toast.success(
+          ragasOutputPath.trim()
+            ? `RAGAS evaluation completed. Summary saved to ${ragasOutputPath.trim()}`
+            : 'RAGAS evaluation completed'
+        );
       } else {
         toast.error('RAGAS evaluation failed: ' + response.message);
       }
@@ -372,6 +490,19 @@ Format 2 - Current Eval Format:
                       )}
                     </div>
 
+                    <div>
+                      <Label>Output Summary JSON Path</Label>
+                      <Input
+                        value={traditionalOutputPath}
+                        onChange={(e) => setTraditionalOutputPath(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, traditionalOutputPath, e.currentTarget.placeholder, setTraditionalOutputPath)}
+                        placeholder="/path/to/traditional_eval_summary.json"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Optional. If provided, the backend will write the summary metrics to this JSON file.
+                      </p>
+                    </div>
+
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                       <div>
                         <Label className="text-sm">Enable BERTScore</Label>
@@ -404,7 +535,36 @@ Format 2 - Current Eval Format:
 
               {/* Results */}
               <Card className="p-6">
-                <h2 className="font-bold mb-4">Evaluation Results</h2>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="font-bold">Evaluation Results</h2>
+                    <p className="text-xs text-slate-500 mt-1">Click a metric card to view a short explanation and formula.</p>
+                  </div>
+                  <Dialog open={!!selectedTraditionalMetric} onOpenChange={(open) => !open && setSelectedTraditionalMetric(null)}>
+                    <DialogContent className="sm:max-w-[560px]">
+                      {selectedTraditionalMetric && traditionalMetricInfo[selectedTraditionalMetric] && (
+                        <>
+                          <DialogHeader>
+                            <DialogTitle>{traditionalMetricInfo[selectedTraditionalMetric].title}</DialogTitle>
+                            <DialogDescription>
+                              {traditionalMetricInfo[selectedTraditionalMetric].blurb}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-blue-700 mb-2">Formula</div>
+                              <pre className="whitespace-pre-wrap font-mono text-sm text-blue-950">{traditionalMetricInfo[selectedTraditionalMetric].formula}</pre>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">How To Read It</div>
+                              <p className="text-sm text-slate-700">{traditionalMetricInfo[selectedTraditionalMetric].note}</p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
@@ -416,18 +576,34 @@ Format 2 - Current Eval Format:
                       <div className="grid grid-cols-2 gap-4">
                         {Object.entries(traditionalResult).map(([key, value]) => {
                           if (typeof value === 'number') {
+                            const metricInfo = traditionalMetricInfo[key];
                             return (
-                              <div
+                              <button
                                 key={key}
-                                className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200"
+                                type="button"
+                                onClick={() => metricInfo && setSelectedTraditionalMetric(key)}
+                                className="p-4 text-left bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-blue-300 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                                disabled={!metricInfo}
                               >
-                                <div className="text-sm text-slate-600 mb-1">
-                                  {key.replace(/_/g, ' ').toUpperCase()}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="text-sm text-slate-600 mb-1">
+                                    {key.replace(/_/g, ' ').toUpperCase()}
+                                  </div>
+                                  {metricInfo && (
+                                    <span className="rounded-full border border-blue-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-blue-700">
+                                      Formula
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-2xl font-bold text-blue-900">
-                                  {(value as number).toFixed(4)}
+                                  {key === 'sample_count' ? Math.round(value as number) : (value as number).toFixed(4)}
                                 </div>
-                              </div>
+                                {metricInfo && (
+                                  <p className="mt-2 text-xs leading-5 text-slate-600">
+                                    {metricInfo.blurb}
+                                  </p>
+                                )}
+                              </button>
                             );
                           }
                           return null;
@@ -630,7 +806,7 @@ Format 2 - Current Eval Format:
                               value={embeddingModelPath}
                               onChange={(e) => setEmbeddingModelPath(e.target.value)}
                               onKeyDown={(e) => fillPlaceholderOnTab(e, embeddingModelPath, e.currentTarget.placeholder, setEmbeddingModelPath)}
-                              placeholder="/path/to/bge-large-en-v1.5"
+                              placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
                               className="mt-1.5"
                             />
                             <p className="text-xs text-slate-500 mt-1">
@@ -719,6 +895,19 @@ Format 2 - Current Eval Format:
                       </p>
                     </div>
 
+                    <div>
+                      <Label>Output Summary JSON Path</Label>
+                      <Input
+                        value={ragasOutputPath}
+                        onChange={(e) => setRagasOutputPath(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, ragasOutputPath, e.currentTarget.placeholder, setRagasOutputPath)}
+                        placeholder="/path/to/ragas_eval_summary.json"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Optional. If provided, the backend will write the summary result to this JSON file.
+                      </p>
+                    </div>
+
                     <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
                       <p className="text-xs text-amber-800">
                         💡 The file will be automatically parsed based on its format
@@ -746,7 +935,36 @@ Format 2 - Current Eval Format:
 
               {/* Results */}
               <Card className="p-6">
-                <h2 className="font-bold mb-4">RAGAS Results</h2>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="font-bold">RAGAS Results</h2>
+                    <p className="text-xs text-slate-500 mt-1">Click a summary card to view a short explanation and formula.</p>
+                  </div>
+                  <Dialog open={!!selectedRagasMetric} onOpenChange={(open) => !open && setSelectedRagasMetric(null)}>
+                    <DialogContent className="sm:max-w-[560px]">
+                      {selectedRagasMetric && ragasMetricInfo[selectedRagasMetric] && (
+                        <>
+                          <DialogHeader>
+                            <DialogTitle>{ragasMetricInfo[selectedRagasMetric].title}</DialogTitle>
+                            <DialogDescription>
+                              {ragasMetricInfo[selectedRagasMetric].blurb}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-purple-700 mb-2">Formula</div>
+                              <pre className="whitespace-pre-wrap font-mono text-sm text-purple-950">{ragasMetricInfo[selectedRagasMetric].formula}</pre>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">How To Read It</div>
+                              <p className="text-sm text-slate-700">{ragasMetricInfo[selectedRagasMetric].note}</p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
@@ -760,6 +978,7 @@ Format 2 - Current Eval Format:
                           <h3 className="text-sm font-medium mb-3">Summary</h3>
                           <div className="grid grid-cols-2 gap-3">
                             {Object.entries(ragasResult.summary).map(([key, value]) => {
+                              const metricInfo = ragasMetricInfo[key];
                               // Handle both simple numbers and {mean, min, max} objects
                               let displayValue: string;
                               if (typeof value === 'number') {
@@ -771,22 +990,37 @@ Format 2 - Current Eval Format:
                               }
                               
                               return (
-                                <div
+                                <button
                                   key={key}
-                                  className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200"
+                                  type="button"
+                                  onClick={() => metricInfo && setSelectedRagasMetric(key)}
+                                  className="p-3 text-left bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-purple-300 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                                  disabled={!metricInfo}
                                 >
-                                  <div className="text-xs text-slate-600 mb-1">
-                                    {key.replace(/_/g, ' ').toUpperCase()}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="text-xs text-slate-600 mb-1">
+                                      {key.replace(/_/g, ' ').toUpperCase()}
+                                    </div>
+                                    {metricInfo && (
+                                      <span className="rounded-full border border-purple-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-purple-700">
+                                        Formula
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-xl font-bold text-purple-900">
                                     {displayValue}
                                   </div>
+                                  {metricInfo && (
+                                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                                      {metricInfo.blurb}
+                                    </p>
+                                  )}
                                   {value && typeof value === 'object' && 'mean' in value && (
                                     <div className="text-xs text-slate-500 mt-1">
                                       min: {(value as any).min.toFixed(3)} | max: {(value as any).max.toFixed(3)}
                                     </div>
                                   )}
-                                </div>
+                                </button>
                               );
                             })}
                           </div>

@@ -168,6 +168,7 @@ class RAGASEvalFileRequest(BaseModel):
             "2. sample_results.json 格式：列表，每项含 input/llm_ans/answers/retrieval_list"
         ),
     )
+    output_path: Optional[str] = Field(None, description="可选：若提供则将 summary 结果写入该 JSON 文件")
     vllm_api_base: Optional[str] = Field(
         None, description="vLLM API 地址（可选，未提供时从配置读取）"
     )
@@ -412,6 +413,7 @@ class ChunkStickinessFileRequest(BaseModel):
 class TraditionalEvalFileRequest(BaseModel):
     """从 JSON 文件读取评估结果并计算传统指标。"""
     input_path: str = Field(..., description="评估结果 JSON 文件路径（格式同 sample_results.json）")
+    output_path: Optional[str] = Field(None, description="可选：若提供则将 summary 结果写入该 JSON 文件")
     enable_bert_score: Optional[bool] = Field(
         None, description="是否计算 BERTScore（可选，未提供时从配置读取 DEFAULT_ENABLE_BERT_SCORE）"
     )

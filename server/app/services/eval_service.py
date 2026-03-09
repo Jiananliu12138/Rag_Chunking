@@ -149,7 +149,7 @@ class EvalService:
                 hf_home=None,  # 服务层不设置 HF_HOME，使用系统默认
             )
 
-            return TraditionalEvalResult(
+            result = TraditionalEvalResult(
                 f1=float(scores["f1"]),
                 rouge_l=float(scores["rouge_l"]),
                 bleu_1=float(scores["bleu_1"]),
@@ -159,6 +159,12 @@ class EvalService:
                 bert_score_f1=float(scores["bert_score_f1"]) if scores.get("bert_score_f1") is not None else None,
                 sample_count=len(predictions),
             )
+            if request.output_path:
+                FileRepository.write_json(
+                    request.output_path,
+                    {"summary": result.model_dump()},
+                )
+            return result
         except ImportError as exc:
             raise EvaluationException(f"无法导入 eval_lite 模块: {exc}") from exc
         except Exception as exc:
@@ -355,11 +361,20 @@ class EvalService:
                 noise_sensitivity_irrelevant=_make_summary("noise_sensitivity_irrelevant"),
             )
 
-            return RAGASEvalResult(
+            result = RAGASEvalResult(
                 summary=summary,
                 sample_count=len(dataset["question"]),
                 samples=raw.get("samples", []),
             )
+            if request.output_path:
+                FileRepository.write_json(
+                    request.output_path,
+                    {
+                        "summary": result.summary.model_dump(),
+                        "sample_count": result.sample_count,
+                    },
+                )
+            return result
         except FileNotFoundError as exc:
             raise EvaluationException(f"输入文件不存在: {exc}") from exc
         except Exception as exc:
