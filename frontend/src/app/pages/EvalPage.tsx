@@ -30,6 +30,68 @@ import { toast } from 'sonner';
 export default function EvalPage() {
   const [loading, setLoading] = useState(false);
 
+  const traditionalPlaceholder = `[
+\t{
+\t\t"_id": 1,
+\t\t"input": "According to the 19th-century writer Baron Ernouf, who was the brother of Waldrada of Lotharingia?",
+\t\t"llm_ans": "According to Baron Ernouf, Waldrada was the sister of Thietgaud, bishop of Trier, so her brother was Thietgaud.",
+\t\t"answer": "Baron Ernouf suggested that Waldrada was the sister of Thietgaud, the bishop of Trier.",
+\t\t"rag_retrieval": [
+\t\t\t{
+\t\t\t\t"text": "Baron Ernouf suggested that Waldrada was the sister of Thietgaud, the bishop of Trier.",
+\t\t\t\t"retrieval_score": 0.6081,
+\t\t\t\t"doc_id": "41ac2...",
+\t\t\t\t"chunk_id": "2"
+\t\t\t}
+\t\t],
+\t\t"gold_reference": [
+\t\t\t{
+\t\t\t\t"text": "Baron Ernouf suggested that Waldrada was the sister of Thietgaud, the bishop of Trier.",
+\t\t\t\t"doc_id": "41ac2...",
+\t\t\t\t"chunk_id": "1"
+\t\t\t}
+\t\t]
+\t}
+]`;
+
+  const ragasPlaceholder = `Format 1 - Standard RAGAS:
+{
+\t"question": ["Q1?", "Q2?"],
+\t"answer": ["A1", "A2"],
+\t"contexts": [["C1a", "C1b"], ["C2"]],
+\t"ground_truth": ["GT1", "GT2"]
+}
+
+Format 2 - Current Eval Format:
+[
+\t{
+\t\t"_id": 1,
+\t\t"input": "Question?",
+\t\t"llm_ans": "LLM answer",
+\t\t"answer": "Ground truth",
+\t\t"rag_retrieval": [
+\t\t\t{ "text": "Context 1", "retrieval_score": 0.91 },
+\t\t\t{ "text": "Context 2", "retrieval_score": 0.87 }
+\t\t],
+\t\t"gold_reference": [
+\t\t\t{ "text": "Reference context", "doc_id": "doc_1", "chunk_id": "1" }
+\t\t]
+\t}
+]`;
+
+  const fillPlaceholderOnTab = (
+    event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+    currentValue: string,
+    placeholderValue: string,
+    setValue: (value: string) => void,
+  ) => {
+    if (event.key !== 'Tab' || currentValue.trim() || !placeholderValue) {
+      return;
+    }
+    event.preventDefault();
+    setValue(placeholderValue);
+  };
+
   // Traditional Eval - Direct Input
   const [testDataJson, setTestDataJson] = useState('');
   const [enableBertScore, setEnableBertScore] = useState(false);
@@ -197,11 +259,12 @@ export default function EvalPage() {
                       <Textarea
                         value={testDataJson}
                         onChange={(e) => setTestDataJson(e.target.value)}
-                        placeholder={'[\n  {\n    "_id": "question_1",\n    "input": "Who is Peter Rosegger?",\n    "llm_ans": "Peter Rosegger was an Austrian writer and poet.",\n    "answers": ["He was an Austrian writer and poet."],\n    "retrieval_list": ["Peter Rosegger (1843-1918) was..."]\n  }\n]'}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, testDataJson, traditionalPlaceholder, setTestDataJson)}
+                        placeholder={traditionalPlaceholder}
                         className="min-h-[280px] font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        💡 Paste your JSON array directly. Each item needs: _id, input, llm_ans, answers, retrieval_list (optional)
+                        💡 Press Tab on an empty editor to insert the example. Each item should include: _id, input, llm_ans, answer, rag_retrieval, gold_reference
                       </p>
                     </div>
 
@@ -246,6 +309,7 @@ export default function EvalPage() {
                         <Input
                           value={tempTraditionalPath}
                           onChange={(e) => setTempTraditionalPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, tempTraditionalPath, e.currentTarget.placeholder, setTempTraditionalPath)}
                           placeholder="/path/to/sample_results.json or click + to browse"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter' && tempTraditionalPath.trim()) {
@@ -421,6 +485,7 @@ export default function EvalPage() {
                               id="vllm-api-base-2"
                               value={vllmApiBase}
                               onChange={(e) => setVllmApiBase(e.target.value)}
+                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
                               placeholder="http://localhost:8005/v1"
                               className="mt-1.5"
                             />
@@ -434,6 +499,7 @@ export default function EvalPage() {
                               id="vllm-model-name-2"
                               value={vllmModelName}
                               onChange={(e) => setVllmModelName(e.target.value)}
+                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
                               placeholder="Qwen2.5-7B-Instruct"
                               className="mt-1.5"
                             />
@@ -447,6 +513,7 @@ export default function EvalPage() {
                               id="embedding-model-path-2"
                               value={embeddingModelPath}
                               onChange={(e) => setEmbeddingModelPath(e.target.value)}
+                              onKeyDown={(e) => fillPlaceholderOnTab(e, embeddingModelPath, e.currentTarget.placeholder, setEmbeddingModelPath)}
                               placeholder="/path/to/bge-large-en-v1.5"
                               className="mt-1.5"
                             />
@@ -469,11 +536,12 @@ export default function EvalPage() {
                       <Textarea
                         value={ragasDataJson}
                         onChange={(e) => setRagasDataJson(e.target.value)}
-                        placeholder={'Format 1 - Standard RAGAS:\n{\n  "question": ["Q1?", "Q2?"],\n  "answer": ["A1", "A2"],\n  "contexts": [["C1a", "C1b"], ["C2"]],\n  "ground_truth": ["GT1", "GT2"]\n}\n\nFormat 2 - Sample Results:\n[\n  {\n    "_id": "q1",\n    "input": "Question?",\n    "llm_ans": "LLM answer",\n    "answers": ["Ground truth"],\n    "retrieval_list": ["Context 1", "Context 2"]\n  }\n]'}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, ragasDataJson, ragasPlaceholder, setRagasDataJson)}
+                        placeholder={ragasPlaceholder}
                         className="min-h-[360px] font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        💡 Supports both formats. Backend auto-detects and converts.
+                        💡 Press Tab on an empty editor to insert the example. Supports both formats and auto-converts on the backend.
                       </p>
                     </div>
 
@@ -533,6 +601,7 @@ export default function EvalPage() {
                               id="vllm-api-base-2"
                               value={vllmApiBase}
                               onChange={(e) => setVllmApiBase(e.target.value)}
+                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
                               placeholder="http://localhost:8005/v1"
                               className="mt-1.5"
                             />
@@ -546,6 +615,7 @@ export default function EvalPage() {
                               id="vllm-model-name-2"
                               value={vllmModelName}
                               onChange={(e) => setVllmModelName(e.target.value)}
+                              onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
                               placeholder="Qwen2.5-7B-Instruct"
                               className="mt-1.5"
                             />
@@ -559,6 +629,7 @@ export default function EvalPage() {
                               id="embedding-model-path-2"
                               value={embeddingModelPath}
                               onChange={(e) => setEmbeddingModelPath(e.target.value)}
+                              onKeyDown={(e) => fillPlaceholderOnTab(e, embeddingModelPath, e.currentTarget.placeholder, setEmbeddingModelPath)}
                               placeholder="/path/to/bge-large-en-v1.5"
                               className="mt-1.5"
                             />
@@ -582,6 +653,7 @@ export default function EvalPage() {
                         <Input
                           value={tempRagasPath}
                           onChange={(e) => setTempRagasPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, tempRagasPath, e.currentTarget.placeholder, setTempRagasPath)}
                           placeholder="/path/to/ragas_data.json or click + to browse"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter' && tempRagasPath.trim()) {
