@@ -1,7 +1,8 @@
 """
-向量索引服务层。
-负责嵌入模型加载、向量索引构建与 collection 管理。
+Vector index service.
+Handles embedding model loading, index build/add, and collection management.
 """
+from threading import Lock
 from typing import Any, Tuple
 
 from app.config import get_settings
@@ -11,74 +12,91 @@ from app.repositories.file_repository import FileRepository
 from app.repositories.milvus_repository import MilvusRepository
 from app.schemas.index_schema import (
     CollectionInfo,
-    CollectionListResult,
     CollectionInspectItem,
     CollectionInspectResult,
-    IndexBuildRequest,
-    IndexBuildResult,
+    CollectionListResult,
     IndexAddRequest,
     IndexAddResult,
+    IndexBuildRequest,
+    IndexBuildResult,
     IndexDeleteByMetadataRequest,
 )
 
+_EMBED_MODEL_CACHE: dict[str, Any] = {}
+_EMBED_MODEL_CACHE_LOCK = Lock()
+
 
 class IndexService:
-
     def __init__(self, milvus_repo: MilvusRepository):
         self._repo = milvus_repo
 
-    # ── 内部：加载嵌入模型 ────────────────────────────────────────────────────
-
     @staticmethod
     def _load_langchain_embed(embed_model_path: str):
-        """加载 LangChain 格式的 HuggingFace 嵌入模型。"""
-        try:
-            from app.core.path_setup import ensure_paths
-            ensure_paths()
-            from embeddings.base import HuggingfaceEmbeddings  # noqa: PLC0415
-            return HuggingfaceEmbeddings(model_name=embed_model_path)
-        except ImportError:
-            pass
-        try:
-            from langchain_huggingface import HuggingFaceEmbeddings
-            return HuggingFaceEmbeddings(
-                model_name=embed_model_path,
-                model_kwargs={"device": "cpu"},
-                encode_kwargs={"normalize_embeddings": True},
-            )
-        except Exception as exc:
-            raise ModelLoadException(f"嵌入模型加载失败 ({embed_model_path}): {exc}") from exc
+        """Load and cache the embedding model used by retrieval and indexing."""
+        cache_key = str(embed_model_path).strip()
+        with _EMBED_MODEL_CACHE_LOCK:
+            cached = _EMBED_MODEL_CACHE.get(cache_key)
+            if cached is not None:
+                return cached
 
-    # ── 内部：从分块结果 JSON 中解析文本块及元数据 ─────────────────────────────
+            try:
+                from app.core.path_setup import ensure_paths
+
+                ensure_paths()
+                from embeddings.base import HuggingfaceEmbeddings  # noqa: PLC0415
+
+                model = HuggingfaceEmbeddings(
+                    model_name=embed_model_path,
+                    model_kwargs={"device": "cpu"},
+                )
+            except ImportError:
+                model = None
+            except Exception as exc:
+                raise ModelLoadException(
+                    f"嵌入模型加载失败 ({embed_model_path}): {exc}"
+                ) from exc
+
+            if model is None:
+                try:
+                    from langchain_huggingface import HuggingFaceEmbeddings
+
+                    model = HuggingFaceEmbeddings(
+                        model_name=embed_model_path,
+                        model_kwargs={"device": "cpu"},
+                        encode_kwargs={"normalize_embeddings": True},
+                    )
+                except Exception as exc:
+                    raise ModelLoadException(
+                        f"嵌入模型加载失败 ({embed_model_path}): {exc}"
+                    ) from exc
+
+            _EMBED_MODEL_CACHE[cache_key] = model
+            return model
 
     @classmethod
-    def _load_chunks_and_metadata_from_file(cls, docs_path: str) -> Tuple[list[str], list[dict[str, Any]]]:
+    def _load_chunks_and_metadata_from_file(
+        cls, docs_path: str
+    ) -> Tuple[list[str], list[dict[str, Any]]]:
         """
-        从分块结果 JSON 文件中加载文本块列表及元数据。
+        Load chunks and metadata from a chunk-result JSON file.
 
-        目前特别支持 MoC/our_metrics/test_data/test.json 这种结构：
+        Preferred format:
         {
           "filepath": "...",
-          "splits": [[text, doc_id], ...],
+          "splits": [[text, doc_id, chunk_id], ...],
           "time_cost": ...
         }
-
-        其中：
-        - metadata["file_path"] 来自顶层 filepath
-        - metadata["doc_id"]    来自每个 split 的第二个元素（写入 LlamaIndex/Milvus 默认 doc_id 字段）
-        - metadata["chunk_id"]  来自每个 split 的第三个元素（自定义字段）
-
-        其他兼容格式则退化为只有文本、metadata 为空字典。
         """
         try:
             raw = FileRepository.read_json(docs_path)
         except Exception as exc:
-            raise IndexBuildException(f"读取分块结果文件失败 ({docs_path}): {exc}") from exc
+            raise IndexBuildException(
+                f"读取分块结果文件失败 ({docs_path}): {exc}"
+            ) from exc
 
         chunks: list[str] = []
         metadatas: list[dict[str, Any]] = []
 
-        # 特例：带 filepath + splits 的结构（来自 MoC 评估流水线）
         if isinstance(raw, dict) and "splits" in raw:
             filepath = raw.get("filepath")
             splits = raw.get("splits")
@@ -99,7 +117,6 @@ class IndexService:
                                 md["chunk_id"] = str(chunk_id)
                             metadatas.append(md)
 
-        # 其他通用格式：复用 FileRepository.parse_chunks_from_json，只返回文本
         if not chunks:
             try:
                 parsed_chunks = FileRepository.parse_chunks_from_json(raw)
@@ -116,34 +133,34 @@ class IndexService:
 
     @classmethod
     def _load_chunks_from_file(cls, docs_path: str) -> list[str]:
-        """兼容旧调用，只返回文本块列表。"""
+        """Compatibility wrapper that returns only chunk texts."""
         chunks, _ = cls._load_chunks_and_metadata_from_file(docs_path)
         return chunks
 
-    # ── 公开接口 ──────────────────────────────────────────────────────────────
-
     def build_index(self, request: IndexBuildRequest) -> IndexBuildResult:
         logger.info(
-            "构建索引请求: collection=%s，docs_path=%s",
+            "构建索引请求: collection=%s, docs_path=%s",
             request.collection_name,
             request.docs_path,
         )
-        # 支持一次性从多个分块结果文件构建索引（若提供 docs_paths，则忽略 docs_path）
         if getattr(request, "docs_paths", None):
             all_chunks: list[str] = []
             all_metadatas: list[dict[str, Any]] = []
-            for p in request.docs_paths or []:
-                cks, mds = self._load_chunks_and_metadata_from_file(p)
-                all_chunks.extend(cks)
-                all_metadatas.extend(mds)
+            for path in request.docs_paths or []:
+                chunks, metadatas = self._load_chunks_and_metadata_from_file(path)
+                all_chunks.extend(chunks)
+                all_metadatas.extend(metadatas)
             chunks, metadatas = all_chunks, all_metadatas
             logger.info(
-                "本次构建共合并 %d 个分块文件，总文本块数=%d",
+                "本次构建合并 %d 个分块文件，总文本块数 %d",
                 len(request.docs_paths or []),
                 len(chunks),
             )
         else:
-            chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
+            chunks, metadatas = self._load_chunks_and_metadata_from_file(
+                request.docs_path
+            )
+
         settings = get_settings()
         model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
         embed_dim = request.embed_dim or settings.DEFAULT_EMBEDDING_DIM
@@ -162,33 +179,29 @@ class IndexService:
         return IndexBuildResult(**info)
 
     def add_index(self, request: IndexAddRequest) -> IndexAddResult:
-        """
-        向已有索引中追加数据。
-
-        输入语义与 build_index 相同：使用 docs_path 指向分块结果 JSON，
-        但底层调用 MilvusRepository.add_index（overwrite 固定为 False）。
-        """
         logger.info(
-            "追加索引请求: collection=%s，docs_path=%s",
+            "追加索引请求: collection=%s, docs_path=%s",
             request.collection_name,
             request.docs_path,
         )
-        # 支持一次性从多个分块结果文件追加数据（若提供 docs_paths，则忽略 docs_path）
         if getattr(request, "docs_paths", None):
             all_chunks: list[str] = []
             all_metadatas: list[dict[str, Any]] = []
-            for p in request.docs_paths or []:
-                cks, mds = self._load_chunks_and_metadata_from_file(p)
-                all_chunks.extend(cks)
-                all_metadatas.extend(mds)
+            for path in request.docs_paths or []:
+                chunks, metadatas = self._load_chunks_and_metadata_from_file(path)
+                all_chunks.extend(chunks)
+                all_metadatas.extend(metadatas)
             chunks, metadatas = all_chunks, all_metadatas
             logger.info(
-                "本次追加共合并 %d 个分块文件，总文本块数=%d",
+                "本次追加合并 %d 个分块文件，总文本块数 %d",
                 len(request.docs_paths or []),
                 len(chunks),
             )
         else:
-            chunks, metadatas = self._load_chunks_and_metadata_from_file(request.docs_path)
+            chunks, metadatas = self._load_chunks_and_metadata_from_file(
+                request.docs_path
+            )
+
         settings = get_settings()
         model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
 
@@ -219,9 +232,6 @@ class IndexService:
         self._repo.delete_collection(collection_name)
 
     def inspect_collections(self) -> CollectionInspectResult:
-        """
-        结合物理信息（.db 文件）和逻辑信息（schema + 动态字段）返回所有 collection 的详情。
-        """
         raw = self._repo.inspect_all_collections()
         items = [CollectionInspectItem(**item) for item in raw]
         return CollectionInspectResult(collections=items, total=len(items))
@@ -231,9 +241,6 @@ class IndexService:
         collection_name: str,
         request: IndexDeleteByMetadataRequest,
     ) -> None:
-        """
-        按 filepath / doc_ids 删除部分向量。
-        """
         self._repo.delete_by_metadata(
             collection_name=collection_name,
             filepath=request.filepath,

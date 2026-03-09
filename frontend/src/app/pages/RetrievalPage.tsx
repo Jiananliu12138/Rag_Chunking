@@ -29,6 +29,7 @@ interface SearchResult {
   score: number;
   filepath?: string;
   doc_id?: string;
+  chunk_id?: string;
 }
 
 export default function RetrievalPage() {
@@ -590,6 +591,11 @@ export default function RetrievalPage() {
                               Doc ID: {result.doc_id}
                             </div>
                           )}
+                          {result.chunk_id && (
+                            <div className="text-xs text-slate-500 mt-1">
+                              Chunk ID: {result.chunk_id}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -636,6 +642,12 @@ export default function RetrievalPage() {
                               </span>
                             </div>
                             <p className="text-slate-700">{item.text}</p>
+                            {(item.doc_id || item.chunk_id) && (
+                              <div className="mt-2 space-y-1 text-xs text-slate-500">
+                                {item.doc_id && <div>Doc ID: {item.doc_id}</div>}
+                                {item.chunk_id && <div>Chunk ID: {item.chunk_id}</div>}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
