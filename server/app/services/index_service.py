@@ -40,6 +40,13 @@ class IndexService:
                 return cached
 
             try:
+                import torch
+
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+            except Exception:
+                device = "cpu"
+
+            try:
                 from app.core.path_setup import ensure_paths
 
                 ensure_paths()
@@ -47,7 +54,7 @@ class IndexService:
 
                 model = HuggingfaceEmbeddings(
                     model_name=embed_model_path,
-                    model_kwargs={"device": "cpu"},
+                    model_kwargs={"device": device},
                 )
             except ImportError:
                 model = None
@@ -62,7 +69,7 @@ class IndexService:
 
                     model = HuggingFaceEmbeddings(
                         model_name=embed_model_path,
-                        model_kwargs={"device": "cpu"},
+                        model_kwargs={"device": device},
                         encode_kwargs={"normalize_embeddings": True},
                     )
                 except Exception as exc:
