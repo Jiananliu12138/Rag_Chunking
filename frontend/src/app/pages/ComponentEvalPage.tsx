@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from '../components/ui/dialog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, FolderOpen, Plus, X, BarChart3, Sparkles, Sigma, FlaskConical } from 'lucide-react';
+import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, FolderOpen, Plus, X, BarChart3, Sparkles, Sigma, FlaskConical, ChevronDown, ChevronUp } from 'lucide-react';
 import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
@@ -257,6 +257,64 @@ export default function ComponentEvalPage() {
     },
   };
 
+  const retrievalMetricInfo: Record<string, ChunkMetricDoc> = {
+    precision: {
+      title: 'Precision@k',
+      blurb: 'Fraction of retrieved items in top-k that are relevant.',
+      formulaLatex: String.raw`Precision@k=\frac{|Rel\cap Ret_k|}{|Ret_k|}`,
+      interpretation: 'Higher is better. Measures ranking exactness in top positions.',
+      projectExample: ['In this project, relevance is matched by (doc_id, chunk_id) overlap between `rag_retrieval` and `gold_reference`.', 'Computed per query per cut, then aggregated across queries.'],
+      sources: [
+        { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
+        { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
+      ],
+    },
+    recall: {
+      title: 'Recall@k',
+      blurb: 'Fraction of all relevant items recovered in top-k retrieval.',
+      formulaLatex: String.raw`Recall@k=\frac{|Rel\cap Ret_k|}{|Rel|}`,
+      interpretation: 'Higher is better. Indicates coverage of gold references.',
+      projectExample: ['If a query has 3 gold chunks and top-5 retrieves 2 of them, Recall@5 = 2/3.'],
+      sources: [
+        { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
+        { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
+      ],
+    },
+    map: {
+      title: 'MAP@k (Mean Average Precision)',
+      blurb: 'Mean over queries of average precision computed from ranked hits.',
+      formulaLatex: String.raw`AP@k=\frac{1}{|Rel|}\sum_{i=1}^{k}P@i\cdot rel_i,\quad MAP@k=\frac{1}{|Q|}\sum_{q\in Q}AP_q@k`,
+      interpretation: 'Higher is better. Rewards both early ranking and full relevant-set coverage.',
+      projectExample: ['AP accumulates precision at hit positions among top-k retrieval results, then averaged over all queries.'],
+      sources: [
+        { label: 'IR book (Manning et al.): MAP', url: 'https://nlp.stanford.edu/IR-book/' },
+        { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
+      ],
+    },
+    mrr: {
+      title: 'MRR@k (Mean Reciprocal Rank)',
+      blurb: 'Average reciprocal rank of the first relevant item.',
+      formulaLatex: String.raw`MRR@k=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{rank_q}`,
+      interpretation: 'Higher is better. Strongly rewards placing at least one relevant chunk very early.',
+      projectExample: ['If first hit ranks are [1, 2, not-found], reciprocal ranks are [1, 1/2, 0].'],
+      sources: [
+        { label: 'Wikipedia: Mean reciprocal rank', url: 'https://en.wikipedia.org/wiki/Mean_reciprocal_rank' },
+        { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
+      ],
+    },
+    ndcg: {
+      title: 'nDCG@k',
+      blurb: 'Normalized Discounted Cumulative Gain with position discounting.',
+      formulaLatex: String.raw`DCG@k=\sum_{i=1}^{k}\frac{2^{rel_i}-1}{\log_2(i+1)},\quad nDCG@k=\frac{DCG@k}{IDCG@k}`,
+      interpretation: 'Higher is better. Emphasizes ranking quality near top ranks with gain normalization.',
+      projectExample: ['Even with same hit count, putting relevant chunks earlier yields higher nDCG.'],
+      sources: [
+        { label: 'Wikipedia: Discounted cumulative gain', url: 'https://en.wikipedia.org/wiki/Discounted_cumulative_gain' },
+        { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
+      ],
+    },
+  };
+
   // ── Chunk Quality – Direct Input ────────────────────────────────────────────
   const [qualityChunksJson, setQualityChunksJson] = useState('');
   const [enableSemanticSimilarity, setEnableSemanticSimilarity] = useState(true);
@@ -301,8 +359,11 @@ export default function ComponentEvalPage() {
   const [retrievalCuts, setRetrievalCuts] = useState('1,3,5,10');
   const [retrievalSkipEmptyGold, setRetrievalSkipEmptyGold] = useState(true);
   const [tempRetrievalPath, setTempRetrievalPath] = useState('');
+  const [retrievalOutputPath, setRetrievalOutputPath] = useState('');
   const [retrievalFilePaths, setRetrievalFilePaths] = useState<string[]>([]);
   const retrievalFileRef = useRef<HTMLInputElement>(null);
+  const [selectedRetrievalMetric, setSelectedRetrievalMetric] = useState<string | null>(null);
+  const [expandedCuts, setExpandedCuts] = useState<Record<string, boolean>>({});
 
   // ── Force graph container sizing ───────────────────────────────────────────
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -506,13 +567,18 @@ export default function ComponentEvalPage() {
     try {
       const response = await api.retrievalEvalFile({
         input_path: retrievalFilePaths[0],
+        output_path: retrievalOutputPath.trim() || undefined,
         cuts: parseCuts(),
         skip_empty_gold: retrievalSkipEmptyGold,
       });
 
       if (response.success) {
         setRetrievalResult(response.data);
-        toast.success('Retrieval file evaluation completed');
+        toast.success(
+          retrievalOutputPath.trim()
+            ? `Retrieval file evaluation completed. Result saved to ${retrievalOutputPath.trim()}`
+            : 'Retrieval file evaluation completed'
+        );
       } else {
         toast.error('Retrieval file evaluation failed: ' + response.message);
       }
@@ -564,14 +630,29 @@ export default function ComponentEvalPage() {
         const weight = graph[i]?.[j] ?? 1;
         const ii = parseInt(i);
         const jj = parseInt(j);
-        // 对角线固定相似度为 1（颜色最深），其他位置按 1 - weight 映射
-        const similarity =
-          ii === jj ? 1 : Math.max(0, 1 - weight);
+        const similarity = ii === jj ? 1 : Math.max(0, 1 - weight);
         data.push({ x: ii, y: jj, similarity });
       });
     });
     return data;
   }, [stickinessResult]);
+
+  const retrievalMetricsByCut = useMemo(() => {
+    const agg = retrievalResult?.aggregated;
+    if (!agg || typeof agg !== 'object') return [] as Array<{ cut: string; metrics: Record<string, number> }>;
+    const grouped: Record<string, Record<string, number>> = {};
+    Object.entries(agg).forEach(([key, val]) => {
+      const m = key.match(/^(map|mrr|ndcg|recall|precision)(?:@|_at_?)(\d+)$/i);
+      if (!m) return;
+      const metric = m[1].toLowerCase();
+      const cut = m[2];
+      if (!grouped[cut]) grouped[cut] = {};
+      grouped[cut][metric] = Number(val);
+    });
+    return Object.keys(grouped)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((cut) => ({ cut, metrics: grouped[cut] }));
+  }, [retrievalResult]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -1397,6 +1478,36 @@ export default function ComponentEvalPage() {
                           {tempRetrievalPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
                         </Button>
                       </div>
+                      {retrievalFilePaths.length > 0 && (
+                        <ScrollArea className="h-20 mt-2 rounded-md border border-slate-200 bg-slate-50">
+                          <div className="p-2 space-y-1">
+                            {retrievalFilePaths.map((path, idx) => (
+                              <div key={idx} className="flex items-center justify-between gap-2 p-1 px-2 bg-white rounded border border-slate-200">
+                                <span className="text-xs font-mono truncate flex-1">{path}</span>
+                                <Button
+                                  type="button"
+                                  onClick={() => setRetrievalFilePaths(retrievalFilePaths.filter((_, i) => i !== idx))}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0 text-slate-400 hover:text-red-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Output Summary JSON Path</Label>
+                      <Input
+                        value={retrievalOutputPath}
+                        onChange={(e) => setRetrievalOutputPath(e.target.value)}
+                        placeholder="/path/to/retrieval_eval_summary.json"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Optional. If provided, backend will save retrieval evaluation result JSON to this path.</p>
                     </div>
 
                     <Button onClick={handleRetrievalFileEval} disabled={loading} className="w-full" variant="outline">
@@ -1415,14 +1526,79 @@ export default function ComponentEvalPage() {
                     <div className="space-y-6">
                       {retrievalResult.aggregated && (
                         <div>
-                          <h3 className="text-sm font-medium mb-3">Aggregated Metrics</h3>
-                          <div className="grid grid-cols-2 gap-3">
-                            {Object.entries(retrievalResult.aggregated).map(([key, value]) => (
-                              <div key={key} className="p-3 bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200">
-                                <div className="text-xs text-slate-600 mb-1">{key}</div>
-                                <div className="text-xl font-bold text-indigo-900">{Number(value).toFixed(4)}</div>
-                              </div>
-                            ))}
+                          <div className="flex items-start justify-between gap-4 mb-3">
+                            <div>
+                              <h3 className="text-sm font-medium">Aggregated Metrics by Cut@k</h3>
+                              <p className="text-xs text-slate-500 mt-1">Collapsed by cut. Expand each panel to inspect Precision/Recall/MAP/MRR/nDCG.</p>
+                            </div>
+                            <Dialog open={!!selectedRetrievalMetric} onOpenChange={(open) => !open && setSelectedRetrievalMetric(null)}>
+                              <DialogContent className="sm:max-w-[560px]">
+                                {selectedRetrievalMetric && retrievalMetricInfo[selectedRetrievalMetric] && (
+                                  <>
+                                    <DialogHeader>
+                                      <DialogTitle>{retrievalMetricInfo[selectedRetrievalMetric].title}</DialogTitle>
+                                      <DialogDescription>{retrievalMetricInfo[selectedRetrievalMetric].blurb}</DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-cyan-50 to-white p-4 shadow-sm">
+                                        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-indigo-700"><Sigma className="h-3.5 w-3.5" />Formula (LaTeX)</div>
+                                        <div className="rounded-lg bg-white/80 p-3 text-indigo-950"><BlockMath math={retrievalMetricInfo[selectedRetrievalMetric].formulaLatex} /></div>
+                                      </div>
+                                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
+                                        <p className="text-sm text-slate-700">{retrievalMetricInfo[selectedRetrievalMetric].interpretation}</p>
+                                      </div>
+                                      <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                                        <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-indigo-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
+                                        <ul className="space-y-1 text-sm text-indigo-900 list-disc pl-5">
+                                          {retrievalMetricInfo[selectedRetrievalMetric].projectExample.map((item, idx) => (<li key={idx}>{item}</li>))}
+                                        </ul>
+                                      </div>
+                                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                        <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
+                                        <div className="flex flex-wrap gap-2">
+                                          {(retrievalMetricInfo[selectedRetrievalMetric].sources ?? []).map((s, idx) => (
+                                            <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-indigo-700 hover:bg-indigo-100">{s.label}</a>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+
+                          <div className="space-y-3">
+                            {retrievalMetricsByCut.map(({ cut, metrics }) => {
+                              const open = !!expandedCuts[cut];
+                              return (
+                                <div key={cut} className="rounded-lg border border-indigo-200 bg-gradient-to-br from-indigo-50 to-cyan-50 p-3">
+                                  <button type="button" className="w-full flex items-center justify-between" onClick={() => setExpandedCuts((prev) => ({ ...prev, [cut]: !prev[cut] }))}>
+                                    <div>
+                                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Cut Panel</div>
+                                      <div className="text-lg font-semibold text-indigo-900">@{cut}</div>
+                                    </div>
+                                    {open ? <ChevronUp className="w-4 h-4 text-indigo-700" /> : <ChevronDown className="w-4 h-4 text-indigo-700" />}
+                                  </button>
+                                  {open && (
+                                    <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+                                      {Object.entries(metrics).map(([metric, value]) => (
+                                        <button
+                                          key={`${cut}-${metric}`}
+                                          type="button"
+                                          onClick={() => setSelectedRetrievalMetric(metric)}
+                                          className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-left hover:bg-indigo-50"
+                                        >
+                                          <div className="text-[11px] uppercase text-slate-500">{metric}@{cut}</div>
+                                          <div className="text-sm font-semibold text-indigo-900">{Number(value).toFixed(4)}</div>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
