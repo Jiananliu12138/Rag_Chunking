@@ -553,6 +553,9 @@ export default function RetrievalPage() {
                   {useHybridSearch && (
                     <Badge className="bg-blue-600">Hybrid Search</Badge>
                   )}
+                  {rerankEnabled && (
+                    <Badge className="bg-emerald-600">CrossEncoder</Badge>
+                  )}
                 </h2>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">

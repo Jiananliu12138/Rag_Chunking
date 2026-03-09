@@ -276,6 +276,7 @@ export default function Home() {
                   <>
                     {collectionName ? `Collection: ${collectionName}` : 'Configure collection in settings'}
                     {useHybridSearch && <Badge className="ml-1 h-4 text-xs">Hybrid</Badge>}
+                    {rerankEnabled && <Badge className="ml-1 h-4 text-xs bg-emerald-600">CrossEncoder</Badge>}
                   </>
                 ) : (
                   <>
