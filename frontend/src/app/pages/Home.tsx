@@ -22,13 +22,6 @@ import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Checkbox } from '../components/ui/checkbox';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -79,7 +72,6 @@ export default function Home() {
   const [enableRag, setEnableRag] = useState(true);
   const [useHybridSearch, setUseHybridSearch] = useState(false);
   const [rerankEnabled, setRerankEnabled] = useState(false);
-  const [rerankType, setRerankType] = useState<'rrf' | 'cross_encoder'>('rrf');
   const [rerankModelPath, setRerankModelPath] = useState('');
   const [rerankDevice, setRerankDevice] = useState('cpu');
   const [rerankCandidateK, setRerankCandidateK] = useState(20);
@@ -193,13 +185,13 @@ export default function Home() {
         embed_dim: embedDim,
         top_k: topK,
         enable_rag: enableRag,
-        use_hybrid_search: useHybridSearch || undefined,
-        rerank_enabled: rerankEnabled && rerankType === 'cross_encoder',
+        use_hybrid_search: useHybridSearch,
+        rerank_enabled: rerankEnabled,
         rerank_type: 'cross_encoder',
-        rerank_model_path: rerankEnabled && rerankType === 'cross_encoder' ? (rerankModelPath || undefined) : undefined,
+        rerank_model_path: rerankEnabled ? (rerankModelPath || undefined) : undefined,
         rerank_device: rerankDevice,
-        rerank_candidate_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankCandidateK : undefined,
-        rerank_top_k: rerankEnabled && rerankType === 'cross_encoder' ? rerankTopK : undefined,
+        rerank_candidate_k: rerankEnabled ? rerankCandidateK : undefined,
+        rerank_top_k: rerankEnabled ? rerankTopK : undefined,
         filepath: filterFilepath.length > 0 ? filterFilepath : undefined,
         doc_id: filterDocId.length > 0 ? filterDocId : undefined,
         llm_api_base: llmApiBase,
@@ -748,16 +740,6 @@ export default function Home() {
                       {rerankEnabled && (
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-xs">Rerank Type</Label>
-                            <Select value={rerankType} onValueChange={(v: 'rrf' | 'cross_encoder') => setRerankType(v)}>
-                              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="rrf">RRF</SelectItem>
-                                <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
                             <Label className="text-xs">Rerank Device</Label>
                             <Input
                               value={rerankDevice}
@@ -767,20 +749,20 @@ export default function Home() {
                             />
                           </div>
                           <div>
-                            <Label className="text-xs">Candidate K</Label>
-                            <Input
-                              type="number"
-                              value={rerankCandidateK}
-                              onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))}
-                              className="mt-1 h-8 text-xs"
-                            />
-                          </div>
-                          <div>
                             <Label className="text-xs">Rerank Top K</Label>
                             <Input
                               type="number"
                               value={rerankTopK}
                               onChange={(e) => setRerankTopK(parseInt(e.target.value || '1'))}
+                              className="mt-1 h-8 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Candidate K</Label>
+                            <Input
+                              type="number"
+                              value={rerankCandidateK}
+                              onChange={(e) => setRerankCandidateK(parseInt(e.target.value || '1'))}
                               className="mt-1 h-8 text-xs"
                             />
                           </div>
