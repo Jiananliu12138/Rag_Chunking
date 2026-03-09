@@ -643,20 +643,50 @@ Format 2 - Current Eval Format:
                           .map(([key, value]) => {
                             if (key === 'bleu_1') {
                               const bleuKeys = ['bleu_1', 'bleu_2', 'bleu_3', 'bleu_4'];
+                              const bleuValues = bleuKeys.map((k) => Number(traditionalResult[k] ?? 0));
+                              const bleuMax = Math.max(...bleuValues, 1e-6);
+                              const bleuMean = bleuValues.reduce((a, b) => a + b, 0) / bleuValues.length;
                               return (
-                                <div key="bleu_family" className="col-span-2 p-4 text-left bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+                                <div key="bleu_family" className="col-span-2 rounded-xl border border-blue-200 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-4 text-left shadow-sm">
                                   <button
                                     type="button"
-                                    className="w-full flex items-center justify-between"
+                                    className="w-full flex items-start justify-between gap-3"
                                     onClick={() => setBleuExpanded((v) => !v)}
                                   >
-                                    <div>
-                                      <div className="text-sm text-slate-600 mb-1">BLEU FAMILY (1-4)</div>
-                                      <div className="text-2xl font-bold text-blue-900">{Number(traditionalResult.bleu_4 ?? traditionalResult.bleu_1).toFixed(4)}</div>
-                                      <p className="mt-1 text-xs text-slate-600">Collapsed view for BLEU-1/2/3/4. Click to expand details.</p>
+                                    <div className="flex-1">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Lexical Overlap Panel</div>
+                                      <div className="mt-1 text-sm text-slate-700">BLEU Family (n = 1..4)</div>
+                                      <div className="mt-1 flex items-end gap-4">
+                                        <div className="text-2xl font-bold text-blue-900">{Number(traditionalResult.bleu_4 ?? traditionalResult.bleu_1).toFixed(4)}</div>
+                                        <div className="text-xs text-slate-600 pb-1">BLEU-4 (strict) · Mean {bleuMean.toFixed(4)}</div>
+                                      </div>
+                                      <p className="mt-1 text-xs text-slate-600">Paper-style compact block. Expand to inspect each n-gram order and open formulas.</p>
                                     </div>
-                                    {bleuExpanded ? <ChevronUp className="w-4 h-4 text-blue-700" /> : <ChevronDown className="w-4 h-4 text-blue-700" />}
+                                    {bleuExpanded ? <ChevronUp className="w-4 h-4 text-blue-700 mt-1" /> : <ChevronDown className="w-4 h-4 text-blue-700 mt-1" />}
                                   </button>
+
+                                  <div className="mt-3 rounded-lg border border-blue-100 bg-white/70 p-3">
+                                    <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">N-gram profile (normalized bars)</div>
+                                    <div className="grid grid-cols-4 gap-2">
+                                      {bleuKeys.map((bleuKey, idx) => {
+                                        const v = Number(traditionalResult[bleuKey] ?? 0);
+                                        const h = Math.max(8, Math.round((v / bleuMax) * 42));
+                                        return (
+                                          <button
+                                            key={`bleu_bar_${bleuKey}`}
+                                            type="button"
+                                            onClick={() => setSelectedTraditionalMetric(bleuKey)}
+                                            className="rounded-md border border-blue-100 bg-white p-2 text-center hover:border-blue-300"
+                                          >
+                                            <div className="mx-auto mb-2 w-6 rounded-sm bg-blue-500/80" style={{ height: `${h}px` }} />
+                                            <div className="text-[10px] uppercase text-slate-500">B{idx + 1}</div>
+                                            <div className="text-xs font-semibold text-blue-900">{v.toFixed(4)}</div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
                                   {bleuExpanded && (
                                     <div className="mt-3 grid grid-cols-2 gap-2">
                                       {bleuKeys.map((bleuKey) => (
@@ -665,7 +695,7 @@ Format 2 - Current Eval Format:
                                             key={bleuKey}
                                             type="button"
                                             onClick={() => setSelectedTraditionalMetric(bleuKey)}
-                                            className="rounded-md border border-blue-200 bg-white/80 px-3 py-2 text-left hover:bg-white"
+                                            className="rounded-md border border-blue-200 bg-white/90 px-3 py-2 text-left hover:bg-white"
                                           >
                                             <div className="text-xs text-slate-600 uppercase">{bleuKey.replace('_', '-')}</div>
                                             <div className="text-sm font-semibold text-blue-900">{Number(traditionalResult[bleuKey]).toFixed(4)}</div>
