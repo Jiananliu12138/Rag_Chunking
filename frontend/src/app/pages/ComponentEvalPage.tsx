@@ -221,6 +221,7 @@ export default function ComponentEvalPage() {
     blurb: string;
     formulaLatex: string;
     interpretation: string;
+    variables?: string[];
     projectExample: string[];
     sources?: Array<{ label: string; url: string }>;
   };
@@ -266,6 +267,7 @@ export default function ComponentEvalPage() {
       blurb: 'Fraction of retrieved items in top-k that are relevant.',
       formulaLatex: String.raw`Precision@k=\frac{|Rel\cap Ret_k|}{|Ret_k|}`,
       interpretation: 'Higher is better. Measures ranking exactness in top positions.',
+      variables: ['Rel: relevant set from gold_reference', 'Ret_k: top-k retrieved chunks'],
       projectExample: ['In this project, relevance is matched by (doc_id, chunk_id) overlap between `rag_retrieval` and `gold_reference`.', 'Computed per query per cut, then aggregated across queries.'],
       sources: [
         { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
@@ -277,6 +279,7 @@ export default function ComponentEvalPage() {
       blurb: 'Fraction of all relevant items recovered in top-k retrieval.',
       formulaLatex: String.raw`Recall@k=\frac{|Rel\cap Ret_k|}{|Rel|}`,
       interpretation: 'Higher is better. Indicates coverage of gold references.',
+      variables: ['Rel: relevant set from gold_reference', 'Ret_k: top-k retrieved chunks'],
       projectExample: ['If a query has 3 gold chunks and top-5 retrieves 2 of them, Recall@5 = 2/3.'],
       sources: [
         { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
@@ -288,6 +291,7 @@ export default function ComponentEvalPage() {
       blurb: 'Mean over queries of average precision computed from ranked hits.',
       formulaLatex: String.raw`AP@k=\frac{1}{|Rel|}\sum_{i=1}^{k}P@i\cdot rel_i,\quad MAP@k=\frac{1}{|Q|}\sum_{q\in Q}AP_q@k`,
       interpretation: 'Higher is better. Rewards both early ranking and full relevant-set coverage.',
+      variables: ['Q: query set', 'rel_i∈{0,1}: relevance at rank i'],
       projectExample: ['AP accumulates precision at hit positions among top-k retrieval results, then averaged over all queries.'],
       sources: [
         { label: 'IR book (Manning et al.): MAP', url: 'https://nlp.stanford.edu/IR-book/' },
@@ -299,6 +303,7 @@ export default function ComponentEvalPage() {
       blurb: 'Average reciprocal rank of the first relevant item.',
       formulaLatex: String.raw`MRR@k=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{rank_q}`,
       interpretation: 'Higher is better. Strongly rewards placing at least one relevant chunk very early.',
+      variables: ['rank_q: rank of first relevant hit for query q', 'Q: query set'],
       projectExample: ['If first hit ranks are [1, 2, not-found], reciprocal ranks are [1, 1/2, 0].'],
       sources: [
         { label: 'Wikipedia: Mean reciprocal rank', url: 'https://en.wikipedia.org/wiki/Mean_reciprocal_rank' },
@@ -310,6 +315,7 @@ export default function ComponentEvalPage() {
       blurb: 'Normalized Discounted Cumulative Gain with position discounting.',
       formulaLatex: String.raw`DCG@k=\sum_{i=1}^{k}\frac{2^{rel_i}-1}{\log_2(i+1)},\quad nDCG@k=\frac{DCG@k}{IDCG@k}`,
       interpretation: 'Higher is better. Emphasizes ranking quality near top ranks with gain normalization.',
+      variables: ['rel_i: graded/binary relevance at rank i', 'IDCG@k: ideal DCG at k'],
       projectExample: ['Even with same hit count, putting relevant chunks earlier yields higher nDCG.'],
       sources: [
         { label: 'Wikipedia: Discounted cumulative gain', url: 'https://en.wikipedia.org/wiki/Discounted_cumulative_gain' },
@@ -1550,6 +1556,12 @@ export default function ComponentEvalPage() {
                                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                         <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
                                         <p className="text-sm text-slate-700">{retrievalMetricInfo[selectedRetrievalMetric].interpretation}</p>
+                                      </div>
+                                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                        <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
+                                        <ul className="space-y-1 text-sm text-slate-700 list-disc pl-5">
+                                          {(retrievalMetricInfo[selectedRetrievalMetric].variables ?? []).map((item, idx) => (<li key={idx}>{item}</li>))}
+                                        </ul>
                                       </div>
                                       <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
                                         <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-indigo-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
