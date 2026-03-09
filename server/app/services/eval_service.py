@@ -3,6 +3,7 @@
 封装传统指标（F1/ROUGE/BLEU/BERTScore）和 RAGAS 评估两条路径。
 """
 import numpy as np
+from threading import Lock
 
 from app.config import get_settings
 from app.core.exceptions import EvaluationException
@@ -23,8 +24,50 @@ from app.schemas.eval_schema import (
     TraditionalEvalResult,
 )
 
+_RAGAS_EVALUATOR_CACHE: dict[tuple[str, str, str, str, str, bool, str], object] = {}
+_RAGAS_EVALUATOR_CACHE_LOCK = Lock()
+
 
 class EvalService:
+
+    @staticmethod
+    def _get_ragas_evaluator(
+        *,
+        vllm_api_base: str,
+        vllm_api_key: str,
+        vllm_model_name: str,
+        embedding_model_path: str,
+        device: str,
+        enable_cache: bool,
+        cache_dir: str,
+    ):
+        cache_key = (
+            str(vllm_api_base).strip(),
+            str(vllm_api_key).strip(),
+            str(vllm_model_name).strip(),
+            str(embedding_model_path).strip(),
+            str(device).strip(),
+            bool(enable_cache),
+            str(cache_dir).strip(),
+        )
+        with _RAGAS_EVALUATOR_CACHE_LOCK:
+            cached = _RAGAS_EVALUATOR_CACHE.get(cache_key)
+            if cached is not None:
+                return cached
+
+            from eval_ragas import RAGASEvaluator  # noqa: PLC0415
+
+            evaluator = RAGASEvaluator(
+                vllm_api_base=vllm_api_base,
+                vllm_api_key=vllm_api_key,
+                vllm_model_name=vllm_model_name,
+                embedding_model_path=embedding_model_path,
+                device=device,
+                enable_cache=enable_cache,
+                cache_dir=cache_dir,
+            )
+            _RAGAS_EVALUATOR_CACHE[cache_key] = evaluator
+            return evaluator
 
     @staticmethod
     def _normalize_retrieval_rows(rows: list[dict]) -> list[dict]:
@@ -204,9 +247,7 @@ class EvalService:
             if not embedding_model_path:
                 raise EvaluationException("未配置 RAGAS 嵌入模型（DEFAULT_RAGAS_EMBEDDING_MODEL_PATH）")
 
-            from eval_ragas import RAGASEvaluator  # noqa: PLC0415
-
-            evaluator = RAGASEvaluator(
+            evaluator = self._get_ragas_evaluator(
                 vllm_api_base=vllm_api_base,
                 vllm_api_key=vllm_api_key,
                 vllm_model_name=vllm_model_name,
@@ -284,9 +325,7 @@ class EvalService:
             if not embedding_model_path:
                 raise EvaluationException("未配置 RAGAS 嵌入模型（DEFAULT_RAGAS_EMBEDDING_MODEL_PATH）")
 
-            from eval_ragas import RAGASEvaluator  # noqa: PLC0415
-
-            evaluator = RAGASEvaluator(
+            evaluator = self._get_ragas_evaluator(
                 vllm_api_base=vllm_api_base,
                 vllm_api_key=vllm_api_key,
                 vllm_model_name=vllm_model_name,

@@ -19,7 +19,7 @@ const navItems = [
   { path: '/chunking', label: 'Chunking', icon: FileText },
   { path: '/index', label: 'Index', icon: Database },
   { path: '/retrieval', label: 'Retrieval', icon: Search },
-  { path: '/eval', label: 'Evaluation', icon: BarChart3 },
+  { path: '/eval', label: 'End-to-End Eval', icon: BarChart3 },
   {
     path: '/component-eval',
     label: 'Component Eval',

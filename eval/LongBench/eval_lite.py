@@ -1,22 +1,140 @@
 import gc
-import torch
-import os
 import json
-import numpy as np
 import logging
+import os
 from pathlib import Path
-from bert_score import score as bert_score
-from rouge import Rouge
-from metrics_lite import qa_f1_score
-from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+from threading import Lock
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import numpy as np
+import torch
+from bert_score import BERTScorer
+from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
+from rouge import Rouge
+
+from metrics_lite import qa_f1_score
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+_BERT_SCORER_CACHE: dict[tuple[str, str, int | None, int], BERTScorer] = {}
+_BERT_SCORER_CACHE_LOCK = Lock()
+
+
 class Config:
-    PREDICTION_FILE = '/data/h50056789/Rag_Chunking/Retrival_Result/2wikimqa_qa_semantic_chunk.json'
-    OUTPUT_DIR = '/data/h50056789/Rag_Chunking/eval_result'
+    PREDICTION_FILE = "/data/h50056789/Rag_Chunking/Retrival_Result/2wikimqa_qa_semantic_chunk.json"
+    OUTPUT_DIR = "/data/h50056789/Rag_Chunking/eval_result"
+
+
+def _get_bert_scorer(
+    model_type: str,
+    device: str,
+    num_layers: int | None = None,
+    batch_size: int = 16,
+) -> BERTScorer:
+    cache_key = (
+        str(model_type).strip(),
+        str(device).strip(),
+        num_layers,
+        int(batch_size),
+    )
+    with _BERT_SCORER_CACHE_LOCK:
+        cached = _BERT_SCORER_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+        scorer = BERTScorer(
+            model_type=model_type,
+            num_layers=num_layers,
+            device=device,
+            batch_size=batch_size,
+        )
+        _BERT_SCORER_CACHE[cache_key] = scorer
+        return scorer
+
+
+def bert_score(
+    predictions: list[str],
+    refs: list[str],
+    model_type: str,
+    num_layers: int | None = None,
+    verbose: bool = True,
+    device: str = "cuda:0",
+    batch_size: int = 16,
+):
+    scorer = _get_bert_scorer(
+        model_type=model_type,
+        device=device,
+        num_layers=num_layers,
+        batch_size=batch_size,
+    )
+    return scorer.score(
+        predictions,
+        refs,
+        verbose=verbose,
+        batch_size=batch_size,
+    )
+
+
+def _calculate_metric_scores(predictions: list[str], answers: list[list[str]]) -> dict:
+    scores = {}
+    f1_scores = []
+    rouge_l_scores = []
+    bleu_1_scores = []
+    bleu_2_scores = []
+    bleu_3_scores = []
+    bleu_4_scores = []
+
+    rouge = Rouge()
+    smooth = SmoothingFunction().method1
+
+    for pred, ground_truths in zip(predictions, answers):
+        f1 = 0.0
+        for gt in ground_truths:
+            f1 = max(f1, qa_f1_score(pred, gt))
+        f1_scores.append(f1)
+
+        rouge_l = 0.0
+        for gt in ground_truths:
+            try:
+                if not pred.strip() or not gt.strip():
+                    continue
+                rouge_score = rouge.get_scores(pred, gt)[0]["rouge-l"]["f"]
+                rouge_l = max(rouge_l, rouge_score)
+            except Exception:
+                pass
+        rouge_l_scores.append(rouge_l)
+
+        try:
+            pred_tokens = pred.split()
+            refs_tokens = [gt.split() for gt in ground_truths]
+
+            bleu_1_scores.append(
+                sentence_bleu(refs_tokens, pred_tokens, weights=(1, 0, 0, 0), smoothing_function=smooth)
+            )
+            bleu_2_scores.append(
+                sentence_bleu(refs_tokens, pred_tokens, weights=(0.5, 0.5, 0, 0), smoothing_function=smooth)
+            )
+            bleu_3_scores.append(
+                sentence_bleu(refs_tokens, pred_tokens, weights=(0.333, 0.333, 0.333, 0), smoothing_function=smooth)
+            )
+            bleu_4_scores.append(
+                sentence_bleu(refs_tokens, pred_tokens, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=smooth)
+            )
+        except Exception:
+            bleu_1_scores.append(0.0)
+            bleu_2_scores.append(0.0)
+            bleu_3_scores.append(0.0)
+            bleu_4_scores.append(0.0)
+
+    scores["f1"] = np.mean(f1_scores)
+    scores["rouge_l"] = np.mean(rouge_l_scores)
+    scores["bleu_1"] = np.mean(bleu_1_scores)
+    scores["bleu_2"] = np.mean(bleu_2_scores)
+    scores["bleu_3"] = np.mean(bleu_3_scores)
+    scores["bleu_4"] = np.mean(bleu_4_scores)
+    return scores
+
 
 def calculate_traditional_metrics_with_params(
     predictions: list[str],
@@ -26,119 +144,38 @@ def calculate_traditional_metrics_with_params(
     bert_score_device: str = "cuda:0",
     hf_home: str | None = None,
 ) -> dict:
-    """
-    计算传统指标（带参数版本，供服务层调用）。
-    
-    Args:
-        predictions: 预测答案列表
-        answers: 参考答案列表（每个元素为多个参考答案的列表）
-        enable_bert_score: 是否计算 BERTScore
-        bert_score_model: BERTScore 模型类型
-        bert_score_device: BERTScore 计算设备
-        hf_home: HuggingFace 缓存目录（可选）
-    
-    Returns:
-        包含各项指标均值的字典
-    """
     logger.info("Calculating traditional metrics...")
-    scores = {}
-    
-    # 1. LongBench Metrics (F1 / ROUGE based on dataset)
-    f1_scores = []
-    rouge_l_scores = []
-    bleu_1_scores = []
-    bleu_2_scores = []
-    bleu_3_scores = []
-    bleu_4_scores = []
-    
-    rouge = Rouge()
-    smooth = SmoothingFunction().method1  # 用于 BLEU 平滑
-    
-    for pred, ground_truths in zip(predictions, answers):
-        # F1 按词是不是一样
-        f1 = 0
-        for gt in ground_truths:
-            f1 = max(f1, qa_f1_score(pred, gt))
-        f1_scores.append(f1)
-        
-        # ROUGE-L 最长序列
-        r_l = 0
-        for gt in ground_truths:
-            try:
-                if not pred.strip() or not gt.strip():
-                    continue
-                r_score = rouge.get_scores(pred, gt)[0]['rouge-l']['f']
-                r_l = max(r_l, r_score)
-            except:
-                pass
-        rouge_l_scores.append(r_l)
+    scores = _calculate_metric_scores(predictions, answers)
 
-        # BLEU 1-4
-        try:
-            pred_tokens = pred.split()
-            refs_tokens = [gt.split() for gt in ground_truths]
-            
-            # BLEU-1 (weights=(1, 0, 0, 0))
-            b1 = sentence_bleu(refs_tokens, pred_tokens, weights=(1, 0, 0, 0), smoothing_function=smooth)
-            bleu_1_scores.append(b1)
-            
-            # BLEU-2 (weights=(0.5, 0.5, 0, 0))
-            b2 = sentence_bleu(refs_tokens, pred_tokens, weights=(0.5, 0.5, 0, 0), smoothing_function=smooth)
-            bleu_2_scores.append(b2)
-            
-            # BLEU-3 (weights=(0.33, 0.33, 0.33, 0))
-            b3 = sentence_bleu(refs_tokens, pred_tokens, weights=(0.333, 0.333, 0.333, 0), smoothing_function=smooth)
-            bleu_3_scores.append(b3)
-            
-            # BLEU-4 (weights=(0.25, 0.25, 0.25, 0.25))
-            b4 = sentence_bleu(refs_tokens, pred_tokens, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=smooth)
-            bleu_4_scores.append(b4)
-            
-        except:
-            bleu_1_scores.append(0.0)
-            bleu_2_scores.append(0.0)
-            bleu_3_scores.append(0.0)
-            bleu_4_scores.append(0.0)
-        
-    scores['f1'] = np.mean(f1_scores)
-    scores['rouge_l'] = np.mean(rouge_l_scores)
-    scores['bleu_1'] = np.mean(bleu_1_scores)
-    scores['bleu_2'] = np.mean(bleu_2_scores)
-    scores['bleu_3'] = np.mean(bleu_3_scores)
-    scores['bleu_4'] = np.mean(bleu_4_scores)
-    
-    # 2. BERTScore
     if enable_bert_score:
         logger.info("Calculating BERTScore...")
         try:
             if hf_home:
-                os.environ['HF_HOME'] = hf_home
-            
+                os.environ["HF_HOME"] = hf_home
+
             refs = [" ".join(gts) for gts in answers]
-            
-            P, R, F1 = bert_score(
-                predictions, 
-                refs, 
+            _, _, f1 = bert_score(
+                predictions,
+                refs,
                 model_type=bert_score_model,
                 num_layers=None,
-                verbose=True, 
+                verbose=True,
                 device=bert_score_device,
-                batch_size=16  # 显式设置 batch size
+                batch_size=16,
             )
-            scores['bert_score_f1'] = F1.mean().item()
-            
-            # 释放 BERTScore 显存
-            del P, R, F1
+            scores["bert_score_f1"] = f1.mean().item()
+
+            del f1
             gc.collect()
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             logger.info("BERTScore memory cleared.")
-            
-        except Exception as e:
-            logger.warning(f"BERTScore calculation failed: {e}")
-            scores['bert_score_f1'] = 0.0
+        except Exception as exc:
+            logger.warning("BERTScore calculation failed: %s", exc)
+            scores["bert_score_f1"] = 0.0
     else:
-        scores['bert_score_f1'] = None
-        
+        scores["bert_score_f1"] = None
+
     return scores
 
 
@@ -147,170 +184,63 @@ class Evaluator:
         self.config = config
 
     def calculate_traditional_metrics(self, predictions, answers):
-        """计算传统指标 (F1, ROUGE, BERTScore)"""
-        logger.info("Calculating traditional metrics...")
-        scores = {}
-        
-        # 1. LongBench Metrics (F1 / ROUGE based on dataset)
-        f1_scores = []
-        rouge_l_scores = []
-        bleu_1_scores = []
-        bleu_2_scores = []
-        bleu_3_scores = []
-        bleu_4_scores = []
-        
-        rouge = Rouge()
-        smooth = SmoothingFunction().method1 # 用于 BLEU 平滑
-        
-        for pred, ground_truths in zip(predictions, answers):
-            # F1 按词是不是一样
-            f1 = 0
-            for gt in ground_truths:
-                f1 = max(f1, qa_f1_score(pred, gt))
-            f1_scores.append(f1)
-            
-            # ROUGE-L 最长序列
-            r_l = 0
-            for gt in ground_truths:
-                try:
-                    if not pred.strip() or not gt.strip():
-                        continue
-                    r_score = rouge.get_scores(pred, gt)[0]['rouge-l']['f']
-                    r_l = max(r_l, r_score)
-                except:
-                    pass
-            rouge_l_scores.append(r_l)
-
-            # BLEU 1-4
-            try:
-                pred_tokens = pred.split()
-                refs_tokens = [gt.split() for gt in ground_truths]
-                
-                # BLEU-1 (weights=(1, 0, 0, 0))
-                b1 = sentence_bleu(refs_tokens, pred_tokens, weights=(1, 0, 0, 0), smoothing_function=smooth)
-                bleu_1_scores.append(b1)
-                
-                # BLEU-2 (weights=(0.5, 0.5, 0, 0))
-                b2 = sentence_bleu(refs_tokens, pred_tokens, weights=(0.5, 0.5, 0, 0), smoothing_function=smooth)
-                bleu_2_scores.append(b2)
-                
-                # BLEU-3 (weights=(0.33, 0.33, 0.33, 0))
-                b3 = sentence_bleu(refs_tokens, pred_tokens, weights=(0.333, 0.333, 0.333, 0), smoothing_function=smooth)
-                bleu_3_scores.append(b3)
-                
-                # BLEU-4 (weights=(0.25, 0.25, 0.25, 0.25))
-                b4 = sentence_bleu(refs_tokens, pred_tokens, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=smooth)
-                bleu_4_scores.append(b4)
-                
-            except:
-                bleu_1_scores.append(0.0)
-                bleu_2_scores.append(0.0)
-                bleu_3_scores.append(0.0)
-                bleu_4_scores.append(0.0)
-            
-        scores['f1'] = np.mean(f1_scores)
-        scores['rouge_l'] = np.mean(rouge_l_scores)
-        scores['bleu_1'] = np.mean(bleu_1_scores)
-        scores['bleu_2'] = np.mean(bleu_2_scores)
-        scores['bleu_3'] = np.mean(bleu_3_scores)
-        scores['bleu_4'] = np.mean(bleu_4_scores)
-        
-        # 2. BERTScore
-        logger.info("Calculating BERTScore...")
-        try:
-            # BERTScore 不支持直接的多参考答案取 max，需要手动处理
-            # 策略：对每个样本，计算预测值与所有参考答案的 BERTScore，取 F1 最大的那个
-            os.environ['HF_HOME'] = '/data/h50056789/Rag_Chunking/model/model_cache'
-
-            all_f1_scores = []
-            
-            refs = [" ".join(gts) for gts in answers]
-            
-            P, R, F1 = bert_score(
-                predictions, 
-                refs, 
-                model_type="roberta-large",
-                num_layers=None,
-                verbose=True, 
-                device='cuda:0', # 放在 GPU 0 (Card 1)
-                batch_size=16 # 显式设置 batch size
-            )
-            scores['bert_score_f1'] = F1.mean().item()
-            
-            # 释放 BERTScore 显存
-            del P, R, F1
-            gc.collect()
-            torch.cuda.empty_cache()
-            logger.info("BERTScore memory cleared.")
-            
-        except Exception as e:
-            logger.warning(f"BERTScore calculation failed: {e}")
-            scores['bert_score_f1'] = 0.0
-            
-        return scores
+        return calculate_traditional_metrics_with_params(
+            predictions=predictions,
+            answers=answers,
+            enable_bert_score=True,
+            bert_score_model="roberta-large",
+            bert_score_device="cuda:0",
+            hf_home="/data/h50056789/Rag_Chunking/model/model_cache",
+        )
 
     def run(self, input_json_path=None, output_json_path=None):
-        """
-        执行评估流程。
-        
-        Args:
-            input_json_path: 输入 JSON 文件路径（可选，默认使用 config.PREDICTION_FILE）
-            output_json_path: 输出 JSON 文件路径（可选，默认在输入文件同目录下生成）
-        """
-        # 1. 确定输入路径
         if input_json_path is None:
             input_json_path = self.config.PREDICTION_FILE
-        
+
         input_path = Path(input_json_path)
         if not input_path.exists():
-            logger.error(f"File not found: {input_path}")
+            logger.error("File not found: %s", input_path)
             return
 
-        # 2. 读取数据（优先使用 file_repository，失败则回退到原有方式）
-        with open(input_path, 'r', encoding='utf-8') as f:
+        with open(input_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        predictions = [item['llm_ans'] for item in data]
-        answers = [item['answers'] for item in data]
-        
-        # 3. 计算传统指标
+        predictions = [item["llm_ans"] for item in data]
+        answers = [item["answers"] for item in data]
+
         final_results = self.calculate_traditional_metrics(predictions, answers)
-        
-        # 4. 确定输出路径
+
         if output_json_path is None:
             output_json_path = input_path.parent / f"{input_path.stem}_traditional_eval.json"
         else:
             output_json_path = Path(output_json_path)
-        
-        # 5. 创建输出目录
+
         output_json_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # 6. 合并已有结果（如果存在）
+
         if output_json_path.exists():
             try:
-                with open(output_json_path, 'r', encoding='utf-8') as f:
+                with open(output_json_path, "r", encoding="utf-8") as f:
                     existing_results = json.load(f)
-                    existing_results.update(final_results)
-                    final_results = existing_results
+                existing_results.update(final_results)
+                final_results = existing_results
             except Exception:
                 pass
-        
-        # 7. 保存结果
-        print(f"\n{'='*70}")
-        print(f"💾 保存评估结果")
-        print(f"{'='*70}")
-        print(f"输出文件: {output_json_path}")
-        
-        with open(output_json_path, 'w', encoding='utf-8') as f:
-            def convert(o):
-                if isinstance(o, np.float32) or isinstance(o, np.float64):
-                    return float(o)
-                raise TypeError
-            json.dump(final_results, f, indent=4, default=convert, ensure_ascii=False)
-        
-        print(f"✅ 评估结果已保存")
-        print(f"{'='*70}\n")
-        logger.info(f"Results saved to {output_json_path}")
 
-if __name__ == '__main__':
+        print(f"\n{'=' * 70}")
+        print("Saving evaluation results")
+        print(f"{'=' * 70}")
+        print(f"Output file: {output_json_path}")
+
+        with open(output_json_path, "w", encoding="utf-8") as f:
+            def convert(obj):
+                if isinstance(obj, (np.float32, np.float64)):
+                    return float(obj)
+                raise TypeError
+
+            json.dump(final_results, f, indent=4, default=convert, ensure_ascii=False)
+
+        logger.info("Results saved to %s", output_json_path)
+
+
+if __name__ == "__main__":
     evaluator = Evaluator(Config)
     evaluator.run()

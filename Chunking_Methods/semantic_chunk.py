@@ -3,6 +3,7 @@ import time
 import os
 import multiprocessing
 from functools import partial
+from threading import RLock
 from tqdm import tqdm
 from llama_index.core.node_parser import SemanticSplitterNodeParser
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -16,30 +17,47 @@ BUFFER_SIZE = 1
 BREAKPOINT_THRESHOLD = 74
 NUM_WORKERS = 1
 
+_EMBED_MODEL_CACHE = {}
+_SPLITTER_CACHE = {}
+_CACHE_LOCK = RLock()
+
 def create_directory(path):
     if not os.path.exists(path):
         os.makedirs(path)
         print(f"Created directory: {path}")
 
 
+def _get_embed_model(embed_model_path=EMBED_MODEL_PATH):
+    cache_key = str(embed_model_path).strip()
+    with _CACHE_LOCK:
+        cached = _EMBED_MODEL_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+        model = HuggingFaceEmbedding(model_name=embed_model_path)
+        _EMBED_MODEL_CACHE[cache_key] = model
+        return model
+
+
 def init_splitter():
-    embed_model = HuggingFaceEmbedding(model_name=EMBED_MODEL_PATH)
-    splitter = SemanticSplitterNodeParser(
-        buffer_size=BUFFER_SIZE,
-        breakpoint_percentile_threshold=BREAKPOINT_THRESHOLD,
-        embed_model=embed_model
-    )
-    return splitter
+    return init_splitter_with_params()
 
 
 def init_splitter_with_params(embed_model_path=EMBED_MODEL_PATH, buffer_size=BUFFER_SIZE, breakpoint_threshold=BREAKPOINT_THRESHOLD):
-    embed_model = HuggingFaceEmbedding(model_name=embed_model_path)
-    splitter = SemanticSplitterNodeParser(
-        buffer_size=buffer_size,
-        breakpoint_percentile_threshold=breakpoint_threshold,
-        embed_model=embed_model
-    )
-    return splitter
+    cache_key = (str(embed_model_path).strip(), int(buffer_size), int(breakpoint_threshold))
+    with _CACHE_LOCK:
+        cached = _SPLITTER_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+
+        embed_model = _get_embed_model(embed_model_path)
+        splitter = SemanticSplitterNodeParser(
+            buffer_size=buffer_size,
+            breakpoint_percentile_threshold=breakpoint_threshold,
+            embed_model=embed_model
+        )
+        _SPLITTER_CACHE[cache_key] = splitter
+        return splitter
 
 
 def process_context(context_text, doc_id, splitter):
@@ -84,7 +102,7 @@ def process_line(line_data):
         return None
 
 
-def _process_line_with_params(line_data, splitter):
+def _process_line_with_params(line_data, embed_model_path, buffer_size, breakpoint_threshold):
     """
     模块级函数，用于 multiprocessing，避免 pickle 局部函数的问题。
     """
@@ -96,6 +114,11 @@ def _process_line_with_params(line_data, splitter):
         if not context:
             return None
         
+        splitter = init_splitter_with_params(
+            embed_model_path=embed_model_path,
+            buffer_size=buffer_size,
+            breakpoint_threshold=breakpoint_threshold
+        )
         return process_context(context, doc_id, splitter)
     except Exception as e:
         print(f"Error processing line: {e}")
@@ -123,10 +146,14 @@ def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_M
         with open(input_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
-        splitter = init_splitter_with_params(embed_model_path=embed_model_path, buffer_size=buffer_size, breakpoint_threshold=breakpoint_threshold)
+        process_func = partial(
+            _process_line_with_params,
+            embed_model_path=embed_model_path,
+            buffer_size=buffer_size,
+            breakpoint_threshold=breakpoint_threshold
+        )
         
-        # 使用 functools.partial 绑定 splitter，避免 pickle 局部函数的问题
-        process_func = partial(_process_line_with_params, splitter=splitter)
+        # 仅传递轻量参数，worker 内部按参数获取缓存后的 splitter
         
         with multiprocessing.Pool(processes=num_workers) as pool:
             results = []

@@ -13,6 +13,28 @@ from app.core.logging_config import logger
 class FileRepository:
 
     @staticmethod
+    def _normalize_string_list(value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [str(item) for item in value if isinstance(item, str)]
+        return []
+
+    @staticmethod
+    def _extract_context_texts(value: Any) -> list[str]:
+        if isinstance(value, list):
+            texts: list[str] = []
+            for item in value:
+                if isinstance(item, str):
+                    texts.append(item)
+                elif isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str) and text:
+                        texts.append(text)
+            return texts
+        return []
+
+    @staticmethod
     def read_json(file_path: str) -> Any:
         path = Path(file_path)
         if not path.exists():
@@ -61,14 +83,16 @@ class FileRepository:
             if not isinstance(item, dict):
                 continue
             llm_ans = item.get("llm_ans") or item.get("prediction") or ""
-            ans_list = item.get("answers") or item.get("ground_truth") or []
-            if isinstance(ans_list, str):
-                ans_list = [ans_list]
-            if not isinstance(ans_list, list):
+            ans_list = (
+                FileRepository._normalize_string_list(item.get("answers"))
+                or FileRepository._normalize_string_list(item.get("ground_truth"))
+                or FileRepository._normalize_string_list(item.get("answer"))
+            )
+            if not ans_list:
                 continue
             
             predictions.append(str(llm_ans))
-            answers.append([str(a) for a in ans_list if isinstance(a, str)])
+            answers.append(ans_list)
         
         return predictions, answers
 
@@ -113,13 +137,17 @@ class FileRepository:
                     continue
                 question = item.get("input") or item.get("question") or ""
                 answer = item.get("llm_ans") or item.get("answer") or ""
-                contexts = item.get("retrieval_list") or item.get("contexts") or []
-                if not isinstance(contexts, list):
-                    contexts = []
-                ground_truth_list = item.get("answers") or item.get("ground_truth") or []
-                if isinstance(ground_truth_list, str):
-                    ground_truth_list = [ground_truth_list]
-                ground_truth = " ".join(str(gt) for gt in ground_truth_list if isinstance(gt, str))
+                contexts = (
+                    FileRepository._extract_context_texts(item.get("retrieval_list"))
+                    or FileRepository._extract_context_texts(item.get("contexts"))
+                    or FileRepository._extract_context_texts(item.get("rag_retrieval"))
+                )
+                ground_truth_list = (
+                    FileRepository._normalize_string_list(item.get("answers"))
+                    or FileRepository._normalize_string_list(item.get("ground_truth"))
+                    or FileRepository._normalize_string_list(item.get("answer"))
+                )
+                ground_truth = " ".join(ground_truth_list)
                 
                 dataset["question"].append(str(question))
                 dataset["answer"].append(str(answer))
