@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -656,7 +656,9 @@ Format 2 - Current Eval Format:
           <TabsContent value="traditional">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Input Methods */}
-              <div className="space-y-6">
+              <div className="lg:h-[860px]">
+                <ScrollArea className="h-full lg:pr-2">
+                <div className="space-y-6">
                 {/* Direct Input */}
                 <Card className="p-6">
                   <h2 className="font-bold mb-4 flex items-center gap-2">
@@ -823,10 +825,12 @@ Format 2 - Current Eval Format:
                     </Button>
                   </div>
                 </Card>
+                </div>
+                </ScrollArea>
               </div>
 
               {/* Results */}
-              <Card className="flex h-[680px] flex-col p-6">
+              <Card className="flex h-[860px] flex-col p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 className="font-bold">Evaluation Results</h2>
@@ -975,7 +979,9 @@ Format 2 - Current Eval Format:
           <TabsContent value="ragas">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Input Methods */}
-              <div className="space-y-6">
+              <div className="lg:h-[860px]">
+                <ScrollArea className="h-full lg:pr-2">
+                <div className="space-y-6">
                 {/* Direct JSON Input */}
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -1147,10 +1153,12 @@ Format 2 - Current Eval Format:
                     </Button>
                   </div>
                 </Card>
+                </div>
+                </ScrollArea>
               </div>
 
               {/* Results */}
-              <Card className="flex h-[680px] flex-col p-6">
+              <Card className="flex h-[860px] flex-col p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 className="font-bold">RAGAS Results</h2>
@@ -1222,7 +1230,7 @@ Format 2 - Current Eval Format:
                                       {metricInfo.blurb}
                                     </p>
                                   )}
-                                  {value && typeof value === 'object' && 'mean' in value && (
+                                  {value !== null && typeof value === 'object' && 'mean' in (value as Record<string, unknown>) && (
                                     <div className="text-xs text-slate-500 mt-1">
                                       min: {(value as any).min.toFixed(3)} | max: {(value as any).max.toFixed(3)}
                                     </div>

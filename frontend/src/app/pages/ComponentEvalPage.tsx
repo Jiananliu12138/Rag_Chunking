@@ -295,6 +295,26 @@ export default function ComponentEvalPage() {
   };
 
   const retrievalMetricInfo: Record<string, ChunkMetricDoc> = {
+    recip_rank: {
+      title: 'Reciprocal Rank',
+      blurb: 'Reciprocal rank of the first relevant retrieved item.',
+      formulaLatex: String.raw`RR=\frac{1}{rank_{first\ relevant}}`,
+      interpretation: 'Higher is better. Rewards returning the first relevant chunk as early as possible for a single query.',
+      variables: [String.raw`rank_{first\ relevant}:\ \text{rank position of the first relevant retrieved item}`],
+      projectExample: ['If the first relevant chunk appears at rank 3, then reciprocal rank is 1/3.'],
+    },
+    rprec: {
+      title: 'R-Precision',
+      blurb: 'Precision measured at rank R, where R is the number of relevant items.',
+      formulaLatex: String.raw`R\text{-}Precision=\frac{|Rel\cap Ret_R|}{R}`,
+      interpretation: 'Higher is better. Balances ranking quality against the number of truly relevant chunks for each query.',
+      variables: [
+        String.raw`Rel:\ \text{relevant set from }\mathtt{gold\_reference}`,
+        String.raw`Ret_R:\ \text{top-}R\text{ retrieved chunks}`,
+        String.raw`R=|Rel|:\ \text{number of relevant items}`,
+      ],
+      projectExample: ['If a query has 3 relevant chunks and 1 of them appears in top-3 results, then R-Precision = 1/3.'],
+    },
     precision: {
       title: 'Precision@k',
       blurb: 'Fraction of retrieved items in top-k that are relevant.',
@@ -405,7 +425,7 @@ export default function ComponentEvalPage() {
   const [retrievalFilePaths, setRetrievalFilePaths] = useState<string[]>([]);
   const retrievalFileRef = useRef<HTMLInputElement>(null);
   const [selectedRetrievalMetric, setSelectedRetrievalMetric] = useState<string | null>(null);
-  const [expandedCuts, setExpandedCuts] = useState<Record<string, boolean>>({});
+  const [retrievalFamilyExpanded, setRetrievalFamilyExpanded] = useState(false);
 
   // ── Force graph container sizing ───────────────────────────────────────────
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -684,10 +704,30 @@ export default function ComponentEvalPage() {
     if (!agg || typeof agg !== 'object') return [] as Array<{ cut: string; metrics: Record<string, number> }>;
     const grouped: Record<string, Record<string, number>> = {};
     Object.entries(agg).forEach(([key, val]) => {
-      const m = key.match(/^(map|mrr|ndcg|recall|precision)(?:@|_at_?)(\d+)$/i);
-      if (!m) return;
-      const metric = m[1].toLowerCase();
-      const cut = m[2];
+      const normalizedKey = key.toLowerCase();
+      let metric: string | null = null;
+      let cut: string | null = null;
+      let match = normalizedKey.match(/^p_(\d+)$/);
+      if (match) {
+        metric = 'precision';
+        cut = match[1];
+      }
+      match = match ?? normalizedKey.match(/^recall_(\d+)$/);
+      if (match && !metric) {
+        metric = 'recall';
+        cut = match[1];
+      }
+      match = match ?? normalizedKey.match(/^ndcg_cut_(\d+)$/);
+      if (match && !metric) {
+        metric = 'ndcg';
+        cut = match[1];
+      }
+      match = match ?? normalizedKey.match(/^(map|mrr|ndcg|recall|precision)(?:@|_at_?)(\d+)$/);
+      if (match && !metric) {
+        metric = match[1].toLowerCase();
+        cut = match[2];
+      }
+      if (!metric || !cut) return;
       if (!grouped[cut]) grouped[cut] = {};
       grouped[cut][metric] = Number(val);
     });
@@ -696,9 +736,32 @@ export default function ComponentEvalPage() {
       .map((cut) => ({ cut, metrics: grouped[cut] }));
   }, [retrievalResult]);
 
-  const primaryRetrievalCut = retrievalMetricsByCut.length
-    ? retrievalMetricsByCut[retrievalMetricsByCut.length - 1]
-    : null;
+  const retrievalOverviewMetrics = useMemo(() => {
+    const agg = retrievalResult?.aggregated;
+    if (!agg || typeof agg !== 'object') return [] as Array<{ key: string; display: string; value: number; metricKey: string }>;
+    const items: Array<{ key: string; display: string; value: number; metricKey: string }> = [];
+    const pushIfNumber = (rawKey: string, display: string, metricKey: string) => {
+      const rawValue = (agg as Record<string, unknown>)[rawKey];
+      if (typeof rawValue === 'number') {
+        items.push({ key: rawKey, display, value: rawValue, metricKey });
+      }
+    };
+    pushIfNumber('map', 'MAP', 'map');
+    pushIfNumber('recip_rank', 'Reciprocal Rank', 'recip_rank');
+    pushIfNumber('Rprec', 'R-Precision', 'rprec');
+    pushIfNumber('ndcg', 'nDCG', 'ndcg');
+    return items;
+  }, [retrievalResult]);
+
+  const retrievalCutSummaries = useMemo(() => {
+    return retrievalMetricsByCut.map(({ cut, metrics }) => {
+      const values = [metrics.precision, metrics.recall, metrics.ndcg].filter(
+        (value): value is number => typeof value === 'number',
+      );
+      const mean = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+      return { cut, metrics, mean };
+    });
+  }, [retrievalMetricsByCut]);
 
   const addPendingPath = (
     value: string,
@@ -769,6 +832,11 @@ export default function ComponentEvalPage() {
   ) => {
     const metric = selectedMetric ? metricInfoMap[selectedMetric] : null;
     const sources = metric?.sources ?? fallbackSources;
+    const interpretationItems = Array.isArray(metric?.interpretation)
+      ? metric.interpretation
+      : metric?.interpretation
+        ? [metric.interpretation]
+        : [];
 
     return (
       <Dialog open={!!selectedMetric} onOpenChange={onOpenChange}>
@@ -791,7 +859,15 @@ export default function ComponentEvalPage() {
                 </div>
                 <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Interpretation</div>
-                  <p className="break-words text-sm text-slate-700">{metric.interpretation}</p>
+                  {interpretationItems.length <= 1 ? (
+                    <p className="break-words text-sm text-slate-700">{interpretationItems[0]}</p>
+                  ) : (
+                    <ul className="space-y-1 list-disc break-words pl-5 text-sm text-slate-700">
+                      {interpretationItems.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 {metric.variables?.length ? (
                   <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
@@ -888,7 +964,9 @@ export default function ComponentEvalPage() {
           <TabsContent value="quality">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Input column */}
-              <div className="space-y-6">
+              <div className="lg:h-[860px]">
+                <ScrollArea className="h-full lg:pr-2">
+                <div className="space-y-6">
                 {/* Direct Input */}
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -1028,55 +1106,31 @@ export default function ComponentEvalPage() {
                     </Button>
                   </div>
                 </Card>
+                </div>
+                </ScrollArea>
               </div>
 
               {/* Results column */}
-              <Card className="flex h-[680px] flex-col p-6">
+              <Card className="flex h-[860px] flex-col p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 className="font-bold">Quality Results</h2>
                     <p className="text-xs text-slate-500 mt-1">Click BC/DS cards to open paper-style metric notes.</p>
                   </div>
-                  <Dialog open={!!selectedChunkMetric} onOpenChange={(open) => !open && setSelectedChunkMetric(null)}>
-                        <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
-                      {selectedChunkMetric && chunkMetricInfo[selectedChunkMetric] && (
-                        <>
-                          <DialogHeader>
-                            <DialogTitle>{chunkMetricInfo[selectedChunkMetric].title}</DialogTitle>
-                            <DialogDescription>{chunkMetricInfo[selectedChunkMetric].blurb}</DialogDescription>
-                          </DialogHeader>
-                          <div className="min-w-0 space-y-4">
-                            <div className="min-w-0 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700"><Sigma className="h-3.5 w-3.5" />Formula (LaTeX)</div>
-                              <div className="overflow-x-auto rounded-lg bg-white/80 p-3 text-blue-950">
-                                <BlockMath math={chunkMetricInfo[selectedChunkMetric].formulaLatex} />
-                              </div>
-                            </div>
-                            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
-                              <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
-                              <p className="break-words text-sm text-slate-700">{chunkMetricInfo[selectedChunkMetric].interpretation}</p>
-                            </div>
-                            <div className="min-w-0 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-blue-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
-                              <ul className="space-y-1 break-words text-sm text-blue-900 list-disc pl-5">
-                                {chunkMetricInfo[selectedChunkMetric].projectExample.map((item, idx) => (
-                                  <li key={idx}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="rounded-xl border border-slate-200 bg-white p-4">
-                              <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
-                              <div className="flex flex-wrap gap-2">
-                                {(chunkMetricInfo[selectedChunkMetric].sources ?? chunkMetricSources).map((s, idx) => (
-                                  <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="text-xs rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100">{s.label}</a>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </DialogContent>
-                  </Dialog>
+                  {renderMetricInfoDialog(
+                    selectedChunkMetric,
+                    (open) => !open && setSelectedChunkMetric(null),
+                    chunkMetricInfo,
+                    chunkMetricSources,
+                    {
+                      formulaCard: 'rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm',
+                      formulaText: 'text-blue-700',
+                      exampleCard: 'rounded-xl border border-blue-100 bg-blue-50/60 p-4',
+                      exampleText: 'text-blue-700',
+                      exampleBodyText: 'text-blue-900',
+                      sourceChip: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+                    },
+                  )}
                 </div>
                 <div className="min-h-0 flex-1">
                 {loading ? (
@@ -1510,7 +1564,9 @@ export default function ComponentEvalPage() {
           {isRetrievalSection && (
           <TabsContent value="retrieval">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-6">
+              <div className="lg:h-[860px]">
+                <ScrollArea className="h-full lg:pr-2">
+                <div className="space-y-6">
                 <Card className="p-6">
                   <h2 className="font-bold mb-4 flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-indigo-600" />
@@ -1610,9 +1666,11 @@ export default function ComponentEvalPage() {
                     </Button>
                   </div>
                 </Card>
+                </div>
+                </ScrollArea>
               </div>
 
-              <Card className="flex h-[680px] flex-col p-6">
+              <Card className="flex h-[860px] flex-col p-6">
                 <h2 className="font-bold mb-4">Retrieval Results</h2>
                 <div className="min-h-0 flex-1">
                 {loading ? (
@@ -1646,141 +1704,106 @@ export default function ComponentEvalPage() {
                             )}
                           </div>
 
-                          {/* Summary cards like End-to-End Eval; fall back to raw aggregated if no cut parsed */}
-                          {primaryRetrievalCut ? (
-                            <div className="mb-4">
-                              <h3 className="text-xs font-medium mb-2 text-slate-600">
-                                Key Metrics @{primaryRetrievalCut.cut}
-                              </h3>
-                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                {['map', 'mrr', 'ndcg', 'recall', 'precision'].map((metricKey) => {
-                                  const val = primaryRetrievalCut.metrics[metricKey];
-                                  if (val == null) return null;
-                                  const metricDoc = retrievalMetricInfo[metricKey];
-                                  return (
-                                    <button
-                                      key={metricKey}
-                                      type="button"
-                                      onClick={() => metricDoc && setSelectedRetrievalMetric(metricKey)}
-                                      className="p-3 text-left bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                                      disabled={!metricDoc}
-                                    >
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div className="text-xs text-slate-600 mb-1">
-                                          {metricKey.toUpperCase()}@{primaryRetrievalCut.cut}
-                                        </div>
-                                        {metricDoc && (
-                                          <span className="rounded-full border border-indigo-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-indigo-700">
-                                            Formula
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="text-xl font-bold text-indigo-900">
-                                        {Number(val).toFixed(4)}
-                                      </div>
-                                      {metricDoc && (
-                                        <p className="mt-2 text-xs leading-5 text-slate-600">{metricDoc.blurb}</p>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="mb-4">
-                              <h3 className="text-xs font-medium mb-2 text-slate-600">Key Metrics</h3>
-                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                {Object.entries(retrievalResult.aggregated)
-                                  .filter(([, v]) => typeof v === 'number')
-                                  .slice(0, 6)
-                                  .map(([key, v]) => {
-                                    const baseKey = key.toLowerCase().split('@')[0].split('_at_')[0];
-                                    const metricDoc = retrievalMetricInfo[baseKey];
-                                    return (
-                                      <button
-                                        key={key}
-                                        type="button"
-                                        onClick={() => metricDoc && setSelectedRetrievalMetric(baseKey)}
-                                        className="p-3 text-left bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                                        disabled={!metricDoc}
-                                      >
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div className="text-xs text-slate-600 mb-1">
-                                            {key.toUpperCase()}
-                                          </div>
-                                          {metricDoc && (
-                                            <span className="rounded-full border border-indigo-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-indigo-700">
-                                              Formula
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-xl font-bold text-indigo-900">
-                                          {Number(v as number).toFixed(4)}
-                                        </div>
-                                        {metricDoc && (
-                                          <p className="mt-2 text-xs leading-5 text-slate-600">
-                                            {metricDoc.blurb}
-                                          </p>
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="space-y-3">
-                            {retrievalMetricsByCut.map(({ cut, metrics }) => {
-                              const open = !!expandedCuts[cut];
+                          <div className="grid grid-cols-2 gap-4">
+                            {retrievalOverviewMetrics.map(({ key, display, value, metricKey }) => {
+                              const metricDoc = retrievalMetricInfo[metricKey];
                               return (
-                                <div
-                                  key={cut}
-                                  className="rounded-lg border border-indigo-200 bg-gradient-to-br from-indigo-50 to-cyan-50 p-3"
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => metricDoc && setSelectedRetrievalMetric(metricKey)}
+                                  className="p-4 text-left bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                                  disabled={!metricDoc}
                                 >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="text-sm text-slate-600 mb-1">{display}</div>
+                                    {metricDoc && (
+                                      <span className="rounded-full border border-indigo-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-indigo-700">
+                                        Formula
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-2xl font-bold text-indigo-900">{value.toFixed(4)}</div>
+                                  {metricDoc && <p className="mt-2 text-xs leading-5 text-slate-600">{metricDoc.blurb}</p>}
+                                </button>
+                              );
+                            })}
+
+                            {retrievalCutSummaries.length > 0 && (() => {
+                              const topCut = retrievalCutSummaries[retrievalCutSummaries.length - 1];
+                              const cutMeanMax = Math.max(...retrievalCutSummaries.map((item) => item.mean), 1e-6);
+                              return (
+                                <div key="retrieval_cut_family" className="col-span-2 rounded-xl border border-indigo-200 bg-gradient-to-br from-slate-50 via-indigo-50 to-cyan-50 p-4 text-left shadow-sm">
                                   <button
                                     type="button"
-                                    className="w-full flex items-center justify-between"
-                                    onClick={() =>
-                                      setExpandedCuts((prev) => ({
-                                        ...prev,
-                                        [cut]: !prev[cut],
-                                      }))
-                                    }
+                                    className="w-full flex items-start justify-between gap-3"
+                                    onClick={() => setRetrievalFamilyExpanded((v) => !v)}
                                   >
-                                    <div>
-                                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                                        Cut Panel
+                                    <div className="flex-1">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Top-k Retrieval Panel</div>
+                                      <div className="mt-1 text-sm text-slate-700">Cut Family (@k)</div>
+                                      <div className="mt-1 flex items-end gap-4">
+                                        <div className="text-2xl font-bold text-indigo-900">@{topCut.cut}</div>
+                                        <div className="text-xs text-slate-600 pb-1">Mean {topCut.mean.toFixed(4)} · Precision {Number(topCut.metrics.precision ?? 0).toFixed(4)}</div>
                                       </div>
-                                      <div className="text-lg font-semibold text-indigo-900">@{cut}</div>
+                                      <p className="mt-1 text-xs text-slate-600">Expand to inspect each cut and open formulas for Precision / Recall / nDCG.</p>
                                     </div>
-                                    {open ? (
-                                      <ChevronUp className="w-4 h-4 text-indigo-700" />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4 text-indigo-700" />
-                                    )}
+                                    {retrievalFamilyExpanded ? <ChevronUp className="w-4 h-4 text-indigo-700 mt-1" /> : <ChevronDown className="w-4 h-4 text-indigo-700 mt-1" />}
                                   </button>
-                                  {open && (
-                                    <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
-                                      {Object.entries(metrics).map(([metric, value]) => (
-                                        <button
-                                          key={`${cut}-${metric}`}
-                                          type="button"
-                                          onClick={() => setSelectedRetrievalMetric(metric)}
-                                          className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-left hover:bg-indigo-50"
-                                        >
-                                          <div className="text-[11px] uppercase text-slate-500">
-                                            {metric}@{cut}
+
+                                  <div className="mt-3 rounded-lg border border-indigo-100 bg-white/70 p-3">
+                                    <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Cut profile (mean of Precision / Recall / nDCG)</div>
+                                    <div className={`grid gap-2 ${retrievalCutSummaries.length >= 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+                                      {retrievalCutSummaries.map(({ cut, mean, metrics }) => {
+                                        const h = Math.max(8, Math.round((mean / cutMeanMax) * 42));
+                                        return (
+                                          <button
+                                            key={`cut_bar_${cut}`}
+                                            type="button"
+                                            onClick={() => setRetrievalFamilyExpanded(true)}
+                                            className="rounded-md border border-indigo-100 bg-white p-2 text-center hover:border-indigo-300"
+                                          >
+                                            <div className="mx-auto mb-2 w-6 rounded-sm bg-indigo-500/80" style={{ height: `${h}px` }} />
+                                            <div className="text-[10px] uppercase text-slate-500">@{cut}</div>
+                                            <div className="text-xs font-semibold text-indigo-900">{mean.toFixed(4)}</div>
+                                            <div className="mt-1 text-[10px] text-slate-500">
+                                              P {Number(metrics.precision ?? 0).toFixed(2)} · R {Number(metrics.recall ?? 0).toFixed(2)} · N {Number(metrics.ndcg ?? 0).toFixed(2)}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  {retrievalFamilyExpanded && (
+                                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      {retrievalCutSummaries.map(({ cut, metrics }) => (
+                                        <div key={`cut_${cut}`} className="rounded-md border border-indigo-200 bg-white/90 px-3 py-3">
+                                          <div className="text-xs text-slate-600 uppercase">@{cut}</div>
+                                          <div className="mt-2 grid grid-cols-3 gap-2">
+                                            {[
+                                              { label: 'Precision', value: metrics.precision, metricKey: 'precision' },
+                                              { label: 'Recall', value: metrics.recall, metricKey: 'recall' },
+                                              { label: 'nDCG', value: metrics.ndcg, metricKey: 'ndcg' },
+                                            ].map((item) => (
+                                              <button
+                                                key={`${cut}-${item.metricKey}`}
+                                                type="button"
+                                                onClick={() => setSelectedRetrievalMetric(item.metricKey)}
+                                                className="rounded-md border border-indigo-100 bg-indigo-50/40 px-2 py-2 text-left hover:bg-indigo-50"
+                                              >
+                                                <div className="text-[10px] uppercase text-slate-500">{item.label}@{cut}</div>
+                                                <div className="text-sm font-semibold text-indigo-900">{Number(item.value ?? 0).toFixed(4)}</div>
+                                              </button>
+                                            ))}
                                           </div>
-                                          <div className="text-sm font-semibold text-indigo-900">
-                                            {Number(value).toFixed(4)}
-                                          </div>
-                                        </button>
+                                        </div>
                                       ))}
                                     </div>
                                   )}
                                 </div>
                               );
-                            })}
+                            })()}
                           </div>
                         </div>
                       )}
