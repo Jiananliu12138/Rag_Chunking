@@ -1646,7 +1646,8 @@ export default function ComponentEvalPage() {
                             )}
                           </div>
 
-                          {primaryRetrievalCut && (
+                          {/* Summary cards like End-to-End Eval; fall back to raw aggregated if no cut parsed */}
+                          {primaryRetrievalCut ? (
                             <div className="mb-4">
                               <h3 className="text-xs font-medium mb-2 text-slate-600">
                                 Key Metrics @{primaryRetrievalCut.cut}
@@ -1683,6 +1684,47 @@ export default function ComponentEvalPage() {
                                     </button>
                                   );
                                 })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mb-4">
+                              <h3 className="text-xs font-medium mb-2 text-slate-600">Key Metrics</h3>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {Object.entries(retrievalResult.aggregated)
+                                  .filter(([, v]) => typeof v === 'number')
+                                  .slice(0, 6)
+                                  .map(([key, v]) => {
+                                    const baseKey = key.toLowerCase().split('@')[0].split('_at_')[0];
+                                    const metricDoc = retrievalMetricInfo[baseKey];
+                                    return (
+                                      <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => metricDoc && setSelectedRetrievalMetric(baseKey)}
+                                        className="p-3 text-left bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                                        disabled={!metricDoc}
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="text-xs text-slate-600 mb-1">
+                                            {key.toUpperCase()}
+                                          </div>
+                                          {metricDoc && (
+                                            <span className="rounded-full border border-indigo-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-indigo-700">
+                                              Formula
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-xl font-bold text-indigo-900">
+                                          {Number(v as number).toFixed(4)}
+                                        </div>
+                                        {metricDoc && (
+                                          <p className="mt-2 text-xs leading-5 text-slate-600">
+                                            {metricDoc.blurb}
+                                          </p>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
                               </div>
                             </div>
                           )}
