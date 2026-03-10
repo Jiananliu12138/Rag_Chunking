@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import React, { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -46,6 +46,7 @@ export default function IndexPage() {
   const [inspectData, setInspectData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [buildLoading, setBuildLoading] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
 
   // Build form
   const [collectionName, setCollectionName] = useState('');
@@ -95,7 +96,8 @@ export default function IndexPage() {
     try {
       const response = await api.listCollections();
       if (response.success) {
-        setCollections(response.data.collections || []);
+        const payload = response.data as any;
+        setCollections(payload.collections || []);
       } else {
         toast.error('Failed to load collections: ' + response.message);
       }
@@ -144,8 +146,9 @@ export default function IndexPage() {
       const response = await api.buildIndex(requestData);
 
       if (response.success) {
+        const payload = response.data as any;
         toast.success(
-          `Index built! Indexed ${response.data.indexed_chunks}/${response.data.total_chunks} chunks in ${response.data.time_cost?.toFixed(2)}s`
+          `Index built! Indexed ${payload.indexed_chunks}/${payload.total_chunks} chunks in ${payload.time_cost?.toFixed(2)}s`
         );
         setCollectionName('');
         setDocsPaths([]);
@@ -166,7 +169,7 @@ export default function IndexPage() {
       return;
     }
 
-    setBuildLoading(true);
+    setAddLoading(true);
     try {
       const requestData: any = {
         collection_name: addCollectionName,
@@ -181,8 +184,9 @@ export default function IndexPage() {
       const response = await api.addIndex(requestData);
 
       if (response.success) {
+        const payload = response.data as any;
         toast.success(
-          `Added ${response.data.added_chunks} chunks in ${response.data.time_cost?.toFixed(2)}s`
+          `Added ${payload.added_chunks} chunks in ${payload.time_cost?.toFixed(2)}s`
         );
         setAddCollectionName('');
         setAddDocsPaths([]);
@@ -192,7 +196,7 @@ export default function IndexPage() {
         toast.error('Failed to add to index: ' + response.message);
       }
     } finally {
-      setBuildLoading(false);
+      setAddLoading(false);
     }
   };
 
@@ -321,7 +325,7 @@ export default function IndexPage() {
                     value={tempDocPath}
                     onChange={(e) => setTempDocPath(e.target.value)}
                     onKeyDown={tabFill(setTempDocPath)}
-                    placeholder="/path/to/chunks.json or click + to browse"
+                    placeholder="/path/to/chunks.json (enter server path and click +)"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && tempDocPath.trim()) {
                         setDocsPaths([...docsPaths, tempDocPath.trim()]);
@@ -337,8 +341,10 @@ export default function IndexPage() {
                     className="hidden"
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
-                      const paths = files.map(f => f.name);
-                      setDocsPaths([...docsPaths, ...paths]);
+                      if (files.length > 0) {
+                        const label = files.map((f) => f.name).join(', ');
+                        toast.error(`Browser file pickers only expose filenames (${label}). Please enter the server-side JSON path manually.`);
+                      }
                       if (fileInputRef.current) fileInputRef.current.value = '';
                     }}
                   />
@@ -459,7 +465,7 @@ export default function IndexPage() {
                     value={tempAddDocPath}
                     onChange={(e) => setTempAddDocPath(e.target.value)}
                     onKeyDown={tabFill(setTempAddDocPath)}
-                    placeholder="/path/to/new_chunks.json or click + to browse"
+                    placeholder="/path/to/new_chunks.json (enter server path and click +)"
                     onKeyPress={(e) => {
                       if (e.key === 'Enter' && tempAddDocPath.trim()) {
                         setAddDocsPaths([...addDocsPaths, tempAddDocPath.trim()]);
@@ -475,8 +481,10 @@ export default function IndexPage() {
                     className="hidden"
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []);
-                      const paths = files.map(f => f.name);
-                      setAddDocsPaths([...addDocsPaths, ...paths]);
+                      if (files.length > 0) {
+                        const label = files.map((f) => f.name).join(', ');
+                        toast.error(`Browser file pickers only expose filenames (${label}). Please enter the server-side JSON path manually.`);
+                      }
                       if (addFileInputRef.current) addFileInputRef.current.value = '';
                     }}
                   />
@@ -549,11 +557,11 @@ export default function IndexPage() {
               </div>
               <Button
                 onClick={handleAddIndex}
-                disabled={buildLoading}
+                disabled={addLoading}
                 className="w-full"
                 variant="outline"
               >
-                {buildLoading ? (
+                {addLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Adding...

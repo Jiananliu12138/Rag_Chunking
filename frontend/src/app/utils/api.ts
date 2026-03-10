@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://127.0.0.1:8080/api/v1';
+const API_BASE_URL = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL
+  ?? 'http://127.0.0.1:8080/api/v1';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -11,24 +12,59 @@ async function fetchApi<T>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
   
   try {
     const response = await fetch(url, {
       ...options,
+      signal: options?.signal ?? controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
       },
     });
+    const contentType = response.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+    const payload = isJson ? await response.json() : await response.text();
 
-    const data = await response.json();
-    return data;
+    if (!response.ok) {
+      const message =
+        typeof payload === 'object' && payload !== null
+          ? String(
+              (payload as { message?: unknown; detail?: unknown }).message
+              ?? (payload as { message?: unknown; detail?: unknown }).detail
+              ?? `HTTP ${response.status}`
+            )
+          : String(payload || `HTTP ${response.status}`);
+
+      return {
+        success: false,
+        message,
+        data: null as T,
+      };
+    }
+
+    return isJson
+      ? payload as ApiResponse<T>
+      : {
+          success: true,
+          message: 'ok',
+          data: payload as T,
+        };
   } catch (error) {
+    const message = error instanceof DOMException && error.name === 'AbortError'
+      ? `请求超时：${url}`
+      : error instanceof Error
+        ? error.message
+        : '请求失败';
     return {
       success: false,
-      message: error instanceof Error ? error.message : '请求失败',
+      message,
       data: null as T,
     };
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 

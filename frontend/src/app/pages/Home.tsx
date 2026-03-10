@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type KeyboardEvent } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, type KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, 
@@ -65,6 +65,8 @@ interface Message {
 
 type MessageContext = NonNullable<Message['contexts']>[number];
 
+const HOME_SETTINGS_STORAGE_KEY = 'rag-lab-home-settings';
+
 const toggleStringSelection = (values: string[], value: string) => (
   values.includes(value)
     ? values.filter((item) => item !== value)
@@ -117,6 +119,85 @@ export default function Home() {
 
   const selectedFilepathSet = useMemo(() => new Set(filterFilepath), [filterFilepath]);
   const selectedDocIdSet = useMemo(() => new Set(filterDocId), [filterDocId]);
+  const missingRequirements = useMemo(() => {
+    const items: string[] = [];
+    if (!llmModelName.trim()) items.push('LLM Model Name');
+    if (enableRag && !collectionName.trim()) items.push('Collection Name');
+    if (enableRag && !embedModelPath.trim()) items.push('Embedding Model Path');
+    return items;
+  }, [llmModelName, enableRag, collectionName, embedModelPath]);
+  const canSend = !!input.trim() && !loading && missingRequirements.length === 0;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HOME_SETTINGS_STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof saved.collectionName === 'string') setCollectionName(saved.collectionName);
+      if (typeof saved.embedModelPath === 'string') setEmbedModelPath(saved.embedModelPath);
+      if (typeof saved.embedDim === 'number') setEmbedDim(saved.embedDim);
+      if (typeof saved.topK === 'number') setTopK(saved.topK);
+      if (typeof saved.enableRag === 'boolean') setEnableRag(saved.enableRag);
+      if (typeof saved.useHybridSearch === 'boolean') setUseHybridSearch(saved.useHybridSearch);
+      if (typeof saved.rerankEnabled === 'boolean') setRerankEnabled(saved.rerankEnabled);
+      if (typeof saved.rerankType === 'string') setRerankType(saved.rerankType as 'cross_encoder');
+      if (typeof saved.rerankModelPath === 'string') setRerankModelPath(saved.rerankModelPath);
+      if (typeof saved.rerankDevice === 'string') setRerankDevice(saved.rerankDevice);
+      if (typeof saved.rerankCandidateK === 'number') setRerankCandidateK(saved.rerankCandidateK);
+      if (typeof saved.rerankTopK === 'number') setRerankTopK(saved.rerankTopK);
+      if (typeof saved.llmApiBase === 'string') setLlmApiBase(saved.llmApiBase);
+      if (typeof saved.llmModelName === 'string') setLlmModelName(saved.llmModelName);
+      if (typeof saved.temperature === 'number') setTemperature(saved.temperature);
+      if (typeof saved.maxNewTokens === 'number') setMaxNewTokens(saved.maxNewTokens);
+    } catch {
+      // Ignore malformed local settings and fall back to defaults.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        HOME_SETTINGS_STORAGE_KEY,
+        JSON.stringify({
+          collectionName,
+          embedModelPath,
+          embedDim,
+          topK,
+          enableRag,
+          useHybridSearch,
+          rerankEnabled,
+          rerankType,
+          rerankModelPath,
+          rerankDevice,
+          rerankCandidateK,
+          rerankTopK,
+          llmApiBase,
+          llmModelName,
+          temperature,
+          maxNewTokens,
+        }),
+      );
+    } catch {
+      // Ignore storage failures in private mode / restricted environments.
+    }
+  }, [
+    collectionName,
+    embedModelPath,
+    embedDim,
+    topK,
+    enableRag,
+    useHybridSearch,
+    rerankEnabled,
+    rerankType,
+    rerankModelPath,
+    rerankDevice,
+    rerankCandidateK,
+    rerankTopK,
+    llmApiBase,
+    llmModelName,
+    temperature,
+    maxNewTokens,
+  ]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -135,7 +216,8 @@ export default function Home() {
       try {
         const response = await api.listCollections();
         if (response.success) {
-          const collection = response.data.collections.find(
+          const payload = response.data as any;
+          const collection = payload.collections.find(
             (c: any) => c.name === collectionName
           );
           if (collection) {
@@ -199,25 +281,10 @@ export default function Home() {
       return;
     }
     
-    // LLM settings are always required
-    if (!llmModelName) {
-      toast.error('Please configure LLM Model Name in settings first');
+    if (missingRequirements.length > 0) {
+      toast.error(`Please complete settings first: ${missingRequirements.join(', ')}`);
       setShowSettings(true);
       return;
-    }
-    
-    // Collection and embed model are required only when RAG is enabled
-    if (enableRag) {
-      if (!collectionName) {
-        toast.error('Please configure Collection Name in settings (required when RAG is enabled)');
-        setShowSettings(true);
-        return;
-      }
-      if (!embedModelPath) {
-        toast.error('Please configure Embedding Model Path in settings (required when RAG is enabled)');
-        setShowSettings(true);
-        return;
-      }
     }
 
     const userMessage: Message = {
@@ -257,11 +324,12 @@ export default function Home() {
       const response = await api.generate(data);
       
       if (response.success) {
+        const payload = response.data as any;
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           type: 'assistant',
-          content: response.data.answer || 'Sorry, I couldn\'t generate an answer.',
-          contexts: response.data.context_items || [],
+          content: payload.answer || 'Sorry, I couldn\'t generate an answer.',
+          contexts: payload.context_items || [],
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, assistantMessage]);
@@ -276,7 +344,7 @@ export default function Home() {
         setMessages(prev => [...prev, errorMessage]);
       }
     } catch (error) {
-      toast.error('Request failed');
+      toast.error(error instanceof Error ? error.message : 'Request failed');
     } finally {
       setLoading(false);
     }
@@ -343,8 +411,26 @@ export default function Home() {
                 </div>
                 <h2 className="text-2xl font-bold mb-3">Start Conversation</h2>
                 <p className="text-slate-500 mb-6">
-                  Ask questions and get intelligent answers from your knowledge base
+                  {missingRequirements.length === 0
+                    ? 'Ask questions and get intelligent answers from your knowledge base'
+                    : `Complete setup first: ${missingRequirements.join(', ')}`}
                 </p>
+                {missingRequirements.length > 0 && (
+                  <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left">
+                    <div className="text-sm font-medium text-amber-900">Setup checklist</div>
+                    <div className="mt-1 text-xs text-amber-800">
+                      Missing: {missingRequirements.join(', ')}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                      onClick={() => setShowSettings(true)}
+                    >
+                      Open Settings
+                    </Button>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-3 text-left">
                   <button
                     onClick={() => setInput('What is a vector database?')}
@@ -489,6 +575,11 @@ export default function Home() {
         {/* Input Area */}
         <div className="border-t bg-white px-6 py-4">
           <div className="max-w-4xl mx-auto">
+            {missingRequirements.length > 0 && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Missing required settings: {missingRequirements.join(', ')}
+              </div>
+            )}
             <div className="flex gap-3">
               <div className="flex-1 relative">
                 <Input
@@ -496,15 +587,16 @@ export default function Home() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
                   onKeyDown={tabFill(setInput)}
-                  placeholder="Ask me anything..."
+                  placeholder={missingRequirements.length === 0 ? 'Ask me anything...' : 'Complete settings before sending'}
                   className="pr-12 h-12 text-base"
                   disabled={loading}
                 />
               </div>
               <Button
                 onClick={handleSend}
-                disabled={loading || !input.trim()}
+                disabled={!canSend}
                 className="h-12 px-6 bg-gradient-to-r from-blue-600 to-purple-600"
+                title={missingRequirements.length > 0 ? `Missing: ${missingRequirements.join(', ')}` : undefined}
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />

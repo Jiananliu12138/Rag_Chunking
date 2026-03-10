@@ -722,7 +722,7 @@ Format 2 - Current Eval Format:
                           value={tempTraditionalPath}
                           onChange={(e) => setTempTraditionalPath(e.target.value)}
                           onKeyDown={(e) => fillPlaceholderOnTab(e, tempTraditionalPath, e.currentTarget.placeholder, setTempTraditionalPath)}
-                          placeholder="/path/to/sample_results.json or click + to browse"
+                          placeholder="/path/to/sample_results.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter' && tempTraditionalPath.trim()) {
                               setTraditionalFilePaths([...traditionalFilePaths, tempTraditionalPath.trim()]);
@@ -738,7 +738,7 @@ Format 2 - Current Eval Format:
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              setTraditionalFilePaths([...traditionalFilePaths, file.name]);
+                              toast.error(`Browser file pickers only expose "${file.name}". Please enter the server-side JSON path manually.`);
                               if (traditionalFileRef.current) traditionalFileRef.current.value = '';
                             }
                           }}
@@ -1052,7 +1052,7 @@ Format 2 - Current Eval Format:
                           value={tempRagasPath}
                           onChange={(e) => setTempRagasPath(e.target.value)}
                           onKeyDown={(e) => fillPlaceholderOnTab(e, tempRagasPath, e.currentTarget.placeholder, setTempRagasPath)}
-                          placeholder="/path/to/ragas_data.json or click + to browse"
+                          placeholder="/path/to/ragas_data.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter' && tempRagasPath.trim()) {
                               setRagasFilePaths([...ragasFilePaths, tempRagasPath.trim()]);
@@ -1068,7 +1068,7 @@ Format 2 - Current Eval Format:
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              setRagasFilePaths([...ragasFilePaths, file.name]);
+                              toast.error(`Browser file pickers only expose "${file.name}". Please enter the server-side JSON path manually.`);
                               if (ragasFileRef.current) ragasFileRef.current.value = '';
                             }
                           }}

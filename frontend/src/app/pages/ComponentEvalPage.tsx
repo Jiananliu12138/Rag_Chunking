@@ -296,80 +296,127 @@ export default function ComponentEvalPage() {
 
   const retrievalMetricInfo: Record<string, ChunkMetricDoc> = {
     recip_rank: {
-      title: 'Reciprocal Rank',
-      blurb: 'Reciprocal rank of the first relevant retrieved item.',
-      formulaLatex: String.raw`RR=\frac{1}{rank_{first\ relevant}}`,
-      interpretation: 'Higher is better. Rewards returning the first relevant chunk as early as possible for a single query.',
-      variables: [String.raw`rank_{first\ relevant}:\ \text{rank position of the first relevant retrieved item}`],
-      projectExample: ['If the first relevant chunk appears at rank 3, then reciprocal rank is 1/3.'],
+      title: 'MRR (Mean Reciprocal Rank)',
+      blurb: 'Dataset-level mean of reciprocal rank; the backend field name is `recip_rank`, but the aggregated metric is MRR.',
+      formulaLatex: String.raw`MRR=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{rank_q}`,
+      interpretation: 'Higher is better. For each query, the evaluator finds the first relevant retrieved item, computes its reciprocal rank, and then averages this value across all evaluated queries.',
+      variables: [
+        String.raw`Q:\ \text{query set}`,
+        String.raw`rank_q:\ \text{rank of the first relevant hit for query }q`,
+      ],
+      projectExample: ['If first-hit ranks across queries are [1, 2, not-found], reciprocal ranks are [1, 1/2, 0], and MRR is their mean.'],
     },
+    
     rprec: {
       title: 'R-Precision',
-      blurb: 'Precision measured at rank R, where R is the number of relevant items.',
+      blurb: 'Precision measured at rank R, where R equals the number of relevant items for the query.',
       formulaLatex: String.raw`R\text{-}Precision=\frac{|Rel\cap Ret_R|}{R}`,
-      interpretation: 'Higher is better. Balances ranking quality against the number of truly relevant chunks for each query.',
+      interpretation: 'Higher is better. Measures how many relevant chunks appear within the top-R retrieved results, where R is the total number of relevant chunks for the query.',
       variables: [
-        String.raw`Rel:\ \text{relevant set from }\mathtt{gold\_reference}`,
-        String.raw`Ret_R:\ \text{top-}R\text{ retrieved chunks}`,
-        String.raw`R=|Rel|:\ \text{number of relevant items}`,
+        String.raw`Rel:\ \text{set of relevant chunks from }\mathtt{gold\_reference}`,
+        String.raw`Ret_R:\ \text{set of top-}R\text{ retrieved chunks}`,
+        String.raw`R=|Rel|:\ \text{total number of relevant chunks for the query}`,
       ],
-      projectExample: ['If a query has 3 relevant chunks and 1 of them appears in top-3 results, then R-Precision = 1/3.'],
+      projectExample: [
+        'If a query has 3 relevant chunks (R = 3) and only 1 of them appears within the top-3 retrieved results, then R-Precision = 1/3.'
+      ],
     },
+
     precision: {
       title: 'Precision@k',
-      blurb: 'Fraction of retrieved items in top-k that are relevant.',
-      formulaLatex: String.raw`Precision@k=\frac{|Rel\cap Ret_k|}{|Ret_k|}`,
-      interpretation: 'Higher is better. Measures ranking exactness in top positions.',
-      variables: [String.raw`Rel:\ \text{relevant set from }\mathtt{gold\_reference}`, String.raw`Ret_k:\ \text{top-}k\text{ retrieved chunks}`],
-      projectExample: ['In this project, relevance is matched by (doc_id, chunk_id) overlap between `rag_retrieval` and `gold_reference`.', 'Computed per query per cut, then aggregated across queries.'],
+      blurb: 'Proportion of retrieved items within the top-k results that are relevant.',
+      formulaLatex: String.raw`Precision@k=\frac{|Rel\cap Ret_k|}{k}`,
+      interpretation: 'Higher values indicate better ranking accuracy. Precision@k evaluates how many of the retrieved top-k items are relevant.',
+      variables: [
+        String.raw`Rel:\ \text{set of relevant chunks derived from }\mathtt{gold\_reference}`,
+        String.raw`Ret_k:\ \text{set of top-}k\text{ retrieved chunks}`,
+        String.raw`k:\ \text{retrieval cutoff rank}`
+      ],
+      projectExample: [
+        'In this project, relevance is determined by matching (doc_id, chunk_id) between `rag_retrieval` and `gold_reference`.',
+        'Precision@k is computed for each query at different cutoff values and then averaged across all queries.'
+      ],
       sources: [
         { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
         { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
       ],
     },
+
     recall: {
       title: 'Recall@k',
-      blurb: 'Fraction of all relevant items recovered in top-k retrieval.',
+      blurb: 'Proportion of all relevant items that are successfully retrieved within the top-k results.',
       formulaLatex: String.raw`Recall@k=\frac{|Rel\cap Ret_k|}{|Rel|}`,
-      interpretation: 'Higher is better. Indicates coverage of gold references.',
-      variables: [String.raw`Rel:\ \text{relevant set from }\mathtt{gold\_reference}`, String.raw`Ret_k:\ \text{top-}k\text{ retrieved chunks}`],
-      projectExample: ['If a query has 3 gold chunks and top-5 retrieves 2 of them, Recall@5 = 2/3.'],
+      interpretation: 'Higher values indicate better coverage of relevant documents. Recall@k measures how many of the true relevant chunks are retrieved within the top-k results.',
+      variables: [
+        String.raw`Rel:\ \text{set of relevant chunks derived from }\mathtt{gold\_reference}`,
+        String.raw`Ret_k:\ \text{set of top-}k\text{ retrieved chunks}`,
+        String.raw`k:\ \text{retrieval cutoff rank}`
+      ],
+      projectExample: [
+        'If a query has 3 gold chunks and the top-5 retrieval returns 2 of them, then Recall@5 = 2/3.',
+        'Recall@k reflects retrieval coverage and is particularly important in RAG systems to ensure relevant context is included.'
+      ],
       sources: [
         { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
         { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
       ],
     },
+
     map: {
       title: 'MAP@k (Mean Average Precision)',
-      blurb: 'Mean over queries of average precision computed from ranked hits.',
+      blurb: 'Mean of Average Precision across all queries, measuring how well relevant documents are ranked within the top-k retrieved results.',
+      
       formulaLatex: String.raw`AP@k=\frac{1}{|Rel|}\sum_{i=1}^{k}P@i\cdot rel_i,\quad MAP@k=\frac{1}{|Q|}\sum_{q\in Q}AP_q@k`,
-      interpretation: 'Higher is better. Rewards both early ranking and full relevant-set coverage.',
-      variables: [String.raw`Q:\ \text{query set}`, String.raw`rel_i \in \{0,1\}:\ \text{relevance at rank }i`],
-      projectExample: ['AP accumulates precision at hit positions among top-k retrieval results, then averaged over all queries.'],
+      
+      interpretation: 'Higher values indicate better retrieval quality. MAP rewards systems that rank relevant documents early while also retrieving all relevant items within the top-k results.',
+      
+      variables: [
+        String.raw`Q:\ \text{set of queries}`,
+        String.raw`Rel:\ \text{number of relevant documents for a query}`,
+        String.raw`P@i:\ \text{precision at rank } i`,
+        String.raw`rel_i \in \{0,1\}:\ \text{relevance indicator at rank } i`,
+      ],
+      
+      projectExample: [
+        'For each query, AP@k accumulates the precision values at the ranks where relevant chunks appear among the top-k retrieval results. The MAP score is then obtained by averaging these AP values across all queries in the dataset.'
+      ],
+      
       sources: [
-        { label: 'IR book (Manning et al.): MAP', url: 'https://nlp.stanford.edu/IR-book/' },
+        { label: 'Introduction to Information Retrieval (Manning et al.)', url: 'https://nlp.stanford.edu/IR-book/' },
         { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
       ],
     },
     mrr: {
       title: 'MRR@k (Mean Reciprocal Rank)',
-      blurb: 'Average reciprocal rank of the first relevant item.',
+      blurb: 'Measures how early the first relevant item appears in the ranked results.',
       formulaLatex: String.raw`MRR@k=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{rank_q}`,
-      interpretation: 'Higher is better. Strongly rewards placing at least one relevant chunk very early.',
-      variables: [String.raw`rank_q:\ \text{rank of the first relevant hit for query }q`, String.raw`Q:\ \text{query set}`],
-      projectExample: ['If first hit ranks are [1, 2, not-found], reciprocal ranks are [1, 1/2, 0].'],
+      interpretation: 'Higher is better. Strongly rewards systems that place at least one relevant chunk very early in the ranking.',
+      variables: [
+        String.raw`rank_q:\ \text{rank position of the first relevant item for query } q`,
+        String.raw`Q:\ \text{set of evaluation queries}`
+      ],
+      projectExample: [
+        'Example: if the first relevant results for three queries appear at ranks [1, 2, not-found],',
+        'their reciprocal ranks are [1, 1/2, 0], so the MRR = (1 + 0.5 + 0) / 3 = 0.5.'
+      ],
       sources: [
-        { label: 'Wikipedia: Mean reciprocal rank', url: 'https://en.wikipedia.org/wiki/Mean_reciprocal_rank' },
-        { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
+        { label: 'Wikipedia: Mean Reciprocal Rank', url: 'https://en.wikipedia.org/wiki/Mean_reciprocal_rank' },
+        { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' }
       ],
     },
     ndcg: {
       title: 'nDCG@k',
-      blurb: 'Normalized Discounted Cumulative Gain with position discounting.',
+      blurb: 'Normalized Discounted Cumulative Gain measuring ranking quality with logarithmic position discounting.',
       formulaLatex: String.raw`DCG@k=\sum_{i=1}^{k}\frac{2^{rel_i}-1}{\log_2(i+1)},\quad nDCG@k=\frac{DCG@k}{IDCG@k}`,
-      interpretation: 'Higher is better. Emphasizes ranking quality near top ranks with gain normalization.',
-      variables: [String.raw`rel_i:\ \text{graded or binary relevance at rank }i`, String.raw`IDCG@k:\ \text{ideal DCG at }k`],
-      projectExample: ['Even with same hit count, putting relevant chunks earlier yields higher nDCG.'],
+      interpretation: 'Higher values indicate better ranking quality. nDCG rewards placing highly relevant items near the top of the ranked list while discounting lower-ranked positions.',
+      variables: [
+        String.raw`rel_i:\ \text{relevance score of the document at rank }i`,
+        String.raw`k:\ \text{cutoff rank}`,
+        String.raw`IDCG@k:\ \text{maximum possible DCG obtained by an ideal ranking up to }k`
+      ],
+      projectExample: [
+        'Two retrieval systems may return the same number of relevant chunks, but the one ranking relevant chunks earlier will achieve a higher nDCG score.'
+      ],
       sources: [
         { label: 'Wikipedia: Discounted cumulative gain', url: 'https://en.wikipedia.org/wiki/Discounted_cumulative_gain' },
         { label: 'Project implementation: eval_retrieval.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_retrieval.py' },
@@ -747,20 +794,14 @@ export default function ComponentEvalPage() {
       }
     };
     pushIfNumber('map', 'MAP', 'map');
-    pushIfNumber('recip_rank', 'Reciprocal Rank', 'recip_rank');
+    pushIfNumber('recip_rank', 'MRR', 'recip_rank');
     pushIfNumber('Rprec', 'R-Precision', 'rprec');
     pushIfNumber('ndcg', 'nDCG', 'ndcg');
     return items;
   }, [retrievalResult]);
 
   const retrievalCutSummaries = useMemo(() => {
-    return retrievalMetricsByCut.map(({ cut, metrics }) => {
-      const values = [metrics.precision, metrics.recall, metrics.ndcg].filter(
-        (value): value is number => typeof value === 'number',
-      );
-      const mean = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
-      return { cut, metrics, mean };
-    });
+    return retrievalMetricsByCut.map(({ cut, metrics }) => ({ cut, metrics }));
   }, [retrievalMetricsByCut]);
 
   const addPendingPath = (
@@ -780,7 +821,7 @@ export default function ComponentEvalPage() {
     resetInput: () => void,
   ) => {
     if (!file) return;
-    updatePaths((prev) => [...prev, file.name]);
+    toast.error(`Browser file pickers only expose "${file.name}". Please enter the server-side JSON path manually.`);
     resetInput();
   };
 
@@ -1050,7 +1091,7 @@ export default function ComponentEvalPage() {
                         <Input
                           value={tempQualityPath}
                           onChange={(e) => setTempQualityPath(e.target.value)}
-                          placeholder="/path/to/chunks.json or click + to browse"
+                          placeholder="/path/to/chunks.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter') {
                               addPendingPath(tempQualityPath, setTempQualityPath, setQualityFilePaths);
@@ -1291,7 +1332,7 @@ export default function ComponentEvalPage() {
                         <Input
                           value={tempStickinessPath}
                           onChange={(e) => setTempStickinessPath(e.target.value)}
-                          placeholder="/path/to/chunks.json or click + to browse"
+                          placeholder="/path/to/chunks.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter') {
                               addPendingPath(tempStickinessPath, setTempStickinessPath, setStickinessFilePaths);
@@ -1615,7 +1656,7 @@ export default function ComponentEvalPage() {
                         <Input
                           value={tempRetrievalPath}
                           onChange={(e) => setTempRetrievalPath(e.target.value)}
-                          placeholder="/path/to/retrieval_eval_data.json or click + to browse"
+                          placeholder="/path/to/retrieval_eval_data.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter') {
                               addPendingPath(tempRetrievalPath, setTempRetrievalPath, setRetrievalFilePaths);
@@ -1731,7 +1772,6 @@ export default function ComponentEvalPage() {
 
                             {retrievalCutSummaries.length > 0 && (() => {
                               const topCut = retrievalCutSummaries[retrievalCutSummaries.length - 1];
-                              const cutMeanMax = Math.max(...retrievalCutSummaries.map((item) => item.mean), 1e-6);
                               return (
                                 <div key="retrieval_cut_family" className="col-span-2 rounded-xl border border-indigo-200 bg-gradient-to-br from-slate-50 via-indigo-50 to-cyan-50 p-4 text-left shadow-sm">
                                   <button
@@ -1744,18 +1784,17 @@ export default function ComponentEvalPage() {
                                       <div className="mt-1 text-sm text-slate-700">Cut Family (@k)</div>
                                       <div className="mt-1 flex items-end gap-4">
                                         <div className="text-2xl font-bold text-indigo-900">@{topCut.cut}</div>
-                                        <div className="text-xs text-slate-600 pb-1">Mean {topCut.mean.toFixed(4)} · Precision {Number(topCut.metrics.precision ?? 0).toFixed(4)}</div>
+                                        <div className="text-xs text-slate-600 pb-1">Precision {Number(topCut.metrics.precision ?? 0).toFixed(4)} · Recall {Number(topCut.metrics.recall ?? 0).toFixed(4)} · nDCG {Number(topCut.metrics.ndcg ?? 0).toFixed(4)}</div>
                                       </div>
-                                      <p className="mt-1 text-xs text-slate-600">Expand to inspect each cut and open formulas for Precision / Recall / nDCG.</p>
+                                      <p className="mt-1 text-xs text-slate-600">Expand to inspect each cut and click metric chips for Precision / Recall / nDCG explanations.</p>
                                     </div>
                                     {retrievalFamilyExpanded ? <ChevronUp className="w-4 h-4 text-indigo-700 mt-1" /> : <ChevronDown className="w-4 h-4 text-indigo-700 mt-1" />}
                                   </button>
 
                                   <div className="mt-3 rounded-lg border border-indigo-100 bg-white/70 p-3">
-                                    <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Cut profile (mean of Precision / Recall / nDCG)</div>
+                                    <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Cut profile</div>
                                     <div className={`grid gap-2 ${retrievalCutSummaries.length >= 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
-                                      {retrievalCutSummaries.map(({ cut, mean, metrics }) => {
-                                        const h = Math.max(8, Math.round((mean / cutMeanMax) * 42));
+                                      {retrievalCutSummaries.map(({ cut, metrics }) => {
                                         return (
                                           <button
                                             key={`cut_bar_${cut}`}
@@ -1763,11 +1802,65 @@ export default function ComponentEvalPage() {
                                             onClick={() => setRetrievalFamilyExpanded(true)}
                                             className="rounded-md border border-indigo-100 bg-white p-2 text-center hover:border-indigo-300"
                                           >
-                                            <div className="mx-auto mb-2 w-6 rounded-sm bg-indigo-500/80" style={{ height: `${h}px` }} />
+                                            <div className="mx-auto mb-2 rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-800">
+                                              @{cut}
+                                            </div>
                                             <div className="text-[10px] uppercase text-slate-500">@{cut}</div>
-                                            <div className="text-xs font-semibold text-indigo-900">{mean.toFixed(4)}</div>
-                                            <div className="mt-1 text-[10px] text-slate-500">
-                                              P {Number(metrics.precision ?? 0).toFixed(2)} · R {Number(metrics.recall ?? 0).toFixed(2)} · N {Number(metrics.ndcg ?? 0).toFixed(2)}
+                                            <div className="mt-1 flex items-center justify-center gap-1">
+                                              <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedRetrievalMetric('precision');
+                                                }}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setSelectedRetrievalMetric('precision');
+                                                  }
+                                                }}
+                                                className="rounded border border-indigo-100 bg-indigo-50/60 px-1.5 py-0.5 text-[10px] text-indigo-700"
+                                              >
+                                                P {Number(metrics.precision ?? 0).toFixed(2)}
+                                              </span>
+                                              <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedRetrievalMetric('recall');
+                                                }}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setSelectedRetrievalMetric('recall');
+                                                  }
+                                                }}
+                                                className="rounded border border-indigo-100 bg-indigo-50/60 px-1.5 py-0.5 text-[10px] text-indigo-700"
+                                              >
+                                                R {Number(metrics.recall ?? 0).toFixed(2)}
+                                              </span>
+                                              <span
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedRetrievalMetric('ndcg');
+                                                }}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setSelectedRetrievalMetric('ndcg');
+                                                  }
+                                                }}
+                                                className="rounded border border-indigo-100 bg-indigo-50/60 px-1.5 py-0.5 text-[10px] text-indigo-700"
+                                              >
+                                                N {Number(metrics.ndcg ?? 0).toFixed(2)}
+                                              </span>
                                             </div>
                                           </button>
                                         );
