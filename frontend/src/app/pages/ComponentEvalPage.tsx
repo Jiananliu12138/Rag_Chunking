@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -220,7 +220,7 @@ export default function ComponentEvalPage() {
     title: string;
     blurb: string;
     formulaLatex: string;
-    interpretation: string;
+    interpretation: string | string[];
     variables?: string[];
     projectExample: string[];
     sources?: Array<{ label: string; url: string }>;
@@ -240,24 +240,57 @@ export default function ComponentEvalPage() {
   const chunkMetricInfo: Record<string, ChunkMetricDoc> = {
     bc: {
       title: 'Boundary Clarity (BC)',
-      blurb: 'Measures how clearly the boundary separates adjacent chunks using conditional perplexity ratio.',
+      blurb: 'Measures how clearly adjacent chunks are separated at the semantic level using conditional perplexity ratio.',
       formulaLatex: String.raw`BC_i=\frac{\mathrm{ppl}(c_{i+1}\mid c_i)}{\mathrm{ppl}(c_{i+1}\mid \varnothing)},\quad BC=\frac{1}{N-1}\sum_{i=1}^{N-1}BC_i`,
-      interpretation: 'Lower generally indicates weaker dependency across the boundary (clearer segmentation); values near 1 indicate stronger continuity.',
-      projectExample: ['In this project, each adjacent pair in `chunks` contributes one BC_i.', 'The UI reports `avg_boundary_clarity` from all valid adjacent pairs.'],
+      interpretation:
+        'Boundary Clarity evaluates the semantic independence between adjacent text chunks. If two chunks are strongly dependent, the previous chunk significantly reduces the perplexity of the next chunk, leading to a smaller BC value; if they are semantically independent, the conditional perplexity approaches the unconditional perplexity and BC approaches 1.',
+      variables: [
+        String.raw`c_i:\ \text{the }i\text{-th text chunk in the document}`,
+        String.raw`c_{i+1}:\ \text{the next chunk following }c_i`,
+        String.raw`\mathrm{ppl}(x):\ \text{perplexity of sequence }x\text{ computed by a language model}`,
+        String.raw`\mathrm{ppl}(x\mid y):\ \text{conditional perplexity of }x\text{ given context }y`,
+        String.raw`N:\ \text{total number of chunks in the document}`,
+        String.raw`BC_i:\ \text{boundary clarity score for the boundary between }c_i\text{ and }c_{i+1}`,
+        String.raw`BC:\ \text{average boundary clarity across all adjacent chunk pairs}`,
+      ],
+      projectExample: [
+        'In this project, each adjacent chunk pair (c_i, c_{i+1}) produces one BC_i score.',
+        'BC_i compares the perplexity of the next chunk with and without the previous chunk as context.',
+        'The UI reports avg_boundary_clarity as the mean BC across all valid chunk boundaries.',
+      ],
     },
     ds: {
       title: 'Semantic Dissimilarity (DS)',
-      blurb: 'Measures semantic separation between adjacent chunks based on cosine similarity of embeddings.',
-      formulaLatex: String.raw`DS_i=1-\cos\left(\mathbf{e}(c_i),\mathbf{e}(c_{i+1})\right),\quad DS=\frac{1}{N-1}\sum_{i=1}^{N-1}DS_i`,
-      interpretation: 'Higher DS means adjacent chunks are semantically less similar; very low DS may indicate over-splitting around similar content.',
-      projectExample: ['`chunk_eval_refactored.py` computes normalized embeddings then uses 1 - cosine similarity.', 'The UI reports the dataset mean as `avg_semantic_dissimilarity`.'],
+      blurb: 'Quantifies the semantic difference between adjacent text chunks based on the cosine similarity of their embedding representations.',
+      formulaLatex: String.raw`DS_i = 1 - \cos\left(\mathbf{e}(c_i),\mathbf{e}(c_{i+1})\right),\quad DS = \frac{1}{N-1}\sum_{i=1}^{N-1} DS_i`,
+      interpretation:
+        'DS reflects the degree of semantic separation between neighboring chunks. Higher DS indicates stronger semantic independence between adjacent chunks, suggesting clearer topical boundaries; extremely low DS values may imply over-segmentation where semantically similar content is unnecessarily split across chunks.',
+      projectExample: [
+        '`chunk_eval_refactored.py` computes sentence embeddings for each chunk and derives DS using 1 − cosine similarity between adjacent chunk embeddings.',
+        'The evaluation dashboard aggregates DS across the dataset and reports the mean value as avg_semantic_dissimilarity.',
+      ],
     },
     cs: {
       title: 'Chunk Stickiness (CS, Structural-Entropy View)',
-      blurb: 'Quantifies global coupling pattern of chunk graph via structural entropy over thresholded edges.',
+      blurb: 'Measures the strength and structural coherence of semantic connections between chunks using structural entropy over a chunk relation graph.',
       formulaLatex: String.raw`CS=H(G_\tau)=-\sum_{v\in V}p(v)\log_2 p(v),\quad p(v)=\frac{\deg(v)}{\sum_{u\in V}\deg(u)}`,
-      interpretation: 'Lower entropy indicates stronger cohesive structure (more concentrated connectivity). The page reports complete/incomplete graph variants.',
-      projectExample: ['`relation_eval_refactored.py` builds a normalized graph, keeps edges with weight > threshold, then computes node-degree entropy.', 'Displayed outputs: `structural_entropy_complete` and `structural_entropy_incomplete`.'],
+      interpretation:
+        'Chunk Stickiness evaluates how tightly text chunks are semantically connected across the entire document. Lower entropy indicates that connections concentrate around a few strongly related chunks, implying stronger semantic cohesion, while higher entropy suggests a more scattered connection pattern with weaker or less structured relationships between chunks.',
+      variables: [
+        String.raw`G_\tau:\ \text{thresholded semantic graph constructed from chunk relationships}`,
+        String.raw`V:\ \text{set of nodes in the graph (each node is a chunk)}`,
+        String.raw`v:\ \text{a node representing a single chunk}`,
+        String.raw`\deg(v):\ \text{degree of node }v\text{ (number/weight of incident edges)}`,
+        String.raw`p(v)=\frac{\deg(v)}{\sum_{u\in V}\deg(u)}:\ \text{normalized degree distribution}`,
+        String.raw`H(G_\tau):\ \text{structural entropy of the chunk graph after threshold filtering}`,
+        String.raw`\tau:\ \text{edge-weight threshold used to retain strong semantic connections}`,
+      ],
+      projectExample: [
+        'In this project, chunks are first connected using pairwise semantic edge weights derived from perplexity-based similarity.',
+        'Edges with weights greater than a predefined threshold are retained to construct the semantic graph.',
+        '`relation_eval_refactored.py` computes node degrees and applies the structural entropy formula to the resulting graph.',
+        'The UI reports two variants: structural_entropy_complete and structural_entropy_incomplete.',
+      ],
     },
   };
 
@@ -663,6 +696,10 @@ export default function ComponentEvalPage() {
       .map((cut) => ({ cut, metrics: grouped[cut] }));
   }, [retrievalResult]);
 
+  const primaryRetrievalCut = retrievalMetricsByCut.length
+    ? retrievalMetricsByCut[retrievalMetricsByCut.length - 1]
+    : null;
+
   const addPendingPath = (
     value: string,
     clearValue: (nextValue: string) => void,
@@ -994,7 +1031,7 @@ export default function ComponentEvalPage() {
               </div>
 
               {/* Results column */}
-              <Card className="flex min-h-[680px] flex-col p-6">
+              <Card className="flex h-[680px] flex-col p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 className="font-bold">Quality Results</h2>
@@ -1575,7 +1612,7 @@ export default function ComponentEvalPage() {
                 </Card>
               </div>
 
-              <Card className="flex min-h-[680px] flex-col p-6">
+              <Card className="flex h-[680px] flex-col p-6">
                 <h2 className="font-bold mb-4">Retrieval Results</h2>
                 <div className="min-h-0 flex-1">
                 {loading ? (
@@ -1587,8 +1624,10 @@ export default function ComponentEvalPage() {
                         <div>
                           <div className="flex items-start justify-between gap-4 mb-3">
                             <div>
-                              <h3 className="text-sm font-medium">Aggregated Metrics by Cut@k</h3>
-                              <p className="text-xs text-slate-500 mt-1">Collapsed by cut. Expand each panel to inspect Precision/Recall/MAP/MRR/nDCG.</p>
+                              <h3 className="text-sm font-medium">Aggregated Metrics</h3>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Summary cards at a key cut-off, with expandable panels for detailed @k breakdowns.
+                              </p>
                             </div>
                             {renderMetricInfoDialog(
                               selectedRetrievalMetric,
@@ -1596,7 +1635,8 @@ export default function ComponentEvalPage() {
                               retrievalMetricInfo,
                               [],
                               {
-                                formulaCard: 'rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-cyan-50 to-white p-4 shadow-sm',
+                                formulaCard:
+                                  'rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-cyan-50 to-white p-4 shadow-sm',
                                 formulaText: 'text-indigo-700',
                                 exampleCard: 'rounded-xl border border-indigo-100 bg-indigo-50/60 p-4',
                                 exampleText: 'text-indigo-700',
@@ -1606,17 +1646,76 @@ export default function ComponentEvalPage() {
                             )}
                           </div>
 
+                          {primaryRetrievalCut && (
+                            <div className="mb-4">
+                              <h3 className="text-xs font-medium mb-2 text-slate-600">
+                                Key Metrics @{primaryRetrievalCut.cut}
+                              </h3>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {['map', 'mrr', 'ndcg', 'recall', 'precision'].map((metricKey) => {
+                                  const val = primaryRetrievalCut.metrics[metricKey];
+                                  if (val == null) return null;
+                                  const metricDoc = retrievalMetricInfo[metricKey];
+                                  return (
+                                    <button
+                                      key={metricKey}
+                                      type="button"
+                                      onClick={() => metricDoc && setSelectedRetrievalMetric(metricKey)}
+                                      className="p-3 text-left bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-lg border border-indigo-200 transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300 disabled:cursor-default disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                                      disabled={!metricDoc}
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="text-xs text-slate-600 mb-1">
+                                          {metricKey.toUpperCase()}@{primaryRetrievalCut.cut}
+                                        </div>
+                                        {metricDoc && (
+                                          <span className="rounded-full border border-indigo-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-indigo-700">
+                                            Formula
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-xl font-bold text-indigo-900">
+                                        {Number(val).toFixed(4)}
+                                      </div>
+                                      {metricDoc && (
+                                        <p className="mt-2 text-xs leading-5 text-slate-600">{metricDoc.blurb}</p>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
                           <div className="space-y-3">
                             {retrievalMetricsByCut.map(({ cut, metrics }) => {
                               const open = !!expandedCuts[cut];
                               return (
-                                <div key={cut} className="rounded-lg border border-indigo-200 bg-gradient-to-br from-indigo-50 to-cyan-50 p-3">
-                                  <button type="button" className="w-full flex items-center justify-between" onClick={() => setExpandedCuts((prev) => ({ ...prev, [cut]: !prev[cut] }))}>
+                                <div
+                                  key={cut}
+                                  className="rounded-lg border border-indigo-200 bg-gradient-to-br from-indigo-50 to-cyan-50 p-3"
+                                >
+                                  <button
+                                    type="button"
+                                    className="w-full flex items-center justify-between"
+                                    onClick={() =>
+                                      setExpandedCuts((prev) => ({
+                                        ...prev,
+                                        [cut]: !prev[cut],
+                                      }))
+                                    }
+                                  >
                                     <div>
-                                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Cut Panel</div>
+                                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                                        Cut Panel
+                                      </div>
                                       <div className="text-lg font-semibold text-indigo-900">@{cut}</div>
                                     </div>
-                                    {open ? <ChevronUp className="w-4 h-4 text-indigo-700" /> : <ChevronDown className="w-4 h-4 text-indigo-700" />}
+                                    {open ? (
+                                      <ChevronUp className="w-4 h-4 text-indigo-700" />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4 text-indigo-700" />
+                                    )}
                                   </button>
                                   {open && (
                                     <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -1627,8 +1726,12 @@ export default function ComponentEvalPage() {
                                           onClick={() => setSelectedRetrievalMetric(metric)}
                                           className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-left hover:bg-indigo-50"
                                         >
-                                          <div className="text-[11px] uppercase text-slate-500">{metric}@{cut}</div>
-                                          <div className="text-sm font-semibold text-indigo-900">{Number(value).toFixed(4)}</div>
+                                          <div className="text-[11px] uppercase text-slate-500">
+                                            {metric}@{cut}
+                                          </div>
+                                          <div className="text-sm font-semibold text-indigo-900">
+                                            {Number(value).toFixed(4)}
+                                          </div>
                                         </button>
                                       ))}
                                     </div>

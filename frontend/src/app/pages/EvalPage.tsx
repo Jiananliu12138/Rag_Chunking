@@ -826,7 +826,7 @@ Format 2 - Current Eval Format:
               </div>
 
               {/* Results */}
-              <Card className="flex min-h-[680px] flex-col p-6">
+              <Card className="flex h-[680px] flex-col p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 className="font-bold">Evaluation Results</h2>
@@ -1150,7 +1150,7 @@ Format 2 - Current Eval Format:
               </div>
 
               {/* Results */}
-              <Card className="flex min-h-[680px] flex-col p-6">
+              <Card className="flex h-[680px] flex-col p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 className="font-bold">RAGAS Results</h2>
