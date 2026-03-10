@@ -267,7 +267,7 @@ export default function ComponentEvalPage() {
       blurb: 'Fraction of retrieved items in top-k that are relevant.',
       formulaLatex: String.raw`Precision@k=\frac{|Rel\cap Ret_k|}{|Ret_k|}`,
       interpretation: 'Higher is better. Measures ranking exactness in top positions.',
-      variables: ['Rel: relevant set from gold_reference', 'Ret_k: top-k retrieved chunks'],
+      variables: [String.raw`Rel:\ \text{relevant set from }\mathtt{gold\_reference}`, String.raw`Ret_k:\ \text{top-}k\text{ retrieved chunks}`],
       projectExample: ['In this project, relevance is matched by (doc_id, chunk_id) overlap between `rag_retrieval` and `gold_reference`.', 'Computed per query per cut, then aggregated across queries.'],
       sources: [
         { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
@@ -279,7 +279,7 @@ export default function ComponentEvalPage() {
       blurb: 'Fraction of all relevant items recovered in top-k retrieval.',
       formulaLatex: String.raw`Recall@k=\frac{|Rel\cap Ret_k|}{|Rel|}`,
       interpretation: 'Higher is better. Indicates coverage of gold references.',
-      variables: ['Rel: relevant set from gold_reference', 'Ret_k: top-k retrieved chunks'],
+      variables: [String.raw`Rel:\ \text{relevant set from }\mathtt{gold\_reference}`, String.raw`Ret_k:\ \text{top-}k\text{ retrieved chunks}`],
       projectExample: ['If a query has 3 gold chunks and top-5 retrieves 2 of them, Recall@5 = 2/3.'],
       sources: [
         { label: 'Wikipedia: Precision and recall', url: 'https://en.wikipedia.org/wiki/Precision_and_recall' },
@@ -291,7 +291,7 @@ export default function ComponentEvalPage() {
       blurb: 'Mean over queries of average precision computed from ranked hits.',
       formulaLatex: String.raw`AP@k=\frac{1}{|Rel|}\sum_{i=1}^{k}P@i\cdot rel_i,\quad MAP@k=\frac{1}{|Q|}\sum_{q\in Q}AP_q@k`,
       interpretation: 'Higher is better. Rewards both early ranking and full relevant-set coverage.',
-      variables: ['Q: query set', 'rel_i∈{0,1}: relevance at rank i'],
+      variables: [String.raw`Q:\ \text{query set}`, String.raw`rel_i \in \{0,1\}:\ \text{relevance at rank }i`],
       projectExample: ['AP accumulates precision at hit positions among top-k retrieval results, then averaged over all queries.'],
       sources: [
         { label: 'IR book (Manning et al.): MAP', url: 'https://nlp.stanford.edu/IR-book/' },
@@ -303,7 +303,7 @@ export default function ComponentEvalPage() {
       blurb: 'Average reciprocal rank of the first relevant item.',
       formulaLatex: String.raw`MRR@k=\frac{1}{|Q|}\sum_{q\in Q}\frac{1}{rank_q}`,
       interpretation: 'Higher is better. Strongly rewards placing at least one relevant chunk very early.',
-      variables: ['rank_q: rank of first relevant hit for query q', 'Q: query set'],
+      variables: [String.raw`rank_q:\ \text{rank of the first relevant hit for query }q`, String.raw`Q:\ \text{query set}`],
       projectExample: ['If first hit ranks are [1, 2, not-found], reciprocal ranks are [1, 1/2, 0].'],
       sources: [
         { label: 'Wikipedia: Mean reciprocal rank', url: 'https://en.wikipedia.org/wiki/Mean_reciprocal_rank' },
@@ -315,7 +315,7 @@ export default function ComponentEvalPage() {
       blurb: 'Normalized Discounted Cumulative Gain with position discounting.',
       formulaLatex: String.raw`DCG@k=\sum_{i=1}^{k}\frac{2^{rel_i}-1}{\log_2(i+1)},\quad nDCG@k=\frac{DCG@k}{IDCG@k}`,
       interpretation: 'Higher is better. Emphasizes ranking quality near top ranks with gain normalization.',
-      variables: ['rel_i: graded/binary relevance at rank i', 'IDCG@k: ideal DCG at k'],
+      variables: [String.raw`rel_i:\ \text{graded or binary relevance at rank }i`, String.raw`IDCG@k:\ \text{ideal DCG at }k`],
       projectExample: ['Even with same hit count, putting relevant chunks earlier yields higher nDCG.'],
       sources: [
         { label: 'Wikipedia: Discounted cumulative gain', url: 'https://en.wikipedia.org/wiki/Discounted_cumulative_gain' },
@@ -735,49 +735,51 @@ export default function ComponentEvalPage() {
 
     return (
       <Dialog open={!!selectedMetric} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
           {metric && (
             <>
               <DialogHeader>
                 <DialogTitle>{metric.title}</DialogTitle>
                 <DialogDescription>{metric.blurb}</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className={palette.formulaCard}>
+              <div className="min-w-0 space-y-4">
+                <div className={`${palette.formulaCard} min-w-0 overflow-hidden`}>
                   <div className={`mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] ${palette.formulaText}`}>
                     <Sigma className="h-3.5 w-3.5" />
                     Formula (LaTeX)
                   </div>
-                  <div className="rounded-lg bg-white/80 p-3">
+                  <div className="overflow-x-auto rounded-lg bg-white/80 p-3">
                     <BlockMath math={metric.formulaLatex} />
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Interpretation</div>
-                  <p className="text-sm text-slate-700">{metric.interpretation}</p>
+                  <p className="break-words text-sm text-slate-700">{metric.interpretation}</p>
                 </div>
                 {metric.variables?.length ? (
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
                     <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Variables</div>
-                    <ul className="space-y-1 list-disc pl-5 text-sm text-slate-700">
+                    <ul className="space-y-2 text-sm text-slate-700">
                       {metric.variables.map((item, idx) => (
-                        <li key={idx}>{item}</li>
+                        <li key={idx} className="overflow-x-auto rounded-lg bg-slate-50 px-3 py-2">
+                          <BlockMath math={item} />
+                        </li>
                       ))}
                     </ul>
                   </div>
                 ) : null}
-                <div className={palette.exampleCard}>
+                <div className={`${palette.exampleCard} min-w-0 overflow-hidden`}>
                   <div className={`mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] ${palette.exampleText}`}>
                     <FlaskConical className="h-3.5 w-3.5" />
                     Project-aligned example
                   </div>
-                  <ul className={`space-y-1 list-disc pl-5 text-sm ${palette.exampleBodyText}`}>
+                  <ul className={`space-y-1 list-disc break-words pl-5 text-sm ${palette.exampleBodyText}`}>
                     {metric.projectExample.map((item, idx) => (
                       <li key={idx}>{item}</li>
                     ))}
                   </ul>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
                   <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Source</div>
                   <div className="flex flex-wrap gap-2">
                     {sources.map((source, idx) => (
@@ -992,34 +994,34 @@ export default function ComponentEvalPage() {
               </div>
 
               {/* Results column */}
-              <Card className="p-6">
+              <Card className="flex min-h-[680px] flex-col p-6">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <h2 className="font-bold">Quality Results</h2>
                     <p className="text-xs text-slate-500 mt-1">Click BC/DS cards to open paper-style metric notes.</p>
                   </div>
                   <Dialog open={!!selectedChunkMetric} onOpenChange={(open) => !open && setSelectedChunkMetric(null)}>
-                    <DialogContent className="sm:max-w-[560px]">
+                        <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
                       {selectedChunkMetric && chunkMetricInfo[selectedChunkMetric] && (
                         <>
                           <DialogHeader>
                             <DialogTitle>{chunkMetricInfo[selectedChunkMetric].title}</DialogTitle>
                             <DialogDescription>{chunkMetricInfo[selectedChunkMetric].blurb}</DialogDescription>
                           </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm">
+                          <div className="min-w-0 space-y-4">
+                            <div className="min-w-0 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-white p-4 shadow-sm">
                               <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700"><Sigma className="h-3.5 w-3.5" />Formula (LaTeX)</div>
-                              <div className="rounded-lg bg-white/80 p-3 text-blue-950">
+                              <div className="overflow-x-auto rounded-lg bg-white/80 p-3 text-blue-950">
                                 <BlockMath math={chunkMetricInfo[selectedChunkMetric].formulaLatex} />
                               </div>
                             </div>
-                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
                               <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 mb-2">Interpretation</div>
-                              <p className="text-sm text-slate-700">{chunkMetricInfo[selectedChunkMetric].interpretation}</p>
+                              <p className="break-words text-sm text-slate-700">{chunkMetricInfo[selectedChunkMetric].interpretation}</p>
                             </div>
-                            <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                            <div className="min-w-0 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/60 p-4">
                               <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-blue-700"><FlaskConical className="h-3.5 w-3.5" />Project-aligned example</div>
-                              <ul className="space-y-1 text-sm text-blue-900 list-disc pl-5">
+                              <ul className="space-y-1 break-words text-sm text-blue-900 list-disc pl-5">
                                 {chunkMetricInfo[selectedChunkMetric].projectExample.map((item, idx) => (
                                   <li key={idx}>{item}</li>
                                 ))}
@@ -1039,12 +1041,13 @@ export default function ComponentEvalPage() {
                     </DialogContent>
                   </Dialog>
                 </div>
+                <div className="min-h-0 flex-1">
                 {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                  <div className="flex h-full min-h-[560px] items-center justify-center rounded-xl bg-slate-50 text-slate-400">
+                    <Loader2 className="w-8 h-8 animate-spin" />
                   </div>
                 ) : qualityResult ? (
-                  <ScrollArea className="h-[600px]">
+                  <ScrollArea className="h-full">
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 gap-4">
                         <button
@@ -1115,11 +1118,14 @@ export default function ComponentEvalPage() {
                     </div>
                   </ScrollArea>
                 ) : (
-                  <div className="text-center py-12 text-slate-400">
-                    <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Evaluation results will appear here</p>
+                  <div className="flex h-full min-h-[560px] items-center justify-center rounded-xl bg-slate-50 text-slate-400">
+                    <div className="text-center">
+                      <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Evaluation results will appear here</p>
+                    </div>
                   </div>
                 )}
+                </div>
               </Card>
             </div>
           </TabsContent>
@@ -1569,12 +1575,13 @@ export default function ComponentEvalPage() {
                 </Card>
               </div>
 
-              <Card className="p-6">
+              <Card className="flex min-h-[680px] flex-col p-6">
                 <h2 className="font-bold mb-4">Retrieval Results</h2>
+                <div className="min-h-0 flex-1">
                 {loading ? (
-                  <div className="flex items-center justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>
+                  <div className="flex h-full min-h-[560px] items-center justify-center rounded-xl bg-slate-50 text-slate-400"><Loader2 className="w-8 h-8 animate-spin" /></div>
                 ) : retrievalResult ? (
-                  <ScrollArea className="h-[600px]">
+                  <ScrollArea className="h-full">
                     <div className="space-y-6">
                       {retrievalResult.aggregated && (
                         <div>
@@ -1636,8 +1643,9 @@ export default function ComponentEvalPage() {
                     </div>
                   </ScrollArea>
                 ) : (
-                  <div className="text-center py-12 text-slate-400"><BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Retrieval results will appear here</p></div>
+                  <div className="flex h-full min-h-[560px] items-center justify-center rounded-xl bg-slate-50 text-slate-400"><div className="text-center"><BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Retrieval results will appear here</p></div></div>
                 )}
+                </div>
               </Card>
             </div>
           </TabsContent>

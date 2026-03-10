@@ -60,6 +60,27 @@ const getSearchResultKey = (result: SearchResult, index: number) => (
   ?? `${result.doc_id ?? 'doc'}-${result.filepath ?? 'path'}-${index}`
 );
 
+const normalizeSearchResults = (
+  contextItems?: Array<Partial<SearchResult>>,
+  contexts?: string[],
+): SearchResult[] => {
+  if (Array.isArray(contextItems) && contextItems.length > 0) {
+    return contextItems.map((item) => ({
+      text: item.text ?? '',
+      score: typeof item.score === 'number' ? item.score : 0,
+      filepath: item.filepath,
+      doc_id: item.doc_id,
+      chunk_id: item.chunk_id,
+    }));
+  }
+
+  if (Array.isArray(contexts) && contexts.length > 0) {
+    return contexts.map((text) => ({ text, score: 0 }));
+  }
+
+  return [];
+};
+
 export default function RetrievalPage() {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -240,9 +261,13 @@ export default function RetrievalPage() {
 
       const response = await api.generate(data);
       if (response.success) {
+        const nextContexts = response.data.contexts || [];
+        const nextContextItems = normalizeSearchResults(response.data.context_items, nextContexts);
+
         setRagAnswer(response.data.answer || '');
-        setRagContexts(response.data.contexts || []);
-        setRagContextItems(response.data.context_items || []);
+        setRagContexts(nextContexts);
+        setRagContextItems(nextContextItems);
+        setSearchResults(nextContextItems);
         toast.success('Generation completed');
       } else {
         toast.error('Generation failed: ' + response.message);
