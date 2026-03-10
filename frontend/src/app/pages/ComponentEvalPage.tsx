@@ -728,13 +728,6 @@ export default function ComponentEvalPage() {
     }
   };
 
-  // Auto re-evaluate on param change（仅在非 loading 状态下触发）
-  useEffect(() => {
-    if (!stickinessChunksJson || !stickinessResult || loading) return;
-    const t = setTimeout(() => handleStickinessEval(), 500);
-    return () => clearTimeout(t);
-  }, [threshold, delta, loading, stickinessChunksJson, stickinessResult]);
-
   // ── Derived data ────────────────────────────────────────────────────────────
   const qualityChartData =
     qualityResult?.details?.map((item: any, index: number) => ({
