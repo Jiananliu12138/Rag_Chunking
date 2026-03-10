@@ -673,7 +673,7 @@ Format 2 - Current Eval Format:
                         onChange={(e) => setTestDataJson(e.target.value)}
                         onKeyDown={(e) => fillPlaceholderOnTab(e, testDataJson, traditionalPlaceholder, setTestDataJson)}
                         placeholder={traditionalPlaceholder}
-                        className="min-h-[280px] font-mono text-xs"
+                        className="h-[280px] resize-none overflow-y-auto font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         💡 Press Tab on an empty editor to insert the example. Each item should include: _id, input, llm_ans, answer, rag_retrieval, gold_reference
@@ -999,7 +999,7 @@ Format 2 - Current Eval Format:
                         onChange={(e) => setRagasDataJson(e.target.value)}
                         onKeyDown={(e) => fillPlaceholderOnTab(e, ragasDataJson, ragasPlaceholder, setRagasDataJson)}
                         placeholder={ragasPlaceholder}
-                        className="min-h-[360px] font-mono text-xs"
+                        className="h-[360px] resize-none overflow-y-auto font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         💡 Press Tab on an empty editor to insert the example. Supports both formats and auto-converts on the backend.

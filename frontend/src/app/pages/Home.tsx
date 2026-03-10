@@ -119,14 +119,7 @@ export default function Home() {
 
   const selectedFilepathSet = useMemo(() => new Set(filterFilepath), [filterFilepath]);
   const selectedDocIdSet = useMemo(() => new Set(filterDocId), [filterDocId]);
-  const missingRequirements = useMemo(() => {
-    const items: string[] = [];
-    if (!llmModelName.trim()) items.push('LLM Model Name');
-    if (enableRag && !collectionName.trim()) items.push('Collection Name');
-    if (enableRag && !embedModelPath.trim()) items.push('Embedding Model Path');
-    return items;
-  }, [llmModelName, enableRag, collectionName, embedModelPath]);
-  const canSend = !!input.trim() && !loading && missingRequirements.length === 0;
+  const canSend = !!input.trim() && !loading;
 
   useEffect(() => {
     try {
@@ -281,12 +274,6 @@ export default function Home() {
       return;
     }
     
-    if (missingRequirements.length > 0) {
-      toast.error(`Please complete settings first: ${missingRequirements.join(', ')}`);
-      setShowSettings(true);
-      return;
-    }
-
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
@@ -411,26 +398,8 @@ export default function Home() {
                 </div>
                 <h2 className="text-2xl font-bold mb-3">Start Conversation</h2>
                 <p className="text-slate-500 mb-6">
-                  {missingRequirements.length === 0
-                    ? 'Ask questions and get intelligent answers from your knowledge base'
-                    : `Complete setup first: ${missingRequirements.join(', ')}`}
+                  Ask questions and get intelligent answers from your knowledge base
                 </p>
-                {missingRequirements.length > 0 && (
-                  <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left">
-                    <div className="text-sm font-medium text-amber-900">Setup checklist</div>
-                    <div className="mt-1 text-xs text-amber-800">
-                      Missing: {missingRequirements.join(', ')}
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
-                      onClick={() => setShowSettings(true)}
-                    >
-                      Open Settings
-                    </Button>
-                  </div>
-                )}
                 <div className="grid grid-cols-1 gap-3 text-left">
                   <button
                     onClick={() => setInput('What is a vector database?')}
@@ -575,11 +544,6 @@ export default function Home() {
         {/* Input Area */}
         <div className="border-t bg-white px-6 py-4">
           <div className="max-w-4xl mx-auto">
-            {missingRequirements.length > 0 && (
-              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Missing required settings: {missingRequirements.join(', ')}
-              </div>
-            )}
             <div className="flex gap-3">
               <div className="flex-1 relative">
                 <Input
@@ -587,7 +551,7 @@ export default function Home() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
                   onKeyDown={tabFill(setInput)}
-                  placeholder={missingRequirements.length === 0 ? 'Ask me anything...' : 'Complete settings before sending'}
+                  placeholder="Ask me anything..."
                   className="pr-12 h-12 text-base"
                   disabled={loading}
                 />
@@ -596,7 +560,6 @@ export default function Home() {
                 onClick={handleSend}
                 disabled={!canSend}
                 className="h-12 px-6 bg-gradient-to-r from-blue-600 to-purple-600"
-                title={missingRequirements.length > 0 ? `Missing: ${missingRequirements.join(', ')}` : undefined}
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />

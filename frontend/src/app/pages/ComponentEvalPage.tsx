@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, type KeyboardEvent } from 'react';
 import { useLocation } from 'react-router';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -42,6 +42,31 @@ interface QualityConfigDialogProps {
   setVllmModelName: (v: string) => void;
 }
 
+const fillPlaceholderOnTab = (
+  event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  currentValue: string,
+  placeholderValue: string,
+  setValue: (value: string) => void,
+) => {
+  if (event.key !== 'Tab' || currentValue.trim() || !placeholderValue) {
+    return;
+  }
+  event.preventDefault();
+  setValue(placeholderValue);
+};
+
+const chunkJsonPlaceholder = `{
+  "filepath": "./dataset/docs/2wikimqa/0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt",
+  "splits": [
+    [
+      "Passage 1:\\nZoran Svonja ...\\n\\nPassage 2:\\nAnton Shunto ...",
+      "djgashdkjghskdjghskjdghkjas",
+      1
+    ]
+  ],
+  "time_cost": 2.4059367179870605
+}`;
+
 function QualityConfigDialog({
   open, onOpenChange,
   pplModelPath, setPplModelPath,
@@ -70,7 +95,8 @@ function QualityConfigDialog({
             <Input
               value={pplModelPath}
               onChange={(e) => setPplModelPath(e.target.value)}
-              placeholder="/models/gpt2 (leave blank for default)"
+              onKeyDown={(e) => fillPlaceholderOnTab(e, pplModelPath, e.currentTarget.placeholder, setPplModelPath)}
+              placeholder="/models/Qwen2.5-7B-Instruct"
               className="mt-1.5"
             />
             <p className="text-xs text-slate-500 mt-1">Perplexity model for Boundary Clarity</p>
@@ -80,7 +106,8 @@ function QualityConfigDialog({
             <Input
               value={simModelPath}
               onChange={(e) => setSimModelPath(e.target.value)}
-              placeholder="/models/bge-large-en-v1.5 (leave blank for default)"
+              onKeyDown={(e) => fillPlaceholderOnTab(e, simModelPath, e.currentTarget.placeholder, setSimModelPath)}
+              placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
               className="mt-1.5"
             />
             <p className="text-xs text-slate-500 mt-1">Embedding model for Semantic Dissimilarity</p>
@@ -99,6 +126,7 @@ function QualityConfigDialog({
                 <Input
                   value={vllmApiBase}
                   onChange={(e) => setVllmApiBase(e.target.value)}
+                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
                   placeholder="http://localhost:8005/v1"
                   className="mt-1.5"
                 />
@@ -108,7 +136,8 @@ function QualityConfigDialog({
                 <Input
                   value={vllmModelName}
                   onChange={(e) => setVllmModelName(e.target.value)}
-                  placeholder="e.g. Qwen2.5-7B-Instruct"
+                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
+                  placeholder="Qwen2.5-7B-Instruct"
                   className="mt-1.5"
                 />
               </div>
@@ -163,7 +192,8 @@ function StickinessConfigDialog({
             <Input
               value={modelPath}
               onChange={(e) => setModelPath(e.target.value)}
-              placeholder="/models/bge-large-en-v1.5 (leave blank for default)"
+              onKeyDown={(e) => fillPlaceholderOnTab(e, modelPath, e.currentTarget.placeholder, setModelPath)}
+              placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
               className="mt-1.5"
             />
             <p className="text-xs text-slate-500 mt-1">Embedding model for structural-entropy evaluation</p>
@@ -182,6 +212,7 @@ function StickinessConfigDialog({
                 <Input
                   value={vllmApiBase}
                   onChange={(e) => setVllmApiBase(e.target.value)}
+                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
                   placeholder="http://localhost:8005/v1"
                   className="mt-1.5"
                 />
@@ -191,7 +222,8 @@ function StickinessConfigDialog({
                 <Input
                   value={vllmModelName}
                   onChange={(e) => setVllmModelName(e.target.value)}
-                  placeholder="e.g. Qwen2.5-7B-Instruct"
+                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
+                  placeholder="Qwen2.5-7B-Instruct"
                   className="mt-1.5"
                 />
               </div>
@@ -1036,8 +1068,9 @@ export default function ComponentEvalPage() {
                       <Textarea
                         value={qualityChunksJson}
                         onChange={(e) => setQualityChunksJson(e.target.value)}
-                        placeholder='["First chunk content", "Second chunk content", "Third chunk content"]'
-                        className="min-h-[150px] font-mono text-sm"
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, qualityChunksJson, e.currentTarget.placeholder, setQualityChunksJson)}
+                        placeholder={chunkJsonPlaceholder}
+                        className="h-[220px] resize-none overflow-y-auto font-mono text-sm"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1091,6 +1124,7 @@ export default function ComponentEvalPage() {
                         <Input
                           value={tempQualityPath}
                           onChange={(e) => setTempQualityPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, tempQualityPath, e.currentTarget.placeholder, setTempQualityPath)}
                           placeholder="/path/to/chunks.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter') {
@@ -1295,8 +1329,9 @@ export default function ComponentEvalPage() {
                       <Textarea
                         value={stickinessChunksJson}
                         onChange={(e) => setStickinessChunksJson(e.target.value)}
-                        placeholder='["First chunk content", "Second chunk content", "Third chunk content"]'
-                        className="min-h-[150px] font-mono text-sm"
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, stickinessChunksJson, e.currentTarget.placeholder, setStickinessChunksJson)}
+                        placeholder={chunkJsonPlaceholder}
+                        className="h-[220px] resize-none overflow-y-auto font-mono text-sm"
                       />
                     </div>
                     <Button onClick={handleStickinessEval} disabled={loading} className="w-full">
@@ -1332,6 +1367,7 @@ export default function ComponentEvalPage() {
                         <Input
                           value={tempStickinessPath}
                           onChange={(e) => setTempStickinessPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, tempStickinessPath, e.currentTarget.placeholder, setTempStickinessPath)}
                           placeholder="/path/to/chunks.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter') {
@@ -1619,15 +1655,21 @@ export default function ComponentEvalPage() {
                       <Textarea
                         value={retrievalDataJson}
                         onChange={(e) => setRetrievalDataJson(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, retrievalDataJson, e.currentTarget.placeholder, setRetrievalDataJson)}
                         placeholder={'[\n  {\n    "_id": "q1",\n    "rag_retrieval": [{"doc_id":"d1","chunk_id":"0","text":"...","retrieval_score":0.92}],\n    "gold_reference": [{"doc_id":"d1","chunk_id":"0","text":"..."}]\n  }\n]'}
-                        className="min-h-[280px] font-mono text-xs"
+                        className="h-[280px] resize-none overflow-y-auto font-mono text-xs"
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Cut Points (comma separated)</Label>
-                        <Input value={retrievalCuts} onChange={(e) => setRetrievalCuts(e.target.value)} placeholder="1,3,5,10" />
+                        <Input
+                          value={retrievalCuts}
+                          onChange={(e) => setRetrievalCuts(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, retrievalCuts, e.currentTarget.placeholder, setRetrievalCuts)}
+                          placeholder="1,3,5"
+                        />
                       </div>
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg self-end">
                         <div>
@@ -1656,6 +1698,7 @@ export default function ComponentEvalPage() {
                         <Input
                           value={tempRetrievalPath}
                           onChange={(e) => setTempRetrievalPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, tempRetrievalPath, e.currentTarget.placeholder, setTempRetrievalPath)}
                           placeholder="/path/to/retrieval_eval_data.json (enter server path and click +)"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter') {
@@ -1697,6 +1740,7 @@ export default function ComponentEvalPage() {
                       <Input
                         value={retrievalOutputPath}
                         onChange={(e) => setRetrievalOutputPath(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, retrievalOutputPath, e.currentTarget.placeholder, setRetrievalOutputPath)}
                         placeholder="/path/to/retrieval_eval_summary.json"
                       />
                       <p className="text-xs text-slate-500 mt-1">Optional. If provided, backend will save retrieval evaluation result JSON to this path.</p>
