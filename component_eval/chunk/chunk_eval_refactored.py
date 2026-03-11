@@ -7,6 +7,7 @@
 import json
 import time
 import logging
+import math
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, field
@@ -70,8 +71,8 @@ class EvaluationResult:
     def to_dict(self) -> Dict[str, float]:
         """转换为字典"""
         return {
-            'no_semantic_similarity': self.semantic_dissimilarity,
-            'no_relative_perplexity': self.boundary_clarity
+            'no_semantic_similarity': self.semantic_dissimilarity if math.isfinite(self.semantic_dissimilarity) else None,
+            'no_relative_perplexity': self.boundary_clarity if math.isfinite(self.boundary_clarity) else None
         }
 
 
@@ -351,7 +352,19 @@ class ChunkEvaluator:
         ppl_with_context = self.calculate_perplexity(text1, text2)
         
         # 计算BC
-        bc = ppl_with_context / ppl_without_context if ppl_without_context > 0 else float('inf')
+        if (
+            not math.isfinite(ppl_without_context)
+            or not math.isfinite(ppl_with_context)
+            or ppl_without_context <= 0
+        ):
+            self.logger.warning(
+                "Skipping invalid boundary clarity value: ppl_without_context=%s, ppl_with_context=%s",
+                ppl_without_context,
+                ppl_with_context,
+            )
+            return float('nan')
+
+        bc = ppl_with_context / ppl_without_context
         
         return bc
     
@@ -421,9 +434,9 @@ class ChunkEvaluator:
                 result = self.evaluate_pair(text1, text2)
                 results.append(result)
                 
-                if self.config.enable_semantic_similarity:
+                if self.config.enable_semantic_similarity and math.isfinite(result.semantic_dissimilarity):
                     sem_scores.append(result.semantic_dissimilarity)
-                if self.config.enable_boundary_clarity:
+                if self.config.enable_boundary_clarity and math.isfinite(result.boundary_clarity):
                     bc_scores.append(result.boundary_clarity)
                 
             except Exception as e:
@@ -532,8 +545,8 @@ class ChunkEvaluator:
             output_data = {
                 "summary": {
                     "num_pairs": results.num_pairs,
-                    "avg_semantic_dissimilarity": results.semantic_dissimilarity_avg,
-                    "avg_boundary_clarity": results.boundary_clarity_avg
+                    "avg_semantic_dissimilarity": results.semantic_dissimilarity_avg if math.isfinite(results.semantic_dissimilarity_avg) else None,
+                    "avg_boundary_clarity": results.boundary_clarity_avg if math.isfinite(results.boundary_clarity_avg) else None
                 },
                 "details": [r.to_dict() for r in results.individual_results]
             }

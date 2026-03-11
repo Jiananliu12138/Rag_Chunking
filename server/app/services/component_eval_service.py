@@ -1,3 +1,5 @@
+import math
+
 """
 组件级评估服务层。
 提供分块质量（边界清晰度 + 语义不相似度）和分块黏连度两类评估能力。
@@ -81,16 +83,30 @@ class ComponentEvalService:
             details = [
                 ChunkPairResult(
                     semantic_dissimilarity=(
-                        r.semantic_dissimilarity if use_semantic else None
+                        r.semantic_dissimilarity
+                        if use_semantic and math.isfinite(r.semantic_dissimilarity)
+                        else None
                     ),
-                    boundary_clarity=(r.boundary_clarity if use_boundary else None),
+                    boundary_clarity=(
+                        r.boundary_clarity
+                        if use_boundary and math.isfinite(r.boundary_clarity)
+                        else None
+                    ),
                 )
                 for r in agg.individual_results
             ]
 
             return ChunkQualityResult(
-                avg_semantic_dissimilarity=agg.semantic_dissimilarity_avg,
-                avg_boundary_clarity=agg.boundary_clarity_avg,
+                avg_semantic_dissimilarity=(
+                    agg.semantic_dissimilarity_avg
+                    if math.isfinite(agg.semantic_dissimilarity_avg)
+                    else 0.0
+                ),
+                avg_boundary_clarity=(
+                    agg.boundary_clarity_avg
+                    if math.isfinite(agg.boundary_clarity_avg)
+                    else 0.0
+                ),
                 num_pairs=agg.num_pairs,
                 details=details,
             )
@@ -126,7 +142,7 @@ class ComponentEvalService:
         except ValueError as exc:
             raise EvaluationException(f"不支持的分块结果 JSON 格式: {exc}") from exc
 
-        return self._evaluate_chunk_quality_core(
+        result = self._evaluate_chunk_quality_core(
             chunks=chunks,
             enable_semantic_similarity=request.enable_semantic_similarity,
             enable_boundary_clarity=request.enable_boundary_clarity,
@@ -136,6 +152,9 @@ class ComponentEvalService:
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
         )
+        if request.output_path:
+            FileRepository.write_json(request.output_path, result.model_dump(mode="json"))
+        return result
 
     # ── Chunk 黏连度评估（结构熵） ────────────────────────────────────────────
 
@@ -171,7 +190,7 @@ class ComponentEvalService:
         if len(chunks) < 2:
             raise EvaluationException(f"至少需要 2 个文本块才能评估，当前只有 {len(chunks)} 个")
 
-        return self._evaluate_chunk_stickiness_core(
+        result = self._evaluate_chunk_stickiness_core(
             chunks=chunks,
             threshold=request.threshold,
             delta=request.delta,
@@ -180,6 +199,9 @@ class ComponentEvalService:
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
         )
+        if request.output_path:
+            FileRepository.write_json(request.output_path, result.model_dump(mode="json"))
+        return result
 
     def _evaluate_chunk_stickiness_core(
         self,

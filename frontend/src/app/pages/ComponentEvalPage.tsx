@@ -464,6 +464,7 @@ export default function ComponentEvalPage() {
 
   // ── Chunk Quality – File Input ──────────────────────────────────────────────
   const [tempQualityPath, setTempQualityPath] = useState('');
+  const [qualityOutputPath, setQualityOutputPath] = useState('');
   const [qualityFilePaths, setQualityFilePaths] = useState<string[]>([]);
   const qualityFileRef = useRef<HTMLInputElement>(null);
 
@@ -484,6 +485,7 @@ export default function ComponentEvalPage() {
 
   // ── Chunk Stickiness – File Input ──────────────────────────────────────────
   const [tempStickinessPath, setTempStickinessPath] = useState('');
+  const [stickinessOutputPath, setStickinessOutputPath] = useState('');
   const [stickinessFilePaths, setStickinessFilePaths] = useState<string[]>([]);
   const stickinessFileRef = useRef<HTMLInputElement>(null);
 
@@ -600,13 +602,18 @@ export default function ComponentEvalPage() {
     try {
       const data = buildQualityData({
         input_path: qualityFilePaths[0],
+        output_path: qualityOutputPath.trim() || undefined,
         enable_semantic_similarity: enableSemanticSimilarity,
         enable_boundary_clarity: enableBoundaryClarity,
       });
       const response = await api.chunkQualityFile(data);
       if (response.success) {
         setQualityResult(response.data);
-        toast.success('Chunk quality evaluation completed');
+        toast.success(
+          qualityOutputPath.trim()
+            ? `Chunk quality evaluation completed. Results saved to ${qualityOutputPath.trim()}`
+            : 'Chunk quality evaluation completed'
+        );
       } else {
         toast.error('Evaluation failed: ' + response.message);
       }
@@ -647,13 +654,18 @@ export default function ComponentEvalPage() {
     try {
       const data = buildStickinessData({
         input_path: stickinessFilePaths[0],
+        output_path: stickinessOutputPath.trim() || undefined,
         threshold: threshold[0],
         delta: delta[0],
       });
       const response = await api.chunkStickinessFile(data);
       if (response.success) {
         setStickinessResult(response.data);
-        toast.success('Stickiness evaluation completed');
+        toast.success(
+          stickinessOutputPath.trim()
+            ? `Stickiness evaluation completed. Results saved to ${stickinessOutputPath.trim()}`
+            : 'Stickiness evaluation completed'
+        );
       } else {
         toast.error('Evaluation failed: ' + response.message);
       }
@@ -1169,6 +1181,18 @@ export default function ComponentEvalPage() {
                         <Switch checked={enableBoundaryClarity} onCheckedChange={setEnableBoundaryClarity} />
                       </div>
                     </div>
+                    <div>
+                      <Label>Output Results JSON Path</Label>
+                      <Input
+                        value={qualityOutputPath}
+                        onChange={(e) => setQualityOutputPath(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, qualityOutputPath, e.currentTarget.placeholder, setQualityOutputPath)}
+                        placeholder="/path/to/chunk_quality_results.json"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Optional. If provided, the backend will write the complete JSON shown on the right to this file.
+                      </p>
+                    </div>
                     <Button onClick={handleQualityFileEval} disabled={loading} className="w-full" variant="outline">
                       {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</> : 'Evaluate from File'}
                     </Button>
@@ -1395,6 +1419,18 @@ export default function ComponentEvalPage() {
                         </Button>
                       </div>
                       {renderSelectedPathList(stickinessFilePaths, (idx) => removePathAtIndex(idx, setStickinessFilePaths))}
+                    </div>
+                    <div>
+                      <Label>Output Results JSON Path</Label>
+                      <Input
+                        value={stickinessOutputPath}
+                        onChange={(e) => setStickinessOutputPath(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, stickinessOutputPath, e.currentTarget.placeholder, setStickinessOutputPath)}
+                        placeholder="/path/to/chunk_stickiness_results.json"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Optional. If provided, the backend will write the complete JSON shown below to this file.
+                      </p>
                     </div>
                     <Button onClick={handleStickinessFileEval} disabled={loading} className="w-full" variant="outline">
                       {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</> : 'Evaluate from File'}
