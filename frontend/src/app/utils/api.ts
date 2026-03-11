@@ -12,13 +12,10 @@ async function fetchApi<T>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
-  
+
   try {
     const response = await fetch(url, {
       ...options,
-      signal: options?.signal ?? controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
@@ -54,17 +51,15 @@ async function fetchApi<T>(
         };
   } catch (error) {
     const message = error instanceof DOMException && error.name === 'AbortError'
-      ? `请求超时：${url}`
+      ? `Request aborted: ${url}`
       : error instanceof Error
         ? error.message
-        : '请求失败';
+        : 'Request failed';
     return {
       success: false,
       message,
       data: null as T,
     };
-  } finally {
-    window.clearTimeout(timeoutId);
   }
 }
 
@@ -94,7 +89,7 @@ export const api = {
   deleteCollection: (name: string) => fetchApi(`/index/collections/${name}`, {
     method: 'DELETE',
   }),
-  deleteDocumentsByMetadata: (collectionName: string, data: any) => 
+  deleteDocumentsByMetadata: (collectionName: string, data: any) =>
     fetchApi(`/index/collections/${collectionName}/delete-by-metadata`, {
       method: 'POST',
       body: JSON.stringify(data),
