@@ -21,6 +21,12 @@ from typing import Optional
 
 class ComponentEvalService:
 
+    @staticmethod
+    def _limit_chunks_for_file_eval(chunks: list[str], max_eval_chunks: Optional[int]) -> list[str]:
+        if max_eval_chunks is None or max_eval_chunks <= 0:
+            return chunks
+        return chunks[:max_eval_chunks]
+
     # ── Chunk 质量评估（BC + 语义不相似度） ───────────────────────────────────
 
     def _evaluate_chunk_quality_core(
@@ -137,6 +143,7 @@ class ComponentEvalService:
         try:
             raw = FileRepository.read_json(request.input_path)
             chunks = FileRepository.parse_chunks_from_json(raw)
+            chunks = self._limit_chunks_for_file_eval(chunks, request.max_eval_chunks)
         except FileNotFoundError as exc:
             raise EvaluationException(f"分块结果文件不存在: {exc}") from exc
         except ValueError as exc:
@@ -182,6 +189,7 @@ class ComponentEvalService:
         try:
             raw = FileRepository.read_json(request.input_path)
             chunks = FileRepository.parse_chunks_from_json(raw)
+            chunks = self._limit_chunks_for_file_eval(chunks, request.max_eval_chunks)
         except FileNotFoundError as exc:
             raise EvaluationException(f"分块结果文件不存在: {exc}") from exc
         except ValueError as exc:

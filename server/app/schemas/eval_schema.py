@@ -277,6 +277,11 @@ class ChunkQualityFileRequest(BaseModel):
         None,
         description="可选：若提供则将 component eval 的完整结果写入该 JSON 文件",
     )
+    max_eval_chunks: Optional[int] = Field(
+        None,
+        ge=-1,
+        description="鍙€夛細鏈€澶氬彧璇勪及鍓?N 涓枃鏈潡锛?-1 鎴?null 琛ㄧず鍏ㄩ儴",
+    )
     enable_semantic_similarity: Optional[bool] = Field(
         None,
         description="是否计算语义不相似度（可选，未提供时从配置读取 COMPONENT_ENABLE_SEMANTIC_SIMILARITY）",
@@ -391,6 +396,11 @@ class ChunkStickinessFileRequest(BaseModel):
     output_path: Optional[str] = Field(
         None,
         description="可选：若提供则将 component eval 的完整结果写入该 JSON 文件",
+    )
+    max_eval_chunks: Optional[int] = Field(
+        None,
+        ge=-1,
+        description="鍙€夛細鏈€澶氬彧璇勪及鍓?N 涓枃鏈潡锛?-1 鎴?null 琛ㄧず鍏ㄩ儴",
     )
     threshold: Optional[float] = Field(
         None, ge=0.0, le=1.0, description="边权重阈值（可选，未提供时从配置读取 STICKINESS_THRESHOLD）"

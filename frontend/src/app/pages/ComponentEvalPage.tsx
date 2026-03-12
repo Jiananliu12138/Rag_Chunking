@@ -55,6 +55,21 @@ const fillPlaceholderOnTab = (
   setValue(placeholderValue);
 };
 
+const parseMaxEvalChunksInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (!/^-?\d+$/.test(trimmed)) {
+    throw new Error('Max eval chunks must be an integer. Use -1 for all chunks.');
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (parsed === 0 || parsed < -1) {
+    throw new Error('Max eval chunks must be -1 or a positive integer.');
+  }
+  return parsed;
+};
+
 const chunkJsonPlaceholder = `{
   "filepath": "./dataset/docs/2wikimqa/0a64d8873482d91efc595a508218c6ce881c13c95028039e.txt",
   "splits": [
@@ -465,6 +480,7 @@ export default function ComponentEvalPage() {
   // ── Chunk Quality – File Input ──────────────────────────────────────────────
   const [tempQualityPath, setTempQualityPath] = useState('');
   const [qualityOutputPath, setQualityOutputPath] = useState('');
+  const [qualityMaxEvalChunks, setQualityMaxEvalChunks] = useState('-1');
   const [qualityFilePaths, setQualityFilePaths] = useState<string[]>([]);
   const qualityFileRef = useRef<HTMLInputElement>(null);
 
@@ -486,6 +502,7 @@ export default function ComponentEvalPage() {
   // ── Chunk Stickiness – File Input ──────────────────────────────────────────
   const [tempStickinessPath, setTempStickinessPath] = useState('');
   const [stickinessOutputPath, setStickinessOutputPath] = useState('');
+  const [stickinessMaxEvalChunks, setStickinessMaxEvalChunks] = useState('-1');
   const [stickinessFilePaths, setStickinessFilePaths] = useState<string[]>([]);
   const stickinessFileRef = useRef<HTMLInputElement>(null);
 
@@ -600,9 +617,11 @@ export default function ComponentEvalPage() {
     }
     setLoading(true);
     try {
+      const maxEvalChunks = parseMaxEvalChunksInput(qualityMaxEvalChunks);
       const data = buildQualityData({
         input_path: qualityFilePaths[0],
         output_path: qualityOutputPath.trim() || undefined,
+        max_eval_chunks: maxEvalChunks,
         enable_semantic_similarity: enableSemanticSimilarity,
         enable_boundary_clarity: enableBoundaryClarity,
       });
@@ -617,6 +636,8 @@ export default function ComponentEvalPage() {
       } else {
         toast.error('Evaluation failed: ' + response.message);
       }
+    } catch (error) {
+      toast.error((error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -652,9 +673,11 @@ export default function ComponentEvalPage() {
     }
     setLoading(true);
     try {
+      const maxEvalChunks = parseMaxEvalChunksInput(stickinessMaxEvalChunks);
       const data = buildStickinessData({
         input_path: stickinessFilePaths[0],
         output_path: stickinessOutputPath.trim() || undefined,
+        max_eval_chunks: maxEvalChunks,
         threshold: threshold[0],
         delta: delta[0],
       });
@@ -669,6 +692,8 @@ export default function ComponentEvalPage() {
       } else {
         toast.error('Evaluation failed: ' + response.message);
       }
+    } catch (error) {
+      toast.error((error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -1193,6 +1218,18 @@ export default function ComponentEvalPage() {
                         Optional. If provided, the backend will write the complete JSON shown on the right to this file.
                       </p>
                     </div>
+                    <div>
+                      <Label>Max Eval Chunks</Label>
+                      <Input
+                        value={qualityMaxEvalChunks}
+                        onChange={(e) => setQualityMaxEvalChunks(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, qualityMaxEvalChunks, e.currentTarget.placeholder, setQualityMaxEvalChunks)}
+                        placeholder="-1"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Limit file evaluation to the first N chunks. Use <code>-1</code> to evaluate all chunks.
+                      </p>
+                    </div>
                     <Button onClick={handleQualityFileEval} disabled={loading} className="w-full" variant="outline">
                       {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</> : 'Evaluate from File'}
                     </Button>
@@ -1430,6 +1467,18 @@ export default function ComponentEvalPage() {
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         Optional. If provided, the backend will write the complete JSON shown below to this file.
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Max Eval Chunks</Label>
+                      <Input
+                        value={stickinessMaxEvalChunks}
+                        onChange={(e) => setStickinessMaxEvalChunks(e.target.value)}
+                        onKeyDown={(e) => fillPlaceholderOnTab(e, stickinessMaxEvalChunks, e.currentTarget.placeholder, setStickinessMaxEvalChunks)}
+                        placeholder="-1"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Limit file evaluation to the first N chunks. Use <code>-1</code> to evaluate all chunks.
                       </p>
                     </div>
                     <Button onClick={handleStickinessFileEval} disabled={loading} className="w-full" variant="outline">
