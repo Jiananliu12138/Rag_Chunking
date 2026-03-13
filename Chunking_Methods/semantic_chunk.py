@@ -1,13 +1,20 @@
 import json
 import time
 import os
+import sys
 import multiprocessing
+from pathlib import Path
 from functools import partial
 from threading import RLock
 from tqdm import tqdm
 from llama_index.core.node_parser import SemanticSplitterNodeParser
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core import Document
+
+SERVER_DIR = Path(__file__).resolve().parents[1] / "server"
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
+
+from app.core.model_factory import get_llamaindex_embedding
 
 # 配置
 INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl"
@@ -17,7 +24,6 @@ BUFFER_SIZE = 1
 BREAKPOINT_THRESHOLD = 74
 NUM_WORKERS = 1
 
-_EMBED_MODEL_CACHE = {}
 _SPLITTER_CACHE = {}
 _CACHE_LOCK = RLock()
 
@@ -28,15 +34,7 @@ def create_directory(path):
 
 
 def _get_embed_model(embed_model_path=EMBED_MODEL_PATH):
-    cache_key = str(embed_model_path).strip()
-    with _CACHE_LOCK:
-        cached = _EMBED_MODEL_CACHE.get(cache_key)
-        if cached is not None:
-            return cached
-
-        model = HuggingFaceEmbedding(model_name=embed_model_path)
-        _EMBED_MODEL_CACHE[cache_key] = model
-        return model
+    return get_llamaindex_embedding(model_path=str(embed_model_path).strip())
 
 
 def init_splitter():

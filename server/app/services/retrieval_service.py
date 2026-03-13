@@ -4,13 +4,13 @@
 """
 import json
 import os
-from threading import Lock
 from typing import Any, Optional
 
 from tqdm import tqdm
 
 
 from app.config import get_settings
+from app.core.model_factory import get_cross_encoder
 from app.core.exceptions import ModelLoadException, RetrievalException
 from app.core.logging_config import logger
 from app.repositories.milvus_repository import MilvusRepository
@@ -24,10 +24,6 @@ from app.schemas.retrieval_schema import (
     SearchResultItem,
 )
 from app.services.index_service import IndexService
-
-_RERANKER_CACHE: dict[tuple[str, str], Any] = {}
-_RERANKER_CACHE_LOCK = Lock()
-
 
 class RetrievalService:
 
@@ -109,19 +105,10 @@ class RetrievalService:
 
     @staticmethod
     def _load_cross_encoder(model_path: str, device: str) -> Any:
-        cache_key = (model_path, device)
-        with _RERANKER_CACHE_LOCK:
-            cached = _RERANKER_CACHE.get(cache_key)
-            if cached is not None:
-                return cached
-            try:
-                from sentence_transformers import CrossEncoder
-
-                model = CrossEncoder(model_name=model_path, device=device)
-            except Exception as exc:
-                raise RetrievalException(f"加载 rerank 模型失败: {exc}") from exc
-            _RERANKER_CACHE[cache_key] = model
-            return model
+        try:
+            return get_cross_encoder(model_path=model_path, device=device)
+        except Exception as exc:
+            raise RetrievalException(f"加载 rerank 模型失败: {exc}") from exc
 
     def _rerank_items_cross_encoder(
         self,

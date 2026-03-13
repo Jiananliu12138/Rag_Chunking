@@ -95,3 +95,5 @@ eval/LongBench/embeddings/__pycache__/base.cpython-310.pyc
 eval/LongBench/embeddings/__pycache__/base.cpython-310.pyc
 **/__pycache__/
 **/*.pyc
+
+test_database/

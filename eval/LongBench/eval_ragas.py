@@ -8,6 +8,7 @@ RAGAS 端到端评估器 (简化版)
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -23,9 +24,13 @@ from ragas.metrics import (
 from ragas.metrics._context_entities_recall import ContextEntityRecall
 from ragas.metrics._noise_sensitivity import NoiseSensitivity
 from ragas.llms import llm_factory
-from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.cache import DiskCacheBackend
-from langchain_huggingface import HuggingFaceEmbeddings
+
+SERVER_DIR = Path(__file__).resolve().parents[2] / "server"
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
+
+from app.core.model_factory import get_ragas_embeddings
 
 
 def _is_nan(value):
@@ -97,15 +102,11 @@ class RAGASEvaluator:
         print(f"  模型: {embedding_model_path}")
         print(f"  设备: {device}")
         
-        # 创建 LangChain HuggingFaceEmbeddings
-        langchain_embeddings = HuggingFaceEmbeddings(
-            model_name=embedding_model_path,
-            model_kwargs={'device': device},
-            encode_kwargs={'batch_size': 16, 'normalize_embeddings': True}
+        self.eval_embeddings = get_ragas_embeddings(
+            model_path=embedding_model_path,
+            device=device,
+            encode_kwargs={"batch_size": 16, "normalize_embeddings": True},
         )
-        
-        # 使用 RAGAS 的 LangchainEmbeddingsWrapper 包装
-        self.eval_embeddings = LangchainEmbeddingsWrapper(langchain_embeddings)
         print("✅ Embeddings 初始化完成")
         
         if enable_cache:

@@ -2,12 +2,12 @@
 Vector index service.
 Handles embedding model loading, index build/add, and collection management.
 """
-from threading import Lock
 from typing import Any, Tuple
 
 from app.config import get_settings
 from app.core.exceptions import IndexBuildException, ModelLoadException
 from app.core.logging_config import logger
+from app.core.model_factory import get_langchain_embeddings
 from app.repositories.file_repository import FileRepository
 from app.repositories.milvus_repository import MilvusRepository
 from app.schemas.index_schema import (
@@ -22,10 +22,6 @@ from app.schemas.index_schema import (
     IndexDeleteByMetadataRequest,
 )
 
-_EMBED_MODEL_CACHE: dict[str, Any] = {}
-_EMBED_MODEL_CACHE_LOCK = Lock()
-
-
 class IndexService:
     def __init__(self, milvus_repo: MilvusRepository):
         self._repo = milvus_repo
@@ -33,52 +29,15 @@ class IndexService:
     @staticmethod
     def _load_langchain_embed(embed_model_path: str):
         """Load and cache the embedding model used by retrieval and indexing."""
-        cache_key = str(embed_model_path).strip()
-        with _EMBED_MODEL_CACHE_LOCK:
-            cached = _EMBED_MODEL_CACHE.get(cache_key)
-            if cached is not None:
-                return cached
-
-            try:
-                import torch
-
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-            except Exception:
-                device = "cpu"
-
-            try:
-                from app.core.path_setup import ensure_paths
-
-                ensure_paths()
-                from embeddings.base import HuggingfaceEmbeddings  # noqa: PLC0415
-
-                model = HuggingfaceEmbeddings(
-                    model_name=embed_model_path,
-                    model_kwargs={"device": device},
-                )
-            except ImportError:
-                model = None
-            except Exception as exc:
-                raise ModelLoadException(
-                    f"嵌入模型加载失败 ({embed_model_path}): {exc}"
-                ) from exc
-
-            if model is None:
-                try:
-                    from langchain_huggingface import HuggingFaceEmbeddings
-
-                    model = HuggingFaceEmbeddings(
-                        model_name=embed_model_path,
-                        model_kwargs={"device": device},
-                        encode_kwargs={"normalize_embeddings": True},
-                    )
-                except Exception as exc:
-                    raise ModelLoadException(
-                        f"嵌入模型加载失败 ({embed_model_path}): {exc}"
-                    ) from exc
-
-            _EMBED_MODEL_CACHE[cache_key] = model
-            return model
+        try:
+            return get_langchain_embeddings(
+                model_path=embed_model_path,
+                encode_kwargs={"normalize_embeddings": True},
+            )
+        except Exception as exc:
+            raise ModelLoadException(
+                f"嵌入模型加载失败 ({embed_model_path}): {exc}"
+            ) from exc
 
     @classmethod
     def _load_chunks_and_metadata_from_file(
