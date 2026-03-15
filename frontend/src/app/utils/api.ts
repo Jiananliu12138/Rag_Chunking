@@ -7,6 +7,20 @@ export interface ApiResponse<T = any> {
   data: T;
 }
 
+export interface FileBrowserEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size_bytes?: number | null;
+}
+
+export interface FileBrowserResult {
+  current_path: string;
+  parent_path?: string | null;
+  roots: string[];
+  entries: FileBrowserEntry[];
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
@@ -152,4 +166,10 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(data),
   }),
+
+  // Filesystem browser
+  browseFiles: (path?: string) => {
+    const params = path ? `?path=${encodeURIComponent(path)}` : '';
+    return fetchApi<FileBrowserResult>(`/files/browse${params}`);
+  },
 };

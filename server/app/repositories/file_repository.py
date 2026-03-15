@@ -11,6 +11,61 @@ from app.core.logging_config import logger
 
 
 class FileRepository:
+    @staticmethod
+    def list_roots() -> list[str]:
+        if os.name == "nt":
+            roots: list[str] = []
+            for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+                drive = f"{letter}:\\"
+                if os.path.exists(drive):
+                    roots.append(drive)
+            return roots or [str(Path.cwd().anchor or Path.cwd())]
+
+        return [os.path.sep]
+
+    @staticmethod
+    def resolve_directory(path: str | None) -> Path:
+        if path and str(path).strip():
+            candidate = Path(str(path).strip()).expanduser()
+            if candidate.is_file():
+                return candidate.parent.resolve()
+            return candidate.resolve()
+        return Path.cwd().resolve()
+
+    @staticmethod
+    def list_directory(path: str | None = None) -> dict[str, Any]:
+        directory = FileRepository.resolve_directory(path)
+        if not directory.exists():
+            raise FileNotFoundError(f"目录不存在: {directory}")
+        if not directory.is_dir():
+            raise NotADirectoryError(f"路径不是目录: {directory}")
+
+        entries: list[dict[str, Any]] = []
+        for item in sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+            try:
+                stat = item.stat()
+                size_bytes = None if item.is_dir() else int(stat.st_size)
+            except OSError:
+                size_bytes = None
+            entries.append(
+                {
+                    "name": item.name,
+                    "path": str(item.resolve()),
+                    "is_dir": item.is_dir(),
+                    "size_bytes": size_bytes,
+                }
+            )
+
+        parent_path = None
+        if directory.parent != directory:
+            parent_path = str(directory.parent.resolve())
+
+        return {
+            "current_path": str(directory),
+            "parent_path": parent_path,
+            "roots": FileRepository.list_roots(),
+            "entries": entries,
+        }
 
     @staticmethod
     def _normalize_string_list(value: Any) -> list[str]:

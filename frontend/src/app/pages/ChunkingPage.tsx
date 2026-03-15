@@ -17,6 +17,7 @@ import {
 import { Loader2, FileText, Type, Scissors, X, Eraser } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
+import { PathPickerButton } from '../components/PathPickerButton';
 
 interface ChunkMethod {
   name: string;
@@ -422,21 +423,39 @@ export default function ChunkingPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label>Input File Path</Label>
-                    <Input
-                      value={inputPath}
-                      onChange={(e) => setInputPath(e.target.value)}
-                      onKeyDown={tabFill(setInputPath)}
-                      placeholder="/path/to/input.json"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={inputPath}
+                        onChange={(e) => setInputPath(e.target.value)}
+                        onKeyDown={tabFill(setInputPath)}
+                        placeholder="/path/to/input.json"
+                      />
+                      <PathPickerButton
+                        mode="file"
+                        value={inputPath}
+                        title="Select Input File"
+                        description="This browser reads the filesystem on the machine running the backend service."
+                        onSelect={setInputPath}
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label>Output Directory</Label>
-                    <Input
-                      value={outputDir}
-                      onChange={(e) => setOutputDir(e.target.value)}
-                      onKeyDown={tabFill(setOutputDir)}
-                      placeholder="/path/to/output"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={outputDir}
+                        onChange={(e) => setOutputDir(e.target.value)}
+                        onKeyDown={tabFill(setOutputDir)}
+                        placeholder="/path/to/output"
+                      />
+                      <PathPickerButton
+                        mode="directory"
+                        value={outputDir}
+                        title="Select Output Directory"
+                        description="This browser reads the filesystem on the machine running the backend service."
+                        onSelect={setOutputDir}
+                      />
+                    </div>
                   </div>
                 </div>
 

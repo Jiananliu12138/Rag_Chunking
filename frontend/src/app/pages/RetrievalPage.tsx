@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Loader2, Search, Sparkles, FileText, ChevronDown, Settings2, Filter, X, ChevronsUpDown } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
+import { PathPickerButton } from '../components/PathPickerButton';
 
 interface SearchResult {
   text: string;
@@ -753,21 +754,47 @@ export default function RetrievalPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>Input file path (.jsonl)</Label>
-                  <Input
-                    value={inputPath}
-                    onChange={(e) => setInputPath(e.target.value)}
-                    onKeyDown={tabFill(setInputPath)}
-                    placeholder="/path/to/input.jsonl"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={inputPath}
+                      onChange={(e) => setInputPath(e.target.value)}
+                      onKeyDown={tabFill(setInputPath)}
+                      placeholder="/path/to/input.jsonl"
+                    />
+                    <PathPickerButton
+                      mode="file"
+                      value={inputPath}
+                      title="Select Batch Input File"
+                      description="This browser reads the filesystem on the machine running the backend service."
+                      onSelect={setInputPath}
+                    />
+                  </div>
                 </div>
                 <div>
                   <Label>Output file path (.json)</Label>
-                  <Input
-                    value={outputPath}
-                    onChange={(e) => setOutputPath(e.target.value)}
-                    onKeyDown={tabFill(setOutputPath)}
-                    placeholder="/path/to/output.json"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      value={outputPath}
+                      onChange={(e) => setOutputPath(e.target.value)}
+                      onKeyDown={tabFill(setOutputPath)}
+                      placeholder="/path/to/output.json"
+                    />
+                    <PathPickerButton
+                      mode="directory"
+                      value={outputPath}
+                      title="Select Output Directory"
+                      description="Pick the folder to write the output file into, then edit the filename if needed."
+                      onSelect={(selectedDirectory) => {
+                        const currentName = outputPath.split(/[\\/]/).filter(Boolean).at(-1);
+                        const separator = selectedDirectory.includes('\\') ? '\\' : '/';
+                        setOutputPath(
+                          currentName && currentName.includes('.')
+                            ? `${selectedDirectory}${selectedDirectory.endsWith('/') || selectedDirectory.endsWith('\\') ? '' : separator}${currentName}`
+                            : selectedDirectory,
+                        );
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 

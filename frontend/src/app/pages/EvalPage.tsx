@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -23,11 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Loader2, BarChart3, FileText, Sparkles, Settings, FolderOpen, Plus, X, FlaskConical, Sigma, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, BarChart3, FileText, Sparkles, Settings, Plus, X, FlaskConical, Sigma, ChevronDown, ChevronUp } from 'lucide-react';
 import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
+import { PathPickerButton } from '../components/PathPickerButton';
 
 export default function EvalPage() {
   const [loading, setLoading] = useState(false);
@@ -353,7 +354,6 @@ Format 2 - Current Eval Format:
   const [tempTraditionalPath, setTempTraditionalPath] = useState('');
   const [traditionalOutputPath, setTraditionalOutputPath] = useState('');
   const [traditionalFilePaths, setTraditionalFilePaths] = useState<string[]>([]);
-  const traditionalFileRef = useRef<HTMLInputElement>(null);
 
   // RAGAS Eval - Direct Input
   const [ragasDataJson, setRagasDataJson] = useState('');
@@ -363,7 +363,6 @@ Format 2 - Current Eval Format:
   const [tempRagasPath, setTempRagasPath] = useState('');
   const [ragasOutputPath, setRagasOutputPath] = useState('');
   const [ragasFilePaths, setRagasFilePaths] = useState<string[]>([]);
-  const ragasFileRef = useRef<HTMLInputElement>(null);
 
   // RAGAS Configuration (shared between direct input and file input)
   const [ragasConfigOpen, setRagasConfigOpen] = useState(false);
@@ -730,18 +729,13 @@ Format 2 - Current Eval Format:
                             }
                           }}
                         />
-                        <input
-                          type="file"
-                          ref={traditionalFileRef}
-                          accept=".json"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              toast.error(`Browser file pickers only expose "${file.name}". Please enter the server-side JSON path manually.`);
-                              if (traditionalFileRef.current) traditionalFileRef.current.value = '';
-                            }
-                          }}
+                        <PathPickerButton
+                          mode="file"
+                          value={tempTraditionalPath}
+                          allowedExtensions={['.json']}
+                          title="Select Traditional Eval File"
+                          description="This browser reads the filesystem on the machine running the backend service."
+                          onSelect={(path) => setTraditionalFilePaths((prev) => [...prev, path])}
                         />
                         <Button
                           type="button"
@@ -749,14 +743,12 @@ Format 2 - Current Eval Format:
                             if (tempTraditionalPath.trim()) {
                               setTraditionalFilePaths([...traditionalFilePaths, tempTraditionalPath.trim()]);
                               setTempTraditionalPath('');
-                            } else {
-                              traditionalFileRef.current?.click();
                             }
                           }}
                           size="sm"
                           variant="outline"
                         >
-                          {tempTraditionalPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                          <Plus className="w-4 h-4" />
                         </Button>
                       </div>
                       {traditionalFilePaths.length > 0 && (
@@ -786,12 +778,29 @@ Format 2 - Current Eval Format:
 
                     <div>
                       <Label>Output Summary JSON Path</Label>
-                      <Input
-                        value={traditionalOutputPath}
-                        onChange={(e) => setTraditionalOutputPath(e.target.value)}
-                        onKeyDown={(e) => fillPlaceholderOnTab(e, traditionalOutputPath, e.currentTarget.placeholder, setTraditionalOutputPath)}
-                        placeholder="/path/to/traditional_eval_summary.json"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={traditionalOutputPath}
+                          onChange={(e) => setTraditionalOutputPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, traditionalOutputPath, e.currentTarget.placeholder, setTraditionalOutputPath)}
+                          placeholder="/path/to/traditional_eval_summary.json"
+                        />
+                        <PathPickerButton
+                          mode="directory"
+                          value={traditionalOutputPath}
+                          title="Select Output Directory"
+                          description="Pick the folder to write the summary file into, then edit the filename if needed."
+                          onSelect={(selectedDirectory) => {
+                            const currentName = traditionalOutputPath.split(/[\\/]/).filter(Boolean).at(-1);
+                            const separator = selectedDirectory.includes('\\') ? '\\' : '/';
+                            setTraditionalOutputPath(
+                              currentName && currentName.includes('.')
+                                ? `${selectedDirectory}${selectedDirectory.endsWith('/') || selectedDirectory.endsWith('\\') ? '' : separator}${currentName}`
+                                : selectedDirectory,
+                            );
+                          }}
+                        />
+                      </div>
                       <p className="text-xs text-slate-500 mt-1">
                         Optional. If provided, the backend will write the summary metrics to this JSON file.
                       </p>
@@ -1060,18 +1069,13 @@ Format 2 - Current Eval Format:
                             }
                           }}
                         />
-                        <input
-                          type="file"
-                          ref={ragasFileRef}
-                          accept=".json"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              toast.error(`Browser file pickers only expose "${file.name}". Please enter the server-side JSON path manually.`);
-                              if (ragasFileRef.current) ragasFileRef.current.value = '';
-                            }
-                          }}
+                        <PathPickerButton
+                          mode="file"
+                          value={tempRagasPath}
+                          allowedExtensions={['.json']}
+                          title="Select RAGAS Eval File"
+                          description="This browser reads the filesystem on the machine running the backend service."
+                          onSelect={(path) => setRagasFilePaths((prev) => [...prev, path])}
                         />
                         <Button
                           type="button"
@@ -1079,14 +1083,12 @@ Format 2 - Current Eval Format:
                             if (tempRagasPath.trim()) {
                               setRagasFilePaths([...ragasFilePaths, tempRagasPath.trim()]);
                               setTempRagasPath('');
-                            } else {
-                              ragasFileRef.current?.click();
                             }
                           }}
                           size="sm"
                           variant="outline"
                         >
-                          {tempRagasPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                          <Plus className="w-4 h-4" />
                         </Button>
                       </div>
                       {ragasFilePaths.length > 0 && (
@@ -1119,12 +1121,29 @@ Format 2 - Current Eval Format:
 
                     <div>
                       <Label>Output Summary JSON Path</Label>
-                      <Input
-                        value={ragasOutputPath}
-                        onChange={(e) => setRagasOutputPath(e.target.value)}
-                        onKeyDown={(e) => fillPlaceholderOnTab(e, ragasOutputPath, e.currentTarget.placeholder, setRagasOutputPath)}
-                        placeholder="/path/to/ragas_eval_summary.json"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={ragasOutputPath}
+                          onChange={(e) => setRagasOutputPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, ragasOutputPath, e.currentTarget.placeholder, setRagasOutputPath)}
+                          placeholder="/path/to/ragas_eval_summary.json"
+                        />
+                        <PathPickerButton
+                          mode="directory"
+                          value={ragasOutputPath}
+                          title="Select Output Directory"
+                          description="Pick the folder to write the summary file into, then edit the filename if needed."
+                          onSelect={(selectedDirectory) => {
+                            const currentName = ragasOutputPath.split(/[\\/]/).filter(Boolean).at(-1);
+                            const separator = selectedDirectory.includes('\\') ? '\\' : '/';
+                            setRagasOutputPath(
+                              currentName && currentName.includes('.')
+                                ? `${selectedDirectory}${selectedDirectory.endsWith('/') || selectedDirectory.endsWith('\\') ? '' : separator}${currentName}`
+                                : selectedDirectory,
+                            );
+                          }}
+                        />
+                      </div>
                       <p className="text-xs text-slate-500 mt-1">
                         Optional. If provided, the backend will write the summary result to this JSON file.
                       </p>

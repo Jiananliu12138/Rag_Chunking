@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import React, { useState, useEffect, type KeyboardEvent } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -28,10 +28,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Loader2, Plus, Trash2, Database, Eye, RefreshCw, FileText, Filter, X, FolderOpen, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Trash2, Database, Eye, RefreshCw, FileText, X, AlertCircle } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { PathPickerButton } from '../components/PathPickerButton';
 
 interface Collection {
   name: string;
@@ -56,7 +57,6 @@ export default function IndexPage() {
   const [enableSparse, setEnableSparse] = useState(false);
   const [embedModelPath, setEmbedModelPath] = useState('');
   const [embedDim, setEmbedDim] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Add form
   const [addCollectionName, setAddCollectionName] = useState('');
@@ -64,7 +64,6 @@ export default function IndexPage() {
   const [tempAddDocPath, setTempAddDocPath] = useState(''); // For adding files
   const [addBatchSize, setAddBatchSize] = useState(100);
   const [addEmbedModelPath, setAddEmbedModelPath] = useState('');
-  const addFileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete documents dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -333,20 +332,13 @@ export default function IndexPage() {
                       }
                     }}
                   />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept=".json"
-                    className="hidden"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (files.length > 0) {
-                        const label = files.map((f) => f.name).join(', ');
-                        toast.error(`Browser file pickers only expose filenames (${label}). Please enter the server-side JSON path manually.`);
-                      }
-                      if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
+                  <PathPickerButton
+                    mode="file"
+                    value={tempDocPath}
+                    allowedExtensions={['.json']}
+                    title="Select Chunk Result Files"
+                    description="This browser reads the filesystem on the machine running the backend service."
+                    onSelect={(path) => setDocsPaths((prev) => [...prev, path])}
                   />
                   <Button
                     type="button"
@@ -354,14 +346,12 @@ export default function IndexPage() {
                       if (tempDocPath.trim()) {
                         setDocsPaths([...docsPaths, tempDocPath.trim()]);
                         setTempDocPath('');
-                      } else {
-                        fileInputRef.current?.click();
                       }
                     }}
                     size="sm"
                     variant="outline"
                   >
-                    {tempDocPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                    <Plus className="w-4 h-4" />
                   </Button>
                 </div>
                 {docsPaths.length > 0 && (
@@ -473,20 +463,13 @@ export default function IndexPage() {
                       }
                     }}
                   />
-                  <input
-                    ref={addFileInputRef}
-                    type="file"
-                    multiple
-                    accept=".json"
-                    className="hidden"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (files.length > 0) {
-                        const label = files.map((f) => f.name).join(', ');
-                        toast.error(`Browser file pickers only expose filenames (${label}). Please enter the server-side JSON path manually.`);
-                      }
-                      if (addFileInputRef.current) addFileInputRef.current.value = '';
-                    }}
+                  <PathPickerButton
+                    mode="file"
+                    value={tempAddDocPath}
+                    allowedExtensions={['.json']}
+                    title="Select Chunk Result Files"
+                    description="This browser reads the filesystem on the machine running the backend service."
+                    onSelect={(path) => setAddDocsPaths((prev) => [...prev, path])}
                   />
                   <Button
                     type="button"
@@ -494,14 +477,12 @@ export default function IndexPage() {
                       if (tempAddDocPath.trim()) {
                         setAddDocsPaths([...addDocsPaths, tempAddDocPath.trim()]);
                         setTempAddDocPath('');
-                      } else {
-                        addFileInputRef.current?.click();
                       }
                     }}
                     size="sm"
                     variant="outline"
                   >
-                    {tempAddDocPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                    <Plus className="w-4 h-4" />
                   </Button>
                 </div>
                 {addDocsPaths.length > 0 && (

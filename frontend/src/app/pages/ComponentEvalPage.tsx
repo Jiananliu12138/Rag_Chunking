@@ -18,12 +18,13 @@ import {
   DialogTrigger,
 } from '../components/ui/dialog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, FolderOpen, Plus, X, BarChart3, Sparkles, Sigma, FlaskConical, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, Plus, X, BarChart3, Sparkles, Sigma, FlaskConical, ChevronDown, ChevronUp } from 'lucide-react';
 import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
 import ForceGraph2D from 'react-force-graph-2d';
+import { PathPickerButton } from '../components/PathPickerButton';
 
 // ── Top-level dialog components (must NOT be defined inside the parent) ────────
 
@@ -482,7 +483,6 @@ export default function ComponentEvalPage() {
   const [qualityOutputPath, setQualityOutputPath] = useState('');
   const [qualityMaxEvalChunks, setQualityMaxEvalChunks] = useState('-1');
   const [qualityFilePaths, setQualityFilePaths] = useState<string[]>([]);
-  const qualityFileRef = useRef<HTMLInputElement>(null);
 
   // ── Chunk Quality – Model Config (shared) ──────────────────────────────────
   const [qualityConfigOpen, setQualityConfigOpen] = useState(false);
@@ -504,7 +504,6 @@ export default function ComponentEvalPage() {
   const [stickinessOutputPath, setStickinessOutputPath] = useState('');
   const [stickinessMaxEvalChunks, setStickinessMaxEvalChunks] = useState('-1');
   const [stickinessFilePaths, setStickinessFilePaths] = useState<string[]>([]);
-  const stickinessFileRef = useRef<HTMLInputElement>(null);
 
   // ── Chunk Stickiness – Model Config (shared) ───────────────────────────────
   const [stickinessConfigOpen, setStickinessConfigOpen] = useState(false);
@@ -521,7 +520,6 @@ export default function ComponentEvalPage() {
   const [tempRetrievalPath, setTempRetrievalPath] = useState('');
   const [retrievalOutputPath, setRetrievalOutputPath] = useState('');
   const [retrievalFilePaths, setRetrievalFilePaths] = useState<string[]>([]);
-  const retrievalFileRef = useRef<HTMLInputElement>(null);
   const [selectedRetrievalMetric, setSelectedRetrievalMetric] = useState<string | null>(null);
   const [retrievalFamilyExpanded, setRetrievalFamilyExpanded] = useState(false);
 
@@ -877,16 +875,6 @@ export default function ComponentEvalPage() {
     clearValue('');
   };
 
-  const addSelectedFile = (
-    file: File | undefined,
-    updatePaths: (updater: (prev: string[]) => string[]) => void,
-    resetInput: () => void,
-  ) => {
-    if (!file) return;
-    toast.error(`Browser file pickers only expose "${file.name}". Please enter the server-side JSON path manually.`);
-    resetInput();
-  };
-
   const removePathAtIndex = (
     index: number,
     updatePaths: (updater: (prev: string[]) => string[]) => void,
@@ -1162,16 +1150,13 @@ export default function ComponentEvalPage() {
                             }
                           }}
                         />
-                        <input
-                          type="file"
-                          ref={qualityFileRef}
-                          accept=".json"
-                          className="hidden"
-                          onChange={(e) => {
-                            addSelectedFile(e.target.files?.[0], setQualityFilePaths, () => {
-                              if (qualityFileRef.current) qualityFileRef.current.value = '';
-                            });
-                          }}
+                        <PathPickerButton
+                          mode="file"
+                          value={tempQualityPath}
+                          allowedExtensions={['.json']}
+                          title="Select Chunk Quality Eval File"
+                          description="This browser reads the filesystem on the machine running the backend service."
+                          onSelect={(path) => setQualityFilePaths((prev) => [...prev, path])}
                         />
                         <Button
                           type="button"
@@ -1180,12 +1165,10 @@ export default function ComponentEvalPage() {
                           onClick={() => {
                             if (tempQualityPath.trim()) {
                               addPendingPath(tempQualityPath, setTempQualityPath, setQualityFilePaths);
-                            } else {
-                              qualityFileRef.current?.click();
                             }
                           }}
                         >
-                          {tempQualityPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                          <Plus className="w-4 h-4" />
                         </Button>
                       </div>
                       {renderSelectedPathList(qualityFilePaths, (idx) => removePathAtIndex(idx, setQualityFilePaths))}
@@ -1208,12 +1191,29 @@ export default function ComponentEvalPage() {
                     </div>
                     <div>
                       <Label>Output Results JSON Path</Label>
-                      <Input
-                        value={qualityOutputPath}
-                        onChange={(e) => setQualityOutputPath(e.target.value)}
-                        onKeyDown={(e) => fillPlaceholderOnTab(e, qualityOutputPath, e.currentTarget.placeholder, setQualityOutputPath)}
-                        placeholder="/path/to/chunk_quality_results.json"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={qualityOutputPath}
+                          onChange={(e) => setQualityOutputPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, qualityOutputPath, e.currentTarget.placeholder, setQualityOutputPath)}
+                          placeholder="/path/to/chunk_quality_results.json"
+                        />
+                        <PathPickerButton
+                          mode="directory"
+                          value={qualityOutputPath}
+                          title="Select Output Directory"
+                          description="Pick the folder to write the result file into, then edit the filename if needed."
+                          onSelect={(selectedDirectory) => {
+                            const currentName = qualityOutputPath.split(/[\\/]/).filter(Boolean).at(-1);
+                            const separator = selectedDirectory.includes('\\') ? '\\' : '/';
+                            setQualityOutputPath(
+                              currentName && currentName.includes('.')
+                                ? `${selectedDirectory}${selectedDirectory.endsWith('/') || selectedDirectory.endsWith('\\') ? '' : separator}${currentName}`
+                                : selectedDirectory,
+                            );
+                          }}
+                        />
+                      </div>
                       <p className="text-xs text-slate-500 mt-1">
                         Optional. If provided, the backend will write the complete JSON shown on the right to this file.
                       </p>
@@ -1429,16 +1429,13 @@ export default function ComponentEvalPage() {
                             }
                           }}
                         />
-                        <input
-                          type="file"
-                          ref={stickinessFileRef}
-                          accept=".json"
-                          className="hidden"
-                          onChange={(e) => {
-                            addSelectedFile(e.target.files?.[0], setStickinessFilePaths, () => {
-                              if (stickinessFileRef.current) stickinessFileRef.current.value = '';
-                            });
-                          }}
+                        <PathPickerButton
+                          mode="file"
+                          value={tempStickinessPath}
+                          allowedExtensions={['.json']}
+                          title="Select Chunk Stickiness Eval File"
+                          description="This browser reads the filesystem on the machine running the backend service."
+                          onSelect={(path) => setStickinessFilePaths((prev) => [...prev, path])}
                         />
                         <Button
                           type="button"
@@ -1447,24 +1444,39 @@ export default function ComponentEvalPage() {
                           onClick={() => {
                             if (tempStickinessPath.trim()) {
                               addPendingPath(tempStickinessPath, setTempStickinessPath, setStickinessFilePaths);
-                            } else {
-                              stickinessFileRef.current?.click();
                             }
                           }}
                         >
-                          {tempStickinessPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                          <Plus className="w-4 h-4" />
                         </Button>
                       </div>
                       {renderSelectedPathList(stickinessFilePaths, (idx) => removePathAtIndex(idx, setStickinessFilePaths))}
                     </div>
                     <div>
                       <Label>Output Results JSON Path</Label>
-                      <Input
-                        value={stickinessOutputPath}
-                        onChange={(e) => setStickinessOutputPath(e.target.value)}
-                        onKeyDown={(e) => fillPlaceholderOnTab(e, stickinessOutputPath, e.currentTarget.placeholder, setStickinessOutputPath)}
-                        placeholder="/path/to/chunk_stickiness_results.json"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={stickinessOutputPath}
+                          onChange={(e) => setStickinessOutputPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, stickinessOutputPath, e.currentTarget.placeholder, setStickinessOutputPath)}
+                          placeholder="/path/to/chunk_stickiness_results.json"
+                        />
+                        <PathPickerButton
+                          mode="directory"
+                          value={stickinessOutputPath}
+                          title="Select Output Directory"
+                          description="Pick the folder to write the result file into, then edit the filename if needed."
+                          onSelect={(selectedDirectory) => {
+                            const currentName = stickinessOutputPath.split(/[\\/]/).filter(Boolean).at(-1);
+                            const separator = selectedDirectory.includes('\\') ? '\\' : '/';
+                            setStickinessOutputPath(
+                              currentName && currentName.includes('.')
+                                ? `${selectedDirectory}${selectedDirectory.endsWith('/') || selectedDirectory.endsWith('\\') ? '' : separator}${currentName}`
+                                : selectedDirectory,
+                            );
+                          }}
+                        />
+                      </div>
                       <p className="text-xs text-slate-500 mt-1">
                         Optional. If provided, the backend will write the complete JSON shown below to this file.
                       </p>
@@ -1784,30 +1796,25 @@ export default function ComponentEvalPage() {
                             }
                           }}
                         />
-                        <input
-                          type="file"
-                          ref={retrievalFileRef}
-                          accept=".json"
-                          className="hidden"
-                          onChange={(e) => {
-                            addSelectedFile(e.target.files?.[0], setRetrievalFilePaths, () => {
-                              if (retrievalFileRef.current) retrievalFileRef.current.value = '';
-                            });
-                          }}
+                        <PathPickerButton
+                          mode="file"
+                          value={tempRetrievalPath}
+                          allowedExtensions={['.json']}
+                          title="Select Retrieval Eval File"
+                          description="This browser reads the filesystem on the machine running the backend service."
+                          onSelect={(path) => setRetrievalFilePaths((prev) => [...prev, path])}
                         />
                         <Button
                           type="button"
                           onClick={() => {
                             if (tempRetrievalPath.trim()) {
                               addPendingPath(tempRetrievalPath, setTempRetrievalPath, setRetrievalFilePaths);
-                            } else {
-                              retrievalFileRef.current?.click();
                             }
                           }}
                           size="sm"
                           variant="outline"
                         >
-                          {tempRetrievalPath.trim() ? <Plus className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
+                          <Plus className="w-4 h-4" />
                         </Button>
                       </div>
                       {renderSelectedPathList(retrievalFilePaths, (idx) => removePathAtIndex(idx, setRetrievalFilePaths))}
@@ -1815,12 +1822,29 @@ export default function ComponentEvalPage() {
 
                     <div>
                       <Label>Output Summary JSON Path</Label>
-                      <Input
-                        value={retrievalOutputPath}
-                        onChange={(e) => setRetrievalOutputPath(e.target.value)}
-                        onKeyDown={(e) => fillPlaceholderOnTab(e, retrievalOutputPath, e.currentTarget.placeholder, setRetrievalOutputPath)}
-                        placeholder="/path/to/retrieval_eval_summary.json"
-                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={retrievalOutputPath}
+                          onChange={(e) => setRetrievalOutputPath(e.target.value)}
+                          onKeyDown={(e) => fillPlaceholderOnTab(e, retrievalOutputPath, e.currentTarget.placeholder, setRetrievalOutputPath)}
+                          placeholder="/path/to/retrieval_eval_summary.json"
+                        />
+                        <PathPickerButton
+                          mode="directory"
+                          value={retrievalOutputPath}
+                          title="Select Output Directory"
+                          description="Pick the folder to write the summary file into, then edit the filename if needed."
+                          onSelect={(selectedDirectory) => {
+                            const currentName = retrievalOutputPath.split(/[\\/]/).filter(Boolean).at(-1);
+                            const separator = selectedDirectory.includes('\\') ? '\\' : '/';
+                            setRetrievalOutputPath(
+                              currentName && currentName.includes('.')
+                                ? `${selectedDirectory}${selectedDirectory.endsWith('/') || selectedDirectory.endsWith('\\') ? '' : separator}${currentName}`
+                                : selectedDirectory,
+                            );
+                          }}
+                        />
+                      </div>
                       <p className="text-xs text-slate-500 mt-1">Optional. If provided, backend will save retrieval evaluation result JSON to this path.</p>
                     </div>
 
