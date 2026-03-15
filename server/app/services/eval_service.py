@@ -8,6 +8,7 @@ from threading import Lock
 from app.config import get_settings
 from app.core.exceptions import EvaluationException
 from app.core.logging_config import logger
+from app.core.model_factory import get_ragas_embeddings
 from app.core.path_setup import ensure_paths
 from app.repositories.file_repository import FileRepository
 from app.schemas.eval_schema import (
@@ -57,11 +58,17 @@ class EvalService:
 
             from eval_ragas import RAGASEvaluator  # noqa: PLC0415
 
+            eval_embeddings = get_ragas_embeddings(
+                model_path=embedding_model_path,
+                device=device,
+                encode_kwargs={"batch_size": 16, "normalize_embeddings": True},
+            )
             evaluator = RAGASEvaluator(
                 vllm_api_base=vllm_api_base,
                 vllm_api_key=vllm_api_key,
                 vllm_model_name=vllm_model_name,
                 embedding_model_path=embedding_model_path,
+                eval_embeddings=eval_embeddings,
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,

@@ -54,6 +54,7 @@ class RAGASEvaluator:
         vllm_api_key: str = "EMPTY",
         vllm_model_name: str = "/data/h50056789/Rag_Chunking/model/Qwen/Qwen2.5-7B-Instruct",
         embedding_model_path: str = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5",
+        eval_embeddings: Optional[Any] = None,
         device: str = "cuda:0",
         enable_cache: bool = True,
         cache_dir: str = "./ragas_cache",
@@ -102,7 +103,7 @@ class RAGASEvaluator:
         print(f"  模型: {embedding_model_path}")
         print(f"  设备: {device}")
         
-        self.eval_embeddings = get_ragas_embeddings(
+        self.eval_embeddings = eval_embeddings or get_ragas_embeddings(
             model_path=embedding_model_path,
             device=device,
             encode_kwargs={"batch_size": 16, "normalize_embeddings": True},
