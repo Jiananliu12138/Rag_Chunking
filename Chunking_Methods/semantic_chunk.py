@@ -153,11 +153,30 @@ def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_M
         
         # 仅传递轻量参数，worker 内部按参数获取缓存后的 splitter
         
-        with multiprocessing.Pool(processes=num_workers) as pool:
-            results = []
-            for result in tqdm(pool.imap_unordered(process_func, lines), total=len(lines)):
-                if result:
-                    results.append(result)
+        results = []
+        if int(num_workers) <= 1:
+            splitter = init_splitter_with_params(
+                embed_model_path=embed_model_path,
+                buffer_size=buffer_size,
+                breakpoint_threshold=breakpoint_threshold
+            )
+            for line_data in tqdm(lines, total=len(lines)):
+                try:
+                    data = json.loads(line_data)
+                    doc_id = data.get('_id', '')
+                    context = data.get('context', '')
+                    if not context:
+                        continue
+                    result = process_context(context, doc_id, splitter)
+                    if result:
+                        results.append(result)
+                except Exception as e:
+                    print(f"Error processing line: {e}")
+        else:
+            with multiprocessing.Pool(processes=num_workers) as pool:
+                for result in tqdm(pool.imap_unordered(process_func, lines), total=len(lines)):
+                    if result:
+                        results.append(result)
         
         all_splits = []
         total_time = 0
