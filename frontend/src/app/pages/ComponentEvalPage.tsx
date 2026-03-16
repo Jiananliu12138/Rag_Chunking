@@ -809,6 +809,15 @@ export default function ComponentEvalPage() {
     return maxValue;
   }, [stickinessResult]);
 
+  const getForceLinkColor = useCallback((value: number) => {
+    const normalized = maxForceEdgeValue > 0 ? Math.max(0, Math.min(1, value / maxForceEdgeValue)) : 0;
+    if (normalized > 0.85) return 'rgba(30, 41, 59, 0.95)';
+    if (normalized > 0.65) return 'rgba(37, 99, 235, 0.9)';
+    if (normalized > 0.45) return 'rgba(14, 165, 233, 0.82)';
+    if (normalized > 0.25) return 'rgba(148, 163, 184, 0.72)';
+    return 'rgba(203, 213, 225, 0.58)';
+  }, [maxForceEdgeValue]);
+
   const heatmapData = useMemo(() => {
     if (!stickinessResult?.graph_complete) return [];
     const graph = stickinessResult.graph_complete;
@@ -1695,8 +1704,8 @@ export default function ComponentEvalPage() {
                             height={graphSize.height}
                             nodeLabel="name"
                             nodeAutoColorBy="id"
-                            linkWidth={(link: any) => Math.max(1, link.value * 5)}
-                            linkColor={() => 'rgba(59, 130, 246, 0.6)'}
+                            linkWidth={(link: any) => Math.max(1.2, Math.pow(link.value, 1.15) * 8)}
+                            linkColor={(link: any) => getForceLinkColor(link.value)}
                             nodeRelSize={6}
                             linkDirectionalParticles={2}
                             linkDirectionalParticleWidth={(link: any) => link.value * 4}
@@ -1789,55 +1798,84 @@ export default function ComponentEvalPage() {
                         </DialogDescription>
                       </DialogHeader>
                       {expandedVisualization === 'force' ? (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 720 }}>
-                          {forceGraphData && forceGraphData.nodes.length > 0 ? (
-                            <ForceGraph2D
-                              graphData={forceGraphData}
-                              width={1100}
-                              height={720}
-                              nodeLabel="name"
-                              nodeAutoColorBy="id"
-                              linkWidth={(link: any) => Math.max(1, link.value * 6)}
-                              linkColor={() => 'rgba(59, 130, 246, 0.65)'}
-                              nodeRelSize={7}
-                              linkDirectionalParticles={2}
-                              linkDirectionalParticleWidth={(link: any) => link.value * 4}
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-center text-slate-400">
-                              <div>
-                                <Network className="mx-auto mb-2 h-12 w-12 opacity-50" />
-                                <p>No edges above visualization threshold</p>
-                                <p className="text-xs">Current max edge value: {maxForceEdgeValue.toFixed(3)}</p>
+                        <div className="space-y-4">
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 720 }}>
+                            {forceGraphData && forceGraphData.nodes.length > 0 ? (
+                              <ForceGraph2D
+                                graphData={forceGraphData}
+                                width={1100}
+                                height={720}
+                                nodeLabel="name"
+                                nodeAutoColorBy="id"
+                            linkWidth={(link: any) => Math.max(1.4, Math.pow(link.value, 1.15) * 10)}
+                            linkColor={(link: any) => getForceLinkColor(link.value)}
+                                nodeRelSize={7}
+                                linkDirectionalParticles={2}
+                                linkDirectionalParticleWidth={(link: any) => link.value * 4}
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-center text-slate-400">
+                                <div>
+                                  <Network className="mx-auto mb-2 h-12 w-12 opacity-50" />
+                                  <p>No edges above visualization threshold</p>
+                                  <p className="text-xs">Current max edge value: {maxForceEdgeValue.toFixed(3)}</p>
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-2">
+                              <div className="h-1 w-8 rounded-full bg-slate-300" />
+                              Lower edge value
+                            </span>
+                            <span className="text-slate-500">Current max edge value: {maxForceEdgeValue.toFixed(3)}</span>
+                            <span className="flex items-center gap-2">
+                              <div className="h-2 w-8 rounded-full bg-slate-800" />
+                              Higher edge value
+                            </span>
+                          </div>
                         </div>
                       ) : heatmapData.length > 0 ? (
-                        <ScrollArea className="h-[720px]">
-                          <div
-                            className="grid gap-1"
-                            style={{
-                              gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(0, 1fr))`,
-                            }}
-                          >
-                            {heatmapData.map((cell, idx) => (
-                              <div
-                                key={`expanded-${idx}`}
-                                className="relative aspect-square rounded-sm border border-slate-200"
-                                style={{ backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})` }}
-                                title={`Chunk ${cell.x} -> ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
-                              >
-                                {cell.aboveThreshold ? (
-                                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
-                                ) : null}
-                                <span className="absolute inset-x-0 bottom-0 truncate px-1 pb-0.5 text-center text-[10px] font-medium text-white/90 mix-blend-plus-lighter">
-                                  {cell.dissimilarity.toFixed(2)}
-                                </span>
-                              </div>
-                            ))}
+                        <div className="space-y-4">
+                          <ScrollArea className="h-[720px]">
+                            <div
+                              className="grid gap-1"
+                              style={{
+                                gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(0, 1fr))`,
+                              }}
+                            >
+                              {heatmapData.map((cell, idx) => (
+                                <div
+                                  key={`expanded-${idx}`}
+                                  className="relative aspect-square rounded-sm border border-slate-200"
+                                  style={{ backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})` }}
+                                  title={`Chunk ${cell.x} -> ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
+                                >
+                                  {cell.aboveThreshold ? (
+                                    <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
+                                  ) : null}
+                                  <span className="absolute inset-x-0 bottom-0 truncate px-1 pb-0.5 text-center text-[10px] font-medium text-white/90 mix-blend-plus-lighter">
+                                    {cell.dissimilarity.toFixed(2)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="flex items-center gap-2">
+                              <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />
+                              Low edge value
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <div className="w-4 h-4 bg-rose-600 rounded border border-slate-200" />
+                              High edge value
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full border border-white/80 bg-slate-950/80" />
+                              Above threshold
+                            </span>
                           </div>
-                        </ScrollArea>
+                        </div>
                       ) : (
                         <div className="py-12 text-center text-slate-400">
                           <Grid3x3 className="mx-auto mb-2 h-12 w-12 opacity-50" />
