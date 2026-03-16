@@ -477,9 +477,11 @@ export default function ComponentEvalPage() {
 
   // ── Force graph container sizing ───────────────────────────────────────────
   const graphContainerRef = useRef<HTMLDivElement>(null);
+  const forceGraphRef = useRef<any>(null);
   const [graphSize, setGraphSize] = useState({ width: 460, height: 480 });
   const expandedGraphContainerRef = useRef<HTMLDivElement>(null);
-  const [expandedGraphSize, setExpandedGraphSize] = useState({ width: 1200, height: 840 });
+  const expandedForceGraphRef = useRef<any>(null);
+  const [expandedGraphSize, setExpandedGraphSize] = useState({ width: 1480, height: 920 });
 
   useEffect(() => {
     if (!graphContainerRef.current) return;
@@ -501,8 +503,8 @@ export default function ComponentEvalPage() {
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {
-        const nextWidth = Math.max(720, Math.floor(entry.contentRect.width));
-        const nextHeight = Math.max(720, Math.floor(entry.contentRect.height));
+        const nextWidth = Math.max(980, Math.floor(entry.contentRect.width));
+        const nextHeight = Math.max(760, Math.floor(entry.contentRect.height));
         setExpandedGraphSize({
           width: nextWidth,
           height: nextHeight,
@@ -779,6 +781,29 @@ export default function ComponentEvalPage() {
     if (normalized > 0.25) return 'rgba(250, 204, 21, 0.8)';
     return 'rgba(148, 163, 184, 0.5)';
   }, [maxForceEdgeValue]);
+
+  const fitForceGraphInView = useCallback((graphRef: React.MutableRefObject<any>, durationMs = 600) => {
+    const graph = graphRef.current;
+    if (!graph || !forceGraphData?.nodes?.length) return;
+    requestAnimationFrame(() => {
+      try {
+        graph.zoomToFit(durationMs, 80);
+      } catch {
+        // Ignore transient mount timing issues from canvas lifecycle.
+      }
+    });
+  }, [forceGraphData]);
+
+  useEffect(() => {
+    if (!forceGraphData?.nodes?.length) return;
+    fitForceGraphInView(forceGraphRef, 480);
+  }, [forceGraphData, graphSize.width, graphSize.height, fitForceGraphInView]);
+
+  useEffect(() => {
+    if (expandedVisualization !== 'force' || !forceGraphData?.nodes?.length) return;
+    const timer = window.setTimeout(() => fitForceGraphInView(expandedForceGraphRef, 700), 120);
+    return () => window.clearTimeout(timer);
+  }, [expandedVisualization, expandedGraphSize.width, expandedGraphSize.height, forceGraphData, fitForceGraphInView]);
 
   const heatmapData = useMemo(() => {
     if (!stickinessResult?.graph_complete) return [];
@@ -1662,6 +1687,7 @@ export default function ComponentEvalPage() {
                       >
                         {forceGraphData && forceGraphData.nodes.length > 0 ? (
                           <ForceGraph2D
+                            ref={forceGraphRef}
                             graphData={forceGraphData}
                             width={graphSize.width}
                             height={graphSize.height}
@@ -1672,6 +1698,7 @@ export default function ComponentEvalPage() {
                             nodeRelSize={6}
                             linkDirectionalParticles={2}
                             linkDirectionalParticleWidth={(link: any) => link.value * 4}
+                            onEngineStop={() => fitForceGraphInView(forceGraphRef, 420)}
                           />
                         ) : (
                           <div className="h-full flex items-center justify-center">
@@ -1749,26 +1776,27 @@ export default function ComponentEvalPage() {
                   </div>
 
                     <Dialog open={expandedVisualization !== null} onOpenChange={(open) => !open && setExpandedVisualization(null)}>
-                    <DialogContent className="h-[97vh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto p-4 sm:p-6">
-                      <DialogHeader>
-                        <DialogTitle>
-                          {expandedVisualization === 'force' ? 'Chunk Dependency Graph' : 'Edge Value Heatmap'}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {expandedVisualization === 'force'
-                            ? 'Expanded view of normalized graph edges above the visualization threshold.'
-                            : 'Expanded matrix view of normalized graph edge values.'}
-                        </DialogDescription>
-                      </DialogHeader>
-                      {expandedVisualization === 'force' ? (
-                        <div className="space-y-4">
+                    <DialogContent className="h-[97vh] w-[min(99vw,1900px)] max-w-none overflow-hidden border border-slate-200/90 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-0 shadow-2xl">
+                      <div className="flex h-full flex-col">
+                        <DialogHeader className="shrink-0 border-b border-slate-200/80 px-6 pb-4 pt-5">
+                          <DialogTitle>
+                            {expandedVisualization === 'force' ? 'Chunk Dependency Graph' : 'Edge Value Heatmap'}
+                          </DialogTitle>
+                          <DialogDescription>
+                            {expandedVisualization === 'force'
+                              ? 'Expanded view of normalized graph edges above the visualization threshold.'
+                              : 'Expanded matrix view of normalized graph edge values.'}
+                          </DialogDescription>
+                        </DialogHeader>
+                        {expandedVisualization === 'force' ? (
+                        <div className="flex min-h-0 flex-1 flex-col space-y-4 p-4 sm:p-5">
                           <div
                             ref={expandedGraphContainerRef}
-                            className="mx-auto w-full rounded-lg border border-slate-200 bg-slate-50 overflow-hidden"
-                            style={{ height: '78vh' }}
+                            className="mx-auto h-full w-full rounded-xl border border-slate-300/80 bg-slate-50 shadow-inner overflow-hidden"
                           >
                             {forceGraphData && forceGraphData.nodes.length > 0 ? (
                               <ForceGraph2D
+                                ref={expandedForceGraphRef}
                                 graphData={forceGraphData}
                                 width={expandedGraphSize.width}
                                 height={expandedGraphSize.height}
@@ -1779,6 +1807,7 @@ export default function ComponentEvalPage() {
                                 nodeRelSize={7}
                                 linkDirectionalParticles={2}
                                 linkDirectionalParticleWidth={(link: any) => link.value * 4}
+                                onEngineStop={() => fitForceGraphInView(expandedForceGraphRef, 600)}
                               />
                             ) : (
                               <div className="flex h-full items-center justify-center text-center text-slate-400">
@@ -1803,9 +1832,9 @@ export default function ComponentEvalPage() {
                           </div>
                         </div>
                       ) : heatmapData.length > 0 ? (
-                        <div className="space-y-4">
-                          <div className="mx-auto w-full rounded-lg border border-slate-200 bg-slate-50 p-3 sm:p-4">
-                            <ScrollArea className="h-[80vh] w-full">
+                        <div className="min-h-0 flex-1 space-y-4 p-4 sm:p-5">
+                          <div className="mx-auto h-full w-full rounded-xl border border-slate-300/80 bg-slate-50 p-3 shadow-inner sm:p-4">
+                            <ScrollArea className="h-full w-full">
                               <div
                                 className="grid gap-1"
                                 style={{
@@ -1846,11 +1875,12 @@ export default function ComponentEvalPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="py-12 text-center text-slate-400">
+                        <div className="flex min-h-0 flex-1 items-center justify-center py-12 text-center text-slate-400">
                           <Grid3x3 className="mx-auto mb-2 h-12 w-12 opacity-50" />
                           <p>No heatmap data available</p>
                         </div>
                       )}
+                      </div>
                     </DialogContent>
                   </Dialog>
 
