@@ -179,6 +179,7 @@ class ComponentEvalService:
             chunks=chunks,
             threshold=request.threshold,
             delta=request.delta,
+            score_temperature=request.score_temperature,
             model_path=request.model_path,
             use_vllm=request.use_vllm,
             vllm_api_base=request.vllm_api_base,
@@ -202,6 +203,7 @@ class ComponentEvalService:
             chunks=chunks,
             threshold=request.threshold,
             delta=request.delta,
+            score_temperature=request.score_temperature,
             model_path=request.model_path,
             use_vllm=request.use_vllm,
             vllm_api_base=request.vllm_api_base,
@@ -216,6 +218,7 @@ class ComponentEvalService:
         chunks: list[str],
         threshold: Optional[float],
         delta: Optional[float],
+        score_temperature: Optional[float],
         model_path: Optional[str],
         use_vllm: Optional[bool],
         vllm_api_base: Optional[str],
@@ -234,6 +237,11 @@ class ComponentEvalService:
 
             use_threshold = threshold if threshold is not None else settings.STICKINESS_THRESHOLD
             use_delta = delta if delta is not None else settings.STICKINESS_DELTA
+            use_score_temperature = (
+                score_temperature
+                if score_temperature is not None
+                else settings.STICKINESS_SCORE_TEMPERATURE
+            )
 
             use_vllm_flag = bool(use_vllm)
             vllm_base = vllm_api_base or settings.DEFAULT_VLLM_API_BASE
@@ -243,6 +251,7 @@ class ComponentEvalService:
                 model_path=stickiness_model,
                 threshold=use_threshold,
                 delta=use_delta,
+                score_temperature=use_score_temperature,
                 use_vllm=use_vllm_flag,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,

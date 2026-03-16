@@ -494,10 +494,11 @@ export default function ComponentEvalPage() {
 
   // ── Chunk Stickiness – Direct Input ────────────────────────────────────────
   const [stickinessChunksJson, setStickinessChunksJson] = useState('');
-  const [threshold, setThreshold] = useState([0.8]);
-  const [delta, setDelta] = useState([0.0]);
+  const [threshold, setThreshold] = useState([0.7]);
+  const [delta, setDelta] = useState([0.01]);
+  const [scoreTemperature, setScoreTemperature] = useState([6.0]);
   const [stickinessResult, setStickinessResult] = useState<any>(null);
-  const [similarityThreshold, setSimilarityThreshold] = useState([0.8]);
+  const [similarityThreshold, setSimilarityThreshold] = useState([0.7]);
 
   // ── Chunk Stickiness – File Input ──────────────────────────────────────────
   const [tempStickinessPath, setTempStickinessPath] = useState('');
@@ -649,7 +650,12 @@ export default function ComponentEvalPage() {
     setLoading(true);
     try {
       const chunks = JSON.parse(stickinessChunksJson);
-      const data = buildStickinessData({ chunks, threshold: threshold[0], delta: delta[0] });
+      const data = buildStickinessData({
+        chunks,
+        threshold: threshold[0],
+        delta: delta[0],
+        score_temperature: scoreTemperature[0],
+      });
       const response = await api.chunkStickiness(data);
       if (response.success) {
         setStickinessResult(response.data);
@@ -678,6 +684,7 @@ export default function ComponentEvalPage() {
         max_eval_chunks: maxEvalChunks,
         threshold: threshold[0],
         delta: delta[0],
+        score_temperature: scoreTemperature[0],
       });
       const response = await api.chunkStickinessFile(data);
       if (response.success) {
@@ -796,15 +803,19 @@ export default function ComponentEvalPage() {
     const data: any[] = [];
     nodeIds.forEach((i) => {
       nodeIds.forEach((j) => {
-        const weight = graph[i]?.[j] ?? 1;
+        const dissimilarity = graph[i]?.[j] ?? 1;
         const ii = parseInt(i);
         const jj = parseInt(j);
-        const similarity = ii === jj ? 1 : Math.max(0, 1 - weight);
-        data.push({ x: ii, y: jj, similarity });
+        data.push({
+          x: ii,
+          y: jj,
+          dissimilarity,
+          aboveThreshold: ii !== jj && dissimilarity > threshold[0],
+        });
       });
     });
     return data;
-  }, [stickinessResult]);
+  }, [stickinessResult, threshold]);
 
   const retrievalMetricsByCut = useMemo(() => {
     const agg = retrievalResult?.aggregated;
@@ -1507,7 +1518,7 @@ export default function ComponentEvalPage() {
                   <p className="text-sm text-slate-600 mb-4">
                     Adjust parameters to see their impact on graph structure and entropy
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label>Threshold</Label>
@@ -1516,7 +1527,7 @@ export default function ComponentEvalPage() {
                       <Slider
                         value={threshold}
                         onValueChange={setThreshold}
-                        min={0}
+                        min={0.5}
                         max={1}
                         step={0.01}
                         disabled={loading}
@@ -1532,11 +1543,26 @@ export default function ComponentEvalPage() {
                         value={delta}
                         onValueChange={setDelta}
                         min={0}
-                        max={1}
+                        max={0.2}
                         step={0.01}
                         disabled={loading}
                       />
                       <p className="text-xs text-slate-500">Higher values favor adjacent chunks</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>BC Temperature</Label>
+                        <span className="text-sm font-mono text-slate-600">{scoreTemperature[0].toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        value={scoreTemperature}
+                        onValueChange={setScoreTemperature}
+                        min={1}
+                        max={12}
+                        step={0.5}
+                        disabled={loading}
+                      />
+                      <p className="text-xs text-slate-500">Higher values stretch the high-score region of BC mapping</p>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -1546,7 +1572,7 @@ export default function ComponentEvalPage() {
                       <Slider
                         value={similarityThreshold}
                         onValueChange={setSimilarityThreshold}
-                        min={0}
+                        min={0.5}
                         max={1}
                         step={0.01}
                         disabled={loading}
@@ -1672,10 +1698,10 @@ export default function ComponentEvalPage() {
                     <Card className="p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <Grid3x3 className="w-5 h-5" />
-                        <h3 className="font-bold">Similarity Heatmap</h3>
+                        <h3 className="font-bold">Dissimilarity Heatmap</h3>
                       </div>
                       <p className="text-sm text-slate-600 mb-4">
-                        Matrix view of pairwise chunk similarities (complete graph)
+                        Matrix view of the normalized graph dissimilarity weights returned by the backend
                       </p>
                       {heatmapData.length > 0 ? (
                         <ScrollArea className="h-[480px]">
@@ -1688,20 +1714,31 @@ export default function ComponentEvalPage() {
                             {heatmapData.map((cell, idx) => (
                               <div
                                 key={idx}
-                                className="aspect-square rounded-sm border border-slate-200"
-                                style={{ backgroundColor: `rgba(59, 130, 246, ${cell.similarity})` }}
-                                title={`Chunk ${cell.x} → ${cell.y}: ${cell.similarity.toFixed(3)}`}
-                              />
+                                className="relative aspect-square rounded-sm border border-slate-200"
+                                style={{ backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})` }}
+                                title={`Chunk ${cell.x} -> ${cell.y}: dissimilarity=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
+                              >
+                                {cell.aboveThreshold ? (
+                                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
+                                ) : null}
+                                <span className="absolute inset-x-0 bottom-0 truncate px-1 pb-0.5 text-center text-[10px] font-medium text-white/90 mix-blend-plus-lighter">
+                                  {cell.dissimilarity.toFixed(2)}
+                                </span>
+                              </div>
                             ))}
                           </div>
                           <div className="flex items-center justify-between mt-4 text-xs">
                             <span className="flex items-center gap-2">
-                              <div className="w-4 h-4 bg-blue-100 rounded border border-slate-200" />
-                              Low similarity
+                              <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />
+                              Low dissimilarity
                             </span>
                             <span className="flex items-center gap-2">
-                              <div className="w-4 h-4 bg-blue-600 rounded border border-slate-200" />
-                              High similarity
+                              <div className="w-4 h-4 bg-rose-600 rounded border border-slate-200" />
+                              High dissimilarity
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full border border-white/80 bg-slate-950/80" />
+                              Above threshold
                             </span>
                           </div>
                         </ScrollArea>

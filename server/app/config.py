@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     STICKINESS_MODEL_PATH: str = ""
     STICKINESS_THRESHOLD: float = 0.6
     STICKINESS_DELTA: float = 0.05
+    STICKINESS_SCORE_TEMPERATURE: float = 6.0
 
     @property
     def python_paths(self) -> list[str]:

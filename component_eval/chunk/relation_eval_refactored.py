@@ -27,6 +27,7 @@ class StickinessConfig:
     output_dir: str = 'relation_data_eval1'
     threshold: float = 0.8
     delta: float = 0.0
+    score_temperature: float = 6.0
     device_map: str = "auto"
     log_level: str = 'INFO'
 
@@ -210,7 +211,8 @@ class GraphBuilder:
         self,
         complete_graph: Dict,
         token_nums: List[int],
-        delta: float = 0.0
+        delta: float = 0.0,
+        score_temperature: float = 6.0
     ) -> Dict[int, Dict[int, float]]:
         """
         创建归一化图 (Graph_3)
@@ -228,7 +230,7 @@ class GraphBuilder:
                     ppl_self = complete_graph[j][j]
                     ppl_given = complete_graph[i][j]
                     bc = ppl_given/ppl_self
-                    score = bc / (1 + bc)
+                    score = (bc ** score_temperature) / (1 + bc ** score_temperature)
                     weight_temp = 1 - score
                     position_penalty = delta * abs(i - j) / (n - 1) if n > 1 else 0
                     weight = weight_temp - position_penalty
@@ -364,7 +366,8 @@ class StickinessEvaluator:
         graph_normalized = self.graph_builder.create_normalized_graph(
             graph_complete,
             token_nums,
-            self.config.delta
+            self.config.delta,
+            self.config.score_temperature,
         )
         
         # Step 4: 计算完全图的结构熵

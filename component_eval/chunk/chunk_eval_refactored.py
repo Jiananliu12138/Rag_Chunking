@@ -366,7 +366,7 @@ class ChunkEvaluator:
             return float('nan')
 
         bc = ppl_with_context/ppl_without_context
-        score = bc / (1 + bc)
+        score = (bc ** 6) / (1 + bc ** 6)
 
         return score
     
