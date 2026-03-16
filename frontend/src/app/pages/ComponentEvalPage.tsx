@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from '../components/ui/dialog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, Plus, X, BarChart3, Sparkles, Sigma, FlaskConical, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, Plus, X, BarChart3, Sparkles, Sigma, FlaskConical, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
 import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
@@ -499,6 +499,7 @@ export default function ComponentEvalPage() {
   const [scoreTemperature, setScoreTemperature] = useState([6.0]);
   const [stickinessResult, setStickinessResult] = useState<any>(null);
   const [similarityThreshold, setSimilarityThreshold] = useState([0.7]);
+  const [expandedVisualization, setExpandedVisualization] = useState<'force' | 'heatmap' | null>(null);
 
   // ── Chunk Stickiness – File Input ──────────────────────────────────────────
   const [tempStickinessPath, setTempStickinessPath] = useState('');
@@ -779,22 +780,34 @@ export default function ComponentEvalPage() {
     })) || [];
 
   const forceGraphData = useMemo(() => {
-    if (!stickinessResult?.graph_incomplete) return null;
+    if (!stickinessResult?.graph_complete) return null;
     const nodes: any[] = [];
     const links: any[] = [];
-    const graph = stickinessResult.graph_incomplete;
+    const graph = stickinessResult.graph_complete;
     const nodeIds = Object.keys(graph);
     nodeIds.forEach((id) => nodes.push({ id, name: `Chunk ${id}` }));
     nodeIds.forEach((source) => {
       Object.entries(graph[source] || {}).forEach(([target, weight]: [string, any]) => {
         const edgeValue = Number(weight);
-        if (edgeValue > similarityThreshold[0]) {
+        if (source !== target && edgeValue >= similarityThreshold[0]) {
           links.push({ source, target, edgeValue, value: edgeValue });
         }
       });
     });
     return { nodes, links };
   }, [stickinessResult, similarityThreshold]);
+
+  const maxForceEdgeValue = useMemo(() => {
+    if (!stickinessResult?.graph_complete) return 0;
+    let maxValue = 0;
+    Object.entries(stickinessResult.graph_complete).forEach(([source, row]: [string, any]) => {
+      Object.entries(row || {}).forEach(([target, weight]: [string, any]) => {
+        if (source === target) return;
+        maxValue = Math.max(maxValue, Number(weight) || 0);
+      });
+    });
+    return maxValue;
+  }, [stickinessResult]);
 
   const heatmapData = useMemo(() => {
     if (!stickinessResult?.graph_complete) return [];
@@ -1628,7 +1641,7 @@ export default function ComponentEvalPage() {
                         </div>
                         <div>
                           <h3 className="font-bold">Normalized Complete Graph Entropy</h3>
-                          <p className="text-xs text-slate-600">All chunks fully connected, normalized by log2(num_chunks)</p>
+                          <p className="text-xs text-slate-600">All chunks fully connected, normalized by log2(active nodes)</p>
                         </div>
                       </div>
                       <div className="text-4xl font-bold text-green-900 mb-2">
@@ -1643,7 +1656,7 @@ export default function ComponentEvalPage() {
                         </div>
                         <div>
                           <h3 className="font-bold">Normalized Incomplete Graph Entropy</h3>
-                          <p className="text-xs text-slate-600">After threshold filtering, normalized by log2(num_chunks)</p>
+                          <p className="text-xs text-slate-600">After threshold filtering, normalized by log2(active nodes)</p>
                         </div>
                       </div>
                       <div className="text-4xl font-bold text-orange-900 mb-2">
@@ -1657,9 +1670,15 @@ export default function ComponentEvalPage() {
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                     {/* Force Graph – explicit size to prevent overflow */}
                     <Card className="p-6 overflow-hidden">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Network className="w-5 h-5" />
-                        <h3 className="font-bold">Chunk Dependency Graph</h3>
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Network className="w-5 h-5" />
+                          <h3 className="font-bold">Chunk Dependency Graph</h3>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setExpandedVisualization('force')}>
+                          <Maximize2 className="mr-2 h-4 w-4" />
+                          Expand
+                        </Button>
                       </div>
                       <p className="text-sm text-slate-600 mb-4">
                         Force-directed layout – shows normalized graph edges whose value exceeds the visualization threshold
@@ -1687,7 +1706,7 @@ export default function ComponentEvalPage() {
                             <div className="text-center text-slate-400">
                               <Network className="w-12 h-12 mx-auto mb-2 opacity-50" />
                               <p>No edges above visualization threshold</p>
-                              <p className="text-xs">Try lowering the visualization threshold</p>
+                              <p className="text-xs">Current max edge value: {maxForceEdgeValue.toFixed(3)}</p>
                             </div>
                           </div>
                         )}
@@ -1696,9 +1715,15 @@ export default function ComponentEvalPage() {
 
                     {/* Heatmap */}
                     <Card className="p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Grid3x3 className="w-5 h-5" />
-                        <h3 className="font-bold">Edge Value Heatmap</h3>
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Grid3x3 className="w-5 h-5" />
+                          <h3 className="font-bold">Edge Value Heatmap</h3>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setExpandedVisualization('heatmap')}>
+                          <Maximize2 className="mr-2 h-4 w-4" />
+                          Expand
+                        </Button>
                       </div>
                       <p className="text-sm text-slate-600 mb-4">
                         Matrix view of normalized graph edge values returned by the backend
@@ -1716,7 +1741,7 @@ export default function ComponentEvalPage() {
                                 key={idx}
                                 className="relative aspect-square rounded-sm border border-slate-200"
                                 style={{ backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})` }}
-                                title={`Chunk ${cell.x} -> ${cell.y}: dissimilarity=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
+                                title={`Chunk ${cell.x} -> ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
                               >
                                 {cell.aboveThreshold ? (
                                   <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
@@ -1730,11 +1755,11 @@ export default function ComponentEvalPage() {
                           <div className="flex items-center justify-between mt-4 text-xs">
                             <span className="flex items-center gap-2">
                               <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />
-                              Low dissimilarity
+                              Low edge value
                             </span>
                             <span className="flex items-center gap-2">
                               <div className="w-4 h-4 bg-rose-600 rounded border border-slate-200" />
-                              High dissimilarity
+                              High edge value
                             </span>
                             <span className="flex items-center gap-2">
                               <div className="w-2.5 h-2.5 rounded-full border border-white/80 bg-slate-950/80" />
@@ -1750,6 +1775,77 @@ export default function ComponentEvalPage() {
                       )}
                     </Card>
                   </div>
+
+                  <Dialog open={expandedVisualization !== null} onOpenChange={(open) => !open && setExpandedVisualization(null)}>
+                    <DialogContent className="w-[min(96vw,78rem)] max-w-[78rem]">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {expandedVisualization === 'force' ? 'Chunk Dependency Graph' : 'Edge Value Heatmap'}
+                        </DialogTitle>
+                        <DialogDescription>
+                          {expandedVisualization === 'force'
+                            ? 'Expanded view of normalized graph edges above the visualization threshold.'
+                            : 'Expanded matrix view of normalized graph edge values.'}
+                        </DialogDescription>
+                      </DialogHeader>
+                      {expandedVisualization === 'force' ? (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 720 }}>
+                          {forceGraphData && forceGraphData.nodes.length > 0 ? (
+                            <ForceGraph2D
+                              graphData={forceGraphData}
+                              width={1100}
+                              height={720}
+                              nodeLabel="name"
+                              nodeAutoColorBy="id"
+                              linkWidth={(link: any) => Math.max(1, link.value * 6)}
+                              linkColor={() => 'rgba(59, 130, 246, 0.65)'}
+                              nodeRelSize={7}
+                              linkDirectionalParticles={2}
+                              linkDirectionalParticleWidth={(link: any) => link.value * 4}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-center text-slate-400">
+                              <div>
+                                <Network className="mx-auto mb-2 h-12 w-12 opacity-50" />
+                                <p>No edges above visualization threshold</p>
+                                <p className="text-xs">Current max edge value: {maxForceEdgeValue.toFixed(3)}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : heatmapData.length > 0 ? (
+                        <ScrollArea className="h-[720px]">
+                          <div
+                            className="grid gap-1"
+                            style={{
+                              gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(0, 1fr))`,
+                            }}
+                          >
+                            {heatmapData.map((cell, idx) => (
+                              <div
+                                key={`expanded-${idx}`}
+                                className="relative aspect-square rounded-sm border border-slate-200"
+                                style={{ backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})` }}
+                                title={`Chunk ${cell.x} -> ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
+                              >
+                                {cell.aboveThreshold ? (
+                                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
+                                ) : null}
+                                <span className="absolute inset-x-0 bottom-0 truncate px-1 pb-0.5 text-center text-[10px] font-medium text-white/90 mix-blend-plus-lighter">
+                                  {cell.dissimilarity.toFixed(2)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      ) : (
+                        <div className="py-12 text-center text-slate-400">
+                          <Grid3x3 className="mx-auto mb-2 h-12 w-12 opacity-50" />
+                          <p>No heatmap data available</p>
+                        </div>
+                      )}
+                    </DialogContent>
+                  </Dialog>
 
                   {/* Raw JSON details */}
                   <Card className="p-6 mt-6">

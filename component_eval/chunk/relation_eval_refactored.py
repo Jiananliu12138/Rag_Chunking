@@ -271,6 +271,10 @@ class StructuralEntropyCalculator:
         return entropy
 
     @staticmethod
+    def count_active_nodes(degree_dist: Dict[int, int]) -> int:
+        return sum(1 for degree in degree_dist.values() if degree > 0)
+
+    @staticmethod
     def normalize_entropy(entropy: float, node_count: int) -> float:
         if node_count <= 1:
             return 0.0
@@ -390,7 +394,11 @@ class StickinessEvaluator:
         )
         degree_dist_complete = StructuralEntropyCalculator.build_degree_distribution(edges_complete)
         entropy_complete = StructuralEntropyCalculator.calculate_entropy(degree_dist_complete)
-        normalized_entropy_complete = StructuralEntropyCalculator.normalize_entropy(entropy_complete, n)
+        active_nodes_complete = StructuralEntropyCalculator.count_active_nodes(degree_dist_complete)
+        normalized_entropy_complete = StructuralEntropyCalculator.normalize_entropy(
+            entropy_complete,
+            active_nodes_complete,
+        )
         
         # Step 5: 构建不完全图并计算结构熵
         graph_incomplete = self.graph_builder.create_incomplete_graph(graph_normalized)
@@ -400,7 +408,11 @@ class StickinessEvaluator:
         )
         degree_dist_incomplete = StructuralEntropyCalculator.build_degree_distribution(edges_incomplete)
         entropy_incomplete = StructuralEntropyCalculator.calculate_entropy(degree_dist_incomplete)
-        normalized_entropy_incomplete = StructuralEntropyCalculator.normalize_entropy(entropy_incomplete, n)
+        active_nodes_incomplete = StructuralEntropyCalculator.count_active_nodes(degree_dist_incomplete)
+        normalized_entropy_incomplete = StructuralEntropyCalculator.normalize_entropy(
+            entropy_incomplete,
+            active_nodes_incomplete,
+        )
         
         result = StickinessResult(
             structural_entropy_complete=entropy_complete,
