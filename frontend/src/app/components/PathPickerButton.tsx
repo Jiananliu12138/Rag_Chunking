@@ -162,8 +162,13 @@ export function PathPickerButton({
           ))}
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-          <span className="min-w-0 flex-1 truncate font-mono">{currentPath || 'Loading...'}</span>
+        <div className="flex min-w-0 items-start gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+          <span
+            className="min-w-0 flex-1 overflow-hidden font-mono leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] break-all"
+            title={currentPath || 'Loading...'}
+          >
+            {currentPath || 'Loading...'}
+          </span>
           <div className="flex shrink-0 gap-2">
             {parentPath ? (
               <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void loadDirectory(parentPath)}>
@@ -184,11 +189,11 @@ export function PathPickerButton({
             {visibleEntries.map((entry) => (
               <div
                 key={entry.path}
-                className="flex min-w-0 items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2"
+                className="flex min-w-0 items-start gap-3 rounded-md border border-slate-200 bg-white px-3 py-2"
               >
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  className="flex min-w-0 flex-1 items-start gap-2 text-left"
                   onClick={() => {
                     if (entry.is_dir) {
                       void loadDirectory(entry.path);
@@ -205,7 +210,12 @@ export function PathPickerButton({
                   ) : (
                     <FileText className="w-4 h-4 shrink-0 text-slate-500" />
                   )}
-                  <span className="truncate font-mono text-sm">{entry.name}</span>
+                  <span
+                    className="min-w-0 flex-1 overflow-hidden font-mono text-sm leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] break-all"
+                    title={entry.name}
+                  >
+                    {entry.name}
+                  </span>
                 </button>
 
                 {entry.is_dir ? (

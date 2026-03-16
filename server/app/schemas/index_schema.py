@@ -152,12 +152,14 @@ class CollectionListResult(BaseModel):
 
 
 class CollectionInspectItem(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     collection_name: str
     uri: str
     db_file: str
     size_bytes: int
-    schema: Optional[dict] = Field(
+    collection_schema: Optional[dict] = Field(
         None,
+        alias="schema",
         description="Milvus describe_collection 返回的 schema 信息（可能为 None）。",
     )
     predefined_fields: list[str] = Field(
