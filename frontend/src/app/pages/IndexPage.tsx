@@ -575,7 +575,7 @@ export default function IndexPage() {
                   Inspect Collections
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[80vh]">
+              <DialogContent className="max-w-4xl sm:max-w-4xl max-h-[80vh]">
                 <DialogHeader>
                   <DialogTitle>Collection Details</DialogTitle>
                 </DialogHeader>
@@ -588,7 +588,7 @@ export default function IndexPage() {
                           <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
                             <div>
                               <span className="text-slate-500">URI:</span>{' '}
-                              <span className="font-mono text-xs">{coll.uri}</span>
+                              <span className="font-mono text-xs break-all">{coll.uri}</span>
                             </div>
                             <div>
                               <span className="text-slate-500">Size:</span>{' '}
@@ -629,7 +629,7 @@ export default function IndexPage() {
                                   <ScrollArea className="h-32 rounded-md border bg-slate-50 p-2">
                                     <div className="space-y-1">
                                       {coll.filepaths.map((fp: string, i: number) => (
-                                        <div key={i} className="text-xs font-mono bg-white p-1 px-2 rounded border">
+                                        <div key={i} className="text-xs font-mono bg-white p-1 px-2 rounded border truncate" title={fp}>
                                           {fp}
                                         </div>
                                       ))}
@@ -647,7 +647,7 @@ export default function IndexPage() {
                                   <ScrollArea className="h-32 rounded-md border bg-slate-50 p-2">
                                     <div className="space-y-1">
                                       {coll.doc_ids.map((did: string, i: number) => (
-                                        <div key={i} className="text-xs font-mono bg-white p-1 px-2 rounded border">
+                                        <div key={i} className="text-xs font-mono bg-white p-1 px-2 rounded border truncate" title={did}>
                                           {did}
                                         </div>
                                       ))}
@@ -709,7 +709,7 @@ export default function IndexPage() {
                   <TableRow key={collection.name}>
                     <TableCell className="font-medium">{collection.name}</TableCell>
                     <TableCell className="font-mono text-xs text-slate-500">
-                      {collection.db_file}
+                      <div className="max-w-xs truncate" title={collection.db_file}>{collection.db_file}</div>
                     </TableCell>
                     <TableCell>{formatBytes(collection.size_bytes)}</TableCell>
                     <TableCell className="text-right">
@@ -741,7 +741,7 @@ export default function IndexPage() {
 
         {/* Delete Documents Dialog */}
         <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Manage Documents - {selectedCollection}</DialogTitle>
             </DialogHeader>

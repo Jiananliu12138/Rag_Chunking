@@ -963,9 +963,9 @@ Format 2 - Current Eval Format:
                       </div>
 
                       {/* Raw JSON */}
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-sm font-medium mb-2">Complete Results</h3>
-                        <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto">
+                        <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto max-h-[400px]">
                           {JSON.stringify(traditionalResult, null, 2)}
                         </pre>
                       </div>
@@ -1279,8 +1279,10 @@ Format 2 - Current Eval Format:
                                   <TableCell className="font-mono text-xs">
                                     {sample.index || sample.id || `#${idx + 1}`}
                                   </TableCell>
-                                  <TableCell className="max-w-xs truncate">
-                                    {sample.question || sample.input || '-'}
+                                  <TableCell>
+                                    <div className="max-w-xs truncate" title={sample.question || sample.input || '-'}>
+                                      {sample.question || sample.input || '-'}
+                                    </div>
                                   </TableCell>
                                   <TableCell>
                                     <div className="text-xs space-y-1">
@@ -1311,9 +1313,9 @@ Format 2 - Current Eval Format:
                       )}
 
                       {/* Raw JSON */}
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-sm font-medium mb-2">Complete Results</h3>
-                        <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto">
+                        <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto max-h-[400px]">
                           {JSON.stringify(ragasResult, null, 2)}
                         </pre>
                       </div>

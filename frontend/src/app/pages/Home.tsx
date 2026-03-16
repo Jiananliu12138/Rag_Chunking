@@ -436,7 +436,7 @@ export default function Home() {
                     <div className={`max-w-3xl ${message.type === 'user' ? 'w-auto' : 'w-full'}`}>
                       {message.type === 'user' ? (
                         <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3">
-                          <p className="whitespace-pre-wrap">{message.content}</p>
+                          <p className="whitespace-pre-wrap break-words">{message.content}</p>
                         </div>
                       ) : (
                         <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm">
@@ -445,7 +445,7 @@ export default function Home() {
                               <Sparkles className="w-4 h-4 text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-slate-800 whitespace-pre-wrap">{message.content}</p>
+                              <p className="text-slate-800 whitespace-pre-wrap break-words">{message.content}</p>
                             </div>
                             <Button
                               variant="ghost"
@@ -503,7 +503,7 @@ export default function Home() {
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-slate-700">{ctx.text}</p>
+                                    <p className="text-slate-700 break-words">{ctx.text}</p>
                                   </div>
                                 ))}
                               </CollapsibleContent>

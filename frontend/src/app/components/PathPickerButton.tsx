@@ -125,7 +125,7 @@ export function PathPickerButton({
           <FolderOpen className="w-4 h-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[min(96vw,48rem)] max-w-[48rem] overflow-hidden">
+      <DialogContent className="w-[min(96vw,48rem)] max-w-[48rem] sm:max-w-[48rem] overflow-hidden">
         <DialogHeader>
           <DialogTitle>{title ?? (mode === 'directory' ? 'Select Directory' : 'Select File')}</DialogTitle>
         </DialogHeader>

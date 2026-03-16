@@ -33,12 +33,12 @@ class Settings(BaseSettings):
     MOC_METRICS_DIR: str = str(BASE_DIR / "component_eval" / "chunk")
 
     # ── 嵌入模型默认配置 ──────────────────────────────────────────
-    DEFAULT_EMBEDDING_MODEL: str = ""
+    DEFAULT_EMBEDDING_MODEL: str = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
     DEFAULT_EMBEDDING_DIM: int = 1024
 
     # ── LLM 默认配置 ─────────────────────────────────────────────
     DEFAULT_VLLM_API_BASE: str = "http://localhost:8005/v1"
-    DEFAULT_VLLM_MODEL_NAME: str = ""
+    DEFAULT_VLLM_MODEL_NAME: str = "Qwen2.5-7B-Instruct"
     DEFAULT_LLM_TEMPERATURE: float = 0.1
     DEFAULT_LLM_MAX_TOKENS: int = 1280
 
@@ -56,12 +56,12 @@ class Settings(BaseSettings):
     MILVUS_HYBRID_RANKER_K: int = 60
     DEFAULT_ENABLE_RERANK: bool = False
     DEFAULT_RERANK_MODEL_PATH: str = ""
-    DEFAULT_RERANK_DEVICE: str = "cpu"
+    DEFAULT_RERANK_DEVICE: str = "cuda:0"
 
     # ── 分块 / tiktoken 默认配置 ─────────────────────────────────
     # 从环境变量中读取对应值（.env 中写 TIKTOKEN_CACHE_DIR / CHUNK_NUM_WORKERS 即可）
-    TIKTOKEN_CACHE_DIR: str = ""
-    CHUNK_NUM_WORKERS: int = 4
+    TIKTOKEN_CACHE_DIR: str = "/data/h50056789/Rag_chunk_bench/tiktoken_cache"
+    CHUNK_NUM_WORKERS: int = 1
 
     # ── 分块其他默认配置 ─────────────────────────────────────────
     DEFAULT_CHUNK_SIZE: int = 512
@@ -77,15 +77,15 @@ class Settings(BaseSettings):
     # ── RAGAS 评估默认配置 ───────────────────────────────────────
     DEFAULT_RAGAS_VLLM_API_BASE: str = "http://localhost:8005/v1"
     DEFAULT_RAGAS_VLLM_API_KEY: str = "EMPTY"
-    DEFAULT_RAGAS_VLLM_MODEL_NAME: str = ""
-    DEFAULT_RAGAS_EMBEDDING_MODEL_PATH: str = ""
+    DEFAULT_RAGAS_VLLM_MODEL_NAME: str = "Qwen2.5-7B-Instruct"
+    DEFAULT_RAGAS_EMBEDDING_MODEL_PATH: str = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
     DEFAULT_RAGAS_DEVICE: str = "cuda:0"
     DEFAULT_RAGAS_ENABLE_CACHE: bool = True
     DEFAULT_RAGAS_CACHE_DIR: str = "./ragas_cache"
 
     # ── 组件级评估默认配置 ───────────────────────────────────────
     # Chunk 质量评估（BC + 语义不相似度）
-    COMPONENT_SIM_MODEL_PATH: str = ""
+    COMPONENT_SIM_MODEL_PATH: str = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
     COMPONENT_ENABLE_SEMANTIC_SIMILARITY: bool = True
     COMPONENT_ENABLE_BOUNDARY_CLARITY: bool = True
     COMPONENT_SCORE_TEMPERATURE: float = 6.0

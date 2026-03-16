@@ -397,7 +397,7 @@ export default function ChunkingPage() {
                               {chunk[0]?.length || 0} chars
                             </span>
                           </div>
-                          <p className="text-base leading-relaxed text-slate-700 whitespace-pre-wrap">{chunk[0]}</p>
+                          <p className="text-base leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{chunk[0]}</p>
                         </div>
                       ))}
                     </div>
@@ -416,7 +416,7 @@ export default function ChunkingPage() {
 
           {/* File Chunking Tab */}
           <TabsContent value="file">
-            <Card className="p-6 max-w-3xl mx-auto">
+            <Card className="p-6 max-w-3xl mx-auto overflow-hidden">
               <h3 className="font-bold mb-4">File Chunking Configuration</h3>
               
               <div className="space-y-4 mb-6">
@@ -506,7 +506,7 @@ export default function ChunkingPage() {
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <h4 className="font-medium mb-2 text-green-900">Chunking Completed</h4>
                   <div className="text-sm space-y-1 text-green-800">
-                    <p><strong>Output File:</strong> {fileResult.output_file}</p>
+                    <p className="break-all"><strong>Output File:</strong> {fileResult.output_file}</p>
                     <p><strong>Time Cost:</strong> {fileResult.time_cost?.toFixed(2)}s</p>
                   </div>
                 </div>

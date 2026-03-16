@@ -499,14 +499,15 @@ export default function ComponentEvalPage() {
   }, []);
 
   useEffect(() => {
-    if (!expandedVisualization) return;
+    if (expandedVisualization !== 'force') return;
     let observer: ResizeObserver | null = null;
     let raf: number | null = null;
+    let retries = 0;
 
     const tryObserve = () => {
       const el = expandedGraphContainerRef.current;
       if (!el) {
-        raf = requestAnimationFrame(tryObserve);
+        if (retries++ < 30) raf = requestAnimationFrame(tryObserve);
         return;
       }
       observer = new ResizeObserver((entries) => {
@@ -1371,9 +1372,9 @@ export default function ComponentEvalPage() {
                           </div>
                         </div>
                       )}
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-sm font-medium mb-2">Complete Results</h3>
-                        <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto">
+                        <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto max-h-[360px]">
                           {JSON.stringify(qualityResult, null, 2)}
                         </pre>
                       </div>
@@ -2242,7 +2243,7 @@ export default function ComponentEvalPage() {
                           </div>
                         </div>
                       )}
-                      <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto">{JSON.stringify(retrievalResult, null, 2)}</pre>
+                      <pre className="p-4 bg-slate-50 rounded-lg text-xs overflow-auto max-h-[360px]">{JSON.stringify(retrievalResult, null, 2)}</pre>
                     </div>
                   </ScrollArea>
                 ) : (

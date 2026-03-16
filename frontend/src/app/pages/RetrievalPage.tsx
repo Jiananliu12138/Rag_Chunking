@@ -335,7 +335,7 @@ export default function RetrievalPage() {
               <Settings2 className="w-4 h-4" />
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Retrieval Model Settings</DialogTitle>
             </DialogHeader>
@@ -633,7 +633,7 @@ export default function RetrievalPage() {
             {/* Right: Results */}
             <div className="lg:col-span-2 space-y-6">
               {/* Search Results */}
-              <Card className="p-6 h-[648px] flex flex-col">
+              <Card className="p-6 h-[692px] flex flex-col overflow-hidden">
                 <h2 className="font-bold mb-4 flex items-center gap-2">
                   <Search className="w-5 h-5" />
                   Search Results
@@ -669,7 +669,7 @@ export default function RetrievalPage() {
                               )}
                             </div>
                           </div>
-                          <p className="text-sm text-slate-700">{result.text}</p>
+                          <p className="text-sm text-slate-700 break-words">{result.text}</p>
                           {result.doc_id && (
                             <div className="text-xs text-slate-500 mt-2">
                               Doc ID: {result.doc_id}
@@ -702,7 +702,7 @@ export default function RetrievalPage() {
                     RAG Answer
                   </h2>
                   <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200 mb-4">
-                    <p className="text-slate-800 whitespace-pre-wrap">{ragAnswer}</p>
+                    <p className="text-slate-800 whitespace-pre-wrap break-words">{ragAnswer}</p>
                   </div>
 
                   <Collapsible>
@@ -725,7 +725,7 @@ export default function RetrievalPage() {
                                 Score: {item.score.toFixed(4)}
                               </span>
                             </div>
-                            <p className="text-slate-700">{item.text}</p>
+                            <p className="text-slate-700 break-words">{item.text}</p>
                             {(item.doc_id || item.chunk_id) && (
                               <div className="mt-2 space-y-1 text-xs text-slate-500">
                                 {item.doc_id && <div>Doc ID: {item.doc_id}</div>}
