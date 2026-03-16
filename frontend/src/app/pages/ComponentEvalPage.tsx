@@ -811,11 +811,11 @@ export default function ComponentEvalPage() {
 
   const getForceLinkColor = useCallback((value: number) => {
     const normalized = maxForceEdgeValue > 0 ? Math.max(0, Math.min(1, value / maxForceEdgeValue)) : 0;
-    if (normalized > 0.85) return 'rgba(30, 41, 59, 0.95)';
-    if (normalized > 0.65) return 'rgba(37, 99, 235, 0.9)';
-    if (normalized > 0.45) return 'rgba(14, 165, 233, 0.82)';
-    if (normalized > 0.25) return 'rgba(148, 163, 184, 0.72)';
-    return 'rgba(203, 213, 225, 0.58)';
+    if (normalized > 0.85) return 'rgba(180, 83, 9, 0.96)';
+    if (normalized > 0.65) return 'rgba(239, 68, 68, 0.92)';
+    if (normalized > 0.45) return 'rgba(249, 115, 22, 0.88)';
+    if (normalized > 0.25) return 'rgba(250, 204, 21, 0.8)';
+    return 'rgba(148, 163, 184, 0.5)';
   }, [maxForceEdgeValue]);
 
   const heatmapData = useMemo(() => {
@@ -1678,7 +1678,7 @@ export default function ComponentEvalPage() {
                   {/* Visualizations */}
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                     {/* Force Graph – explicit size to prevent overflow */}
-                    <Card className="p-6 overflow-hidden">
+                    <Card className="p-6 overflow-hidden xl:col-span-2">
                       <div className="mb-4 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <Network className="w-5 h-5" />
@@ -1785,8 +1785,8 @@ export default function ComponentEvalPage() {
                     </Card>
                   </div>
 
-                  <Dialog open={expandedVisualization !== null} onOpenChange={(open) => !open && setExpandedVisualization(null)}>
-                    <DialogContent className="w-[min(96vw,78rem)] max-w-[78rem]">
+                    <Dialog open={expandedVisualization !== null} onOpenChange={(open) => !open && setExpandedVisualization(null)}>
+                    <DialogContent className="w-[min(96vw,88rem)] max-w-[88rem] max-h-[92vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>
                           {expandedVisualization === 'force' ? 'Chunk Dependency Graph' : 'Edge Value Heatmap'}
@@ -1799,12 +1799,12 @@ export default function ComponentEvalPage() {
                       </DialogHeader>
                       {expandedVisualization === 'force' ? (
                         <div className="space-y-4">
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 720 }}>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 680 }}>
                             {forceGraphData && forceGraphData.nodes.length > 0 ? (
                               <ForceGraph2D
                                 graphData={forceGraphData}
-                                width={1100}
-                                height={720}
+                                width={1200}
+                                height={680}
                                 nodeLabel="name"
                                 nodeAutoColorBy="id"
                             linkWidth={(link: any) => Math.max(1.4, Math.pow(link.value, 1.15) * 10)}
@@ -1830,7 +1830,7 @@ export default function ComponentEvalPage() {
                             </span>
                             <span className="text-slate-500">Current max edge value: {maxForceEdgeValue.toFixed(3)}</span>
                             <span className="flex items-center gap-2">
-                              <div className="h-2 w-8 rounded-full bg-slate-800" />
+                              <div className="h-2 w-8 rounded-full bg-orange-700" />
                               Higher edge value
                             </span>
                           </div>
