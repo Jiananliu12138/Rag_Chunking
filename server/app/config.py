@@ -92,8 +92,8 @@ class Settings(BaseSettings):
 
     # Chunk 黏连度评估（结构熵）
     STICKINESS_MODEL_PATH: str = ""
-    STICKINESS_THRESHOLD: float = 0.8
-    STICKINESS_DELTA: float = 0.0
+    STICKINESS_THRESHOLD: float = 0.6
+    STICKINESS_DELTA: float = 0.05
 
     @property
     def python_paths(self) -> list[str]:

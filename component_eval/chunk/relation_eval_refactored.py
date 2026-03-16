@@ -89,8 +89,9 @@ class VLLMPerplexityClient:
         else:
             target_logprobs = full[len(ctx):]
         token_num = max(len(target_logprobs), 1)
-        loss_sum = -sum(target_logprobs)
-        return loss_sum, token_num
+        loss_mean = -sum(target_logprobs) / token_num
+        perplexity = math.exp(loss_mean)
+        return perplexity, token_num
 
 
 class PerplexityCalculator:
@@ -140,10 +141,11 @@ class PerplexityCalculator:
         active_logits = shift_logits.view(-1, shift_logits.size(-1))[active]
         active_labels = shift_labels.view(-1)[active]
         
-        loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-        loss = loss_fct(active_logits, active_labels)
-        
-        return loss.sum().item(), shift_labels.shape[1]
+        loss_fct = torch.nn.CrossEntropyLoss(reduction="mean")
+        loss = loss_fct(active_logits, active_labels).item()
+        perplexity = math.exp(loss)
+
+        return perplexity, shift_labels.shape[1]
 
     def get_token_num(self, text: str) -> int:
         """
@@ -220,19 +222,16 @@ class GraphBuilder:
         for i in range(n):
             for j in range(n):
                 if i == j:
-                    graph[i][i] = 1.0
+                    graph[i][i] = 0.5
                 else:
                     # 归一化权重计算
-                    ppl_self = complete_graph[j][j] / token_nums[j]
-                    ppl_given = complete_graph[i][j] / token_nums[j]
-                    #块之间越相关，ppl_given越小，weight_temp越大
-                    weight_temp = (math.exp(ppl_self) - math.exp(ppl_given)) / math.exp(ppl_self)
-                    #weight_temp接近一，块之间相关
-                    # 添加位置距离惩罚
+                    ppl_self = complete_graph[j][j]
+                    ppl_given = complete_graph[i][j]
+                    bc = ppl_given/ppl_self
+                    score = bc / (1 + bc)
+                    weight_temp = 1 - score
                     position_penalty = delta * abs(i - j) / (n - 1) if n > 1 else 0
-                    #块之间越相关，weight越小，距离越近weight越大，保留weight>0.8 即 edge < 0.2的边
-                    weight = -weight_temp + 1 + position_penalty
-                    #weight越大越不相关
+                    weight = weight_temp - position_penalty
                     graph[i][j] = weight
         
         return graph

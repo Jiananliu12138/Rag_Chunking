@@ -324,8 +324,9 @@ class ChunkEvaluator:
         
         # 计算交叉熵损失（即困惑度）
         loss_fn = nn.CrossEntropyLoss(reduction="mean")
-        perplexity = loss_fn(active_logits, active_labels).item()
-        
+        loss = loss_fn(active_logits, active_labels).item()
+        perplexity = math.exp(loss)
+
         return perplexity
     
     def calculate_boundary_clarity(
@@ -364,9 +365,10 @@ class ChunkEvaluator:
             )
             return float('nan')
 
-        bc = ppl_with_context / ppl_without_context
-        
-        return bc
+        bc = ppl_with_context/ppl_without_context
+        score = bc / (1 + bc)
+
+        return score
     
     def evaluate_pair(
         self,
