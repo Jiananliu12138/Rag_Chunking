@@ -226,6 +226,9 @@ class ChunkQualityRequest(BaseModel):
         None,
         description="是否计算边界清晰度 BC（可选，未提供时从配置读取 COMPONENT_ENABLE_BOUNDARY_CLARITY）",
     )
+    score_temperature: Optional[float] = Field(
+        None, ge=0.1, description="可选：BC score 温度参数；未提供时从配置读取"
+    )
     ppl_model_path: Optional[str] = Field(
         None,
         description="可选：覆盖默认的困惑度模型路径；未提供时使用 COMPONENT_PPL_MODEL_PATH。",
@@ -289,6 +292,9 @@ class ChunkQualityFileRequest(BaseModel):
     enable_boundary_clarity: Optional[bool] = Field(
         None,
         description="是否计算边界清晰度 BC（可选，未提供时从配置读取 COMPONENT_ENABLE_BOUNDARY_CLARITY）",
+    )
+    score_temperature: Optional[float] = Field(
+        None, ge=0.1, description="可选：BC score 温度参数；未提供时从配置读取"
     )
     ppl_model_path: Optional[str] = Field(
         None,

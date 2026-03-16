@@ -34,6 +34,7 @@ class ComponentEvalService:
         chunks: list[str],
         enable_semantic_similarity: Optional[bool],
         enable_boundary_clarity: Optional[bool],
+        score_temperature: Optional[float],
         ppl_model_path: Optional[str],
         sim_model_path: Optional[str],
         use_vllm: Optional[bool],
@@ -64,6 +65,11 @@ class ComponentEvalService:
                 if enable_boundary_clarity is not None
                 else settings.COMPONENT_ENABLE_BOUNDARY_CLARITY
             )
+            use_score_temperature = (
+                score_temperature
+                if score_temperature is not None
+                else settings.COMPONENT_SCORE_TEMPERATURE
+            )
 
             sim_path = sim_model_path or settings.COMPONENT_SIM_MODEL_PATH
             if use_semantic and not sim_path:
@@ -78,6 +84,7 @@ class ComponentEvalService:
                 sim_model_name=sim_path,
                 enable_semantic_similarity=use_semantic,
                 enable_boundary_clarity=use_boundary,
+                score_temperature=use_score_temperature,
                 use_vllm=use_vllm_flag,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,
@@ -132,6 +139,7 @@ class ComponentEvalService:
             chunks=chunks,
             enable_semantic_similarity=request.enable_semantic_similarity,
             enable_boundary_clarity=request.enable_boundary_clarity,
+            score_temperature=request.score_temperature,
             ppl_model_path=request.ppl_model_path,
             sim_model_path=request.sim_model_path,
             use_vllm=request.use_vllm,
@@ -153,6 +161,7 @@ class ComponentEvalService:
             chunks=chunks,
             enable_semantic_similarity=request.enable_semantic_similarity,
             enable_boundary_clarity=request.enable_boundary_clarity,
+            score_temperature=request.score_temperature,
             ppl_model_path=request.ppl_model_path,
             sim_model_path=request.sim_model_path,
             use_vllm=request.use_vllm,

@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     COMPONENT_SIM_MODEL_PATH: str = ""
     COMPONENT_ENABLE_SEMANTIC_SIMILARITY: bool = True
     COMPONENT_ENABLE_BOUNDARY_CLARITY: bool = True
+    COMPONENT_SCORE_TEMPERATURE: float = 6.0
 
     # Chunk 黏连度评估（结构熵）
     STICKINESS_MODEL_PATH: str = ""

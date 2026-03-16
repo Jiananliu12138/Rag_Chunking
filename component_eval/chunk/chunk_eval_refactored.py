@@ -45,6 +45,7 @@ class EvaluatorConfig:
     # 评估选项
     enable_semantic_similarity: bool = True
     enable_boundary_clarity: bool = True
+    score_temperature: float = 6.0
 
     # 最多评估多少个文本块（-1 表示使用全部）
     max_eval_chunks: int = -1
@@ -366,7 +367,7 @@ class ChunkEvaluator:
             return float('nan')
 
         bc = ppl_with_context/ppl_without_context
-        score = (bc ** 6) / (1 + bc ** 6)
+        score = (bc ** self.config.score_temperature) / (1 + bc ** self.config.score_temperature)
 
         return score
     

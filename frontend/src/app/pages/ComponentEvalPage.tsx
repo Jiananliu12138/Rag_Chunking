@@ -556,6 +556,7 @@ export default function ComponentEvalPage() {
   const buildQualityData = useCallback(
     (base: Record<string, any>) => {
       const data: any = { ...base };
+      data.score_temperature = scoreTemperature[0];
       if (pplModelPath.trim()) data.ppl_model_path = pplModelPath.trim();
       if (simModelPath.trim()) data.sim_model_path = simModelPath.trim();
       if (qualityUseVllm) {
@@ -565,7 +566,7 @@ export default function ComponentEvalPage() {
       }
       return data;
     },
-    [pplModelPath, simModelPath, qualityUseVllm, qualityVllmApiBase, qualityVllmModelName],
+    [scoreTemperature, pplModelPath, simModelPath, qualityUseVllm, qualityVllmApiBase, qualityVllmModelName],
   );
 
   const buildStickinessData = useCallback(
@@ -1263,6 +1264,23 @@ export default function ComponentEvalPage() {
                         Limit file evaluation to the first N chunks. Use <code>-1</code> to evaluate all chunks.
                       </p>
                     </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>BC Temperature</Label>
+                        <span className="text-sm font-mono text-slate-600">{scoreTemperature[0].toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        value={scoreTemperature}
+                        onValueChange={setScoreTemperature}
+                        min={1}
+                        max={12}
+                        step={0.5}
+                        disabled={loading}
+                      />
+                      <p className="text-xs text-slate-500">
+                        Boundary Clarity scoring temperature for chunk quality. Higher values make the BC mapping steeper.
+                      </p>
+                    </div>
                     <Button onClick={handleQualityFileEval} disabled={loading} className="w-full" variant="outline">
                       {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Evaluating...</> : 'Evaluate from File'}
                     </Button>
@@ -1786,7 +1804,7 @@ export default function ComponentEvalPage() {
                   </div>
 
                     <Dialog open={expandedVisualization !== null} onOpenChange={(open) => !open && setExpandedVisualization(null)}>
-                    <DialogContent className="w-[min(96vw,88rem)] max-w-[88rem] max-h-[92vh] overflow-y-auto">
+                    <DialogContent className="h-[96vh] w-[99vw] max-w-[99vw] overflow-y-auto p-6">
                       <DialogHeader>
                         <DialogTitle>
                           {expandedVisualization === 'force' ? 'Chunk Dependency Graph' : 'Edge Value Heatmap'}
@@ -1799,12 +1817,12 @@ export default function ComponentEvalPage() {
                       </DialogHeader>
                       {expandedVisualization === 'force' ? (
                         <div className="space-y-4">
-                          <div className="mx-auto w-full max-w-[1200px] rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 680 }}>
+                          <div className="mx-auto w-full rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 840 }}>
                             {forceGraphData && forceGraphData.nodes.length > 0 ? (
                               <ForceGraph2D
                                 graphData={forceGraphData}
-                                width={1200}
-                                height={680}
+                                width={1600}
+                                height={840}
                                 nodeLabel="name"
                                 nodeAutoColorBy="id"
                             linkWidth={(link: any) => Math.max(1.4, Math.pow(link.value, 1.15) * 10)}
@@ -1823,7 +1841,7 @@ export default function ComponentEvalPage() {
                               </div>
                             )}
                           </div>
-                          <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between text-xs">
+                          <div className="mx-auto flex w-full items-center justify-between text-xs">
                             <span className="flex items-center gap-2">
                               <div className="h-1 w-8 rounded-full bg-slate-300" />
                               Lower edge value
@@ -1837,7 +1855,7 @@ export default function ComponentEvalPage() {
                         </div>
                       ) : heatmapData.length > 0 ? (
                         <div className="space-y-4">
-                          <ScrollArea className="mx-auto h-[720px] w-full max-w-[1200px]">
+                          <ScrollArea className="mx-auto h-[82vh] w-full">
                             <div
                               className="grid gap-1"
                               style={{
@@ -1861,7 +1879,7 @@ export default function ComponentEvalPage() {
                               ))}
                             </div>
                           </ScrollArea>
-                          <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between text-xs">
+                          <div className="mx-auto flex w-full items-center justify-between text-xs">
                             <span className="flex items-center gap-2">
                               <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />
                               Low edge value
