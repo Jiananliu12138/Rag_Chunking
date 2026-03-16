@@ -481,7 +481,7 @@ export default function ComponentEvalPage() {
   const [graphSize, setGraphSize] = useState({ width: 460, height: 480 });
   const expandedGraphContainerRef = useRef<HTMLDivElement>(null);
   const expandedForceGraphRef = useRef<any>(null);
-  const [expandedGraphSize, setExpandedGraphSize] = useState({ width: 1480, height: 920 });
+  const [expandedGraphSize, setExpandedGraphSize] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
     if (!graphContainerRef.current) return;
@@ -499,20 +499,33 @@ export default function ComponentEvalPage() {
   }, []);
 
   useEffect(() => {
-    if (!expandedGraphContainerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        const nextWidth = Math.max(980, Math.floor(entry.contentRect.width));
-        const nextHeight = Math.max(760, Math.floor(entry.contentRect.height));
-        setExpandedGraphSize({
-          width: nextWidth,
-          height: nextHeight,
-        });
+    if (!expandedVisualization) return;
+    let observer: ResizeObserver | null = null;
+    let raf: number | null = null;
+
+    const tryObserve = () => {
+      const el = expandedGraphContainerRef.current;
+      if (!el) {
+        raf = requestAnimationFrame(tryObserve);
+        return;
       }
-    });
-    observer.observe(expandedGraphContainerRef.current);
-    return () => observer.disconnect();
+      observer = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (entry) {
+          setExpandedGraphSize({
+            width: Math.max(400, Math.floor(entry.contentRect.width)),
+            height: Math.max(300, Math.floor(entry.contentRect.height)),
+          });
+        }
+      });
+      observer.observe(el);
+    };
+
+    raf = requestAnimationFrame(tryObserve);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      observer?.disconnect();
+    };
   }, [expandedVisualization]);
 
   useEffect(() => {
@@ -1713,7 +1726,7 @@ export default function ComponentEvalPage() {
                     </Card>
 
                     {/* Heatmap */}
-                    <Card className="p-6">
+                    <Card className="p-6 overflow-hidden">
                       <div className="mb-4 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <Grid3x3 className="w-5 h-5" />
@@ -1728,30 +1741,39 @@ export default function ComponentEvalPage() {
                         Matrix view of normalized graph edge values returned by the backend
                       </p>
                       {heatmapData.length > 0 ? (
-                        <ScrollArea className="h-[480px]">
-                          <div
-                            className="grid gap-1"
-                            style={{
-                              gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(0, 1fr))`,
-                            }}
-                          >
-                            {heatmapData.map((cell, idx) => (
-                              <div
-                                key={idx}
-                                className="relative aspect-square rounded-sm border border-slate-200"
-                                style={{ backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})` }}
-                                title={`Chunk ${cell.x} -> ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
-                              >
-                                {cell.aboveThreshold ? (
-                                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
-                                ) : null}
-                                <span className="absolute inset-x-0 bottom-0 truncate px-1 pb-0.5 text-center text-[10px] font-medium text-white/90 mix-blend-plus-lighter">
-                                  {cell.dissimilarity.toFixed(2)}
-                                </span>
-                              </div>
-                            ))}
+                        <div className="flex flex-col gap-3" style={{ height: 480 }}>
+                          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-slate-200 bg-slate-50/50">
+                            <div
+                              className="grid gap-[2px] p-1"
+                              style={{
+                                gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(28px, 1fr))`,
+                                width: 'max-content',
+                                minWidth: '100%',
+                              }}
+                            >
+                              {heatmapData.map((cell, idx) => (
+                                <div
+                                  key={idx}
+                                  className="relative flex items-end justify-center rounded-sm border border-slate-200"
+                                  style={{
+                                    backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})`,
+                                    aspectRatio: '1',
+                                    minWidth: 28,
+                                    minHeight: 28,
+                                  }}
+                                  title={`Chunk ${cell.x} → ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
+                                >
+                                  {cell.aboveThreshold ? (
+                                    <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full border border-white/80 bg-slate-950/80" />
+                                  ) : null}
+                                  <span className="pb-0.5 text-center text-[10px] font-semibold leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+                                    {cell.dissimilarity.toFixed(2)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between mt-4 text-xs">
+                          <div className="shrink-0 flex items-center justify-between text-xs">
                             <span className="flex items-center gap-2">
                               <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />
                               Low edge value
@@ -1765,7 +1787,7 @@ export default function ComponentEvalPage() {
                               Above threshold
                             </span>
                           </div>
-                        </ScrollArea>
+                        </div>
                       ) : (
                         <div className="text-center py-12 text-slate-400">
                           <Grid3x3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -1776,8 +1798,7 @@ export default function ComponentEvalPage() {
                   </div>
 
                     <Dialog open={expandedVisualization !== null} onOpenChange={(open) => !open && setExpandedVisualization(null)}>
-                    <DialogContent className="h-[97vh] w-[min(99vw,1900px)] max-w-none overflow-hidden border border-slate-200/90 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-0 shadow-2xl">
-                      <div className="flex h-full flex-col">
+                    <DialogContent className="flex flex-col h-[97vh] w-[min(99vw,1900px)] max-w-none sm:max-w-none gap-0 overflow-hidden border border-slate-200/90 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-0 shadow-2xl">
                         <DialogHeader className="shrink-0 border-b border-slate-200/80 px-6 pb-4 pt-5">
                           <DialogTitle>
                             {expandedVisualization === 'force' ? 'Chunk Dependency Graph' : 'Edge Value Heatmap'}
@@ -1788,11 +1809,12 @@ export default function ComponentEvalPage() {
                               : 'Expanded matrix view of normalized graph edge values.'}
                           </DialogDescription>
                         </DialogHeader>
+
                         {expandedVisualization === 'force' ? (
-                        <div className="flex min-h-0 flex-1 flex-col space-y-4 p-4 sm:p-5">
+                        <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
                           <div
                             ref={expandedGraphContainerRef}
-                            className="mx-auto h-full w-full rounded-xl border border-slate-300/80 bg-slate-50 shadow-inner overflow-hidden"
+                            className="min-h-0 flex-1 w-full rounded-xl border border-slate-300/80 bg-slate-50 shadow-inner overflow-hidden"
                           >
                             {forceGraphData && forceGraphData.nodes.length > 0 ? (
                               <ForceGraph2D
@@ -1819,7 +1841,7 @@ export default function ComponentEvalPage() {
                               </div>
                             )}
                           </div>
-                          <div className="mx-auto flex w-full items-center justify-between text-xs">
+                          <div className="shrink-0 mx-auto flex w-full items-center justify-between pt-3 text-xs">
                             <span className="flex items-center gap-2">
                               <div className="h-1 w-8 rounded-full bg-slate-300" />
                               Lower edge value
@@ -1832,34 +1854,39 @@ export default function ComponentEvalPage() {
                           </div>
                         </div>
                       ) : heatmapData.length > 0 ? (
-                        <div className="min-h-0 flex-1 space-y-4 p-4 sm:p-5">
-                          <div className="mx-auto h-full w-full rounded-xl border border-slate-300/80 bg-slate-50 p-3 shadow-inner sm:p-4">
-                            <ScrollArea className="h-full w-full">
+                        <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+                          <div className="min-h-0 flex-1 w-full overflow-auto rounded-xl border border-slate-300/80 bg-slate-50 p-3 shadow-inner sm:p-4">
                               <div
-                                className="grid gap-1"
+                                className="grid gap-[3px]"
                                 style={{
-                                  gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(0, 1fr))`,
+                                  gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(36px, 1fr))`,
+                                  width: 'max-content',
+                                  minWidth: '100%',
                                 }}
                               >
                               {heatmapData.map((cell, idx) => (
                                 <div
                                   key={`expanded-${idx}`}
-                                  className="relative aspect-square rounded-sm border border-slate-200"
-                                  style={{ backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})` }}
-                                  title={`Chunk ${cell.x} -> ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
+                                  className="relative flex items-end justify-center rounded-sm border border-slate-200"
+                                  style={{
+                                    backgroundColor: `rgba(239, 68, 68, ${Math.max(0.12, Math.min(1, cell.dissimilarity))})`,
+                                    aspectRatio: '1',
+                                    minWidth: 36,
+                                    minHeight: 36,
+                                  }}
+                                  title={`Chunk ${cell.x} → ${cell.y}: edgeValue=${cell.dissimilarity.toFixed(3)}${cell.aboveThreshold ? `, above threshold ${threshold[0].toFixed(2)}` : ''}`}
                                 >
                                   {cell.aboveThreshold ? (
-                                    <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
+                                    <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full border border-white/80 bg-slate-950/80" />
                                   ) : null}
-                                  <span className="absolute inset-x-0 bottom-0 truncate px-1 pb-0.5 text-center text-[10px] font-medium text-white/90 mix-blend-plus-lighter">
+                                  <span className="pb-0.5 text-center text-[11px] font-semibold leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
                                     {cell.dissimilarity.toFixed(2)}
                                   </span>
                                 </div>
                               ))}
                               </div>
-                            </ScrollArea>
                           </div>
-                          <div className="mx-auto flex w-full items-center justify-between text-xs">
+                          <div className="shrink-0 mx-auto flex w-full items-center justify-between pt-3 text-xs">
                             <span className="flex items-center gap-2">
                               <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />
                               Low edge value
@@ -1880,7 +1907,6 @@ export default function ComponentEvalPage() {
                           <p>No heatmap data available</p>
                         </div>
                       )}
-                      </div>
                     </DialogContent>
                   </Dialog>
 
