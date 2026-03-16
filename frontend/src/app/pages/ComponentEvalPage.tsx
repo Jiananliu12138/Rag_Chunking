@@ -787,9 +787,9 @@ export default function ComponentEvalPage() {
     nodeIds.forEach((id) => nodes.push({ id, name: `Chunk ${id}` }));
     nodeIds.forEach((source) => {
       Object.entries(graph[source] || {}).forEach(([target, weight]: [string, any]) => {
-        const similarity = 1 - weight;
-        if (similarity > similarityThreshold[0]) {
-          links.push({ source, target, similarity, value: similarity });
+        const edgeValue = Number(weight);
+        if (edgeValue > similarityThreshold[0]) {
+          links.push({ source, target, edgeValue, value: edgeValue });
         }
       });
     });
@@ -1627,12 +1627,12 @@ export default function ComponentEvalPage() {
                           <Cpu className="w-5 h-5 text-green-700" />
                         </div>
                         <div>
-                          <h3 className="font-bold">Complete Graph Entropy</h3>
-                          <p className="text-xs text-slate-600">All chunks fully connected</p>
+                          <h3 className="font-bold">Normalized Complete Graph Entropy</h3>
+                          <p className="text-xs text-slate-600">All chunks fully connected, normalized by log2(num_chunks)</p>
                         </div>
                       </div>
                       <div className="text-4xl font-bold text-green-900 mb-2">
-                        {stickinessResult.structural_entropy_complete?.toFixed(6) || '-'}
+                        {stickinessResult.normalized_structural_entropy_complete?.toFixed(6) || '-'}
                       </div>
                       <p className="text-sm text-slate-600">Lower values indicate stronger overall cohesion</p>
                     </Card>
@@ -1642,12 +1642,12 @@ export default function ComponentEvalPage() {
                           <Cpu className="w-5 h-5 text-orange-700" />
                         </div>
                         <div>
-                          <h3 className="font-bold">Incomplete Graph Entropy</h3>
-                          <p className="text-xs text-slate-600">After threshold filtering</p>
+                          <h3 className="font-bold">Normalized Incomplete Graph Entropy</h3>
+                          <p className="text-xs text-slate-600">After threshold filtering, normalized by log2(num_chunks)</p>
                         </div>
                       </div>
                       <div className="text-4xl font-bold text-orange-900 mb-2">
-                        {stickinessResult.structural_entropy_incomplete?.toFixed(6) || '-'}
+                        {stickinessResult.normalized_structural_entropy_incomplete?.toFixed(6) || '-'}
                       </div>
                       <p className="text-sm text-slate-600">Difference from complete shows threshold impact</p>
                     </Card>
@@ -1662,7 +1662,7 @@ export default function ComponentEvalPage() {
                         <h3 className="font-bold">Chunk Dependency Graph</h3>
                       </div>
                       <p className="text-sm text-slate-600 mb-4">
-                        Force-directed layout — shows edges with similarity above visualization threshold
+                        Force-directed layout – shows normalized graph edges whose value exceeds the visualization threshold
                       </p>
                       <div
                         ref={graphContainerRef}
@@ -1686,7 +1686,7 @@ export default function ComponentEvalPage() {
                           <div className="h-full flex items-center justify-center">
                             <div className="text-center text-slate-400">
                               <Network className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                              <p>No edges above similarity threshold</p>
+                              <p>No edges above visualization threshold</p>
                               <p className="text-xs">Try lowering the visualization threshold</p>
                             </div>
                           </div>
@@ -1698,10 +1698,10 @@ export default function ComponentEvalPage() {
                     <Card className="p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <Grid3x3 className="w-5 h-5" />
-                        <h3 className="font-bold">Dissimilarity Heatmap</h3>
+                        <h3 className="font-bold">Edge Value Heatmap</h3>
                       </div>
                       <p className="text-sm text-slate-600 mb-4">
-                        Matrix view of the normalized graph dissimilarity weights returned by the backend
+                        Matrix view of normalized graph edge values returned by the backend
                       </p>
                       {heatmapData.length > 0 ? (
                         <ScrollArea className="h-[480px]">

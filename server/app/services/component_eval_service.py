@@ -263,6 +263,8 @@ class ComponentEvalService:
             return ChunkStickinessResult(
                 structural_entropy_complete=result.structural_entropy_complete,
                 structural_entropy_incomplete=result.structural_entropy_incomplete,
+                normalized_structural_entropy_complete=result.normalized_structural_entropy_complete,
+                normalized_structural_entropy_incomplete=result.normalized_structural_entropy_incomplete,
                 graph_complete=result.graph_complete,
                 graph_incomplete=result.graph_incomplete,
             )

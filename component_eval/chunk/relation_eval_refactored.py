@@ -45,13 +45,17 @@ class StickinessResult:
     """黏连度评估结果"""
     structural_entropy_complete: float = 0.0
     structural_entropy_incomplete: float = 0.0
+    normalized_structural_entropy_complete: float = 0.0
+    normalized_structural_entropy_incomplete: float = 0.0
     graph_complete: Dict = field(default_factory=dict)
     graph_incomplete: Dict = field(default_factory=dict)
     
     def to_dict(self) -> Dict:
         return {
             'structural_entropy_complete_graph': self.structural_entropy_complete,
-            'structural_entropy_incomplete_graph': self.structural_entropy_incomplete
+            'structural_entropy_incomplete_graph': self.structural_entropy_incomplete,
+            'normalized_structural_entropy_complete_graph': self.normalized_structural_entropy_complete,
+            'normalized_structural_entropy_incomplete_graph': self.normalized_structural_entropy_incomplete,
         }
 
 
@@ -233,7 +237,7 @@ class GraphBuilder:
                     score = (bc ** score_temperature) / (1 + bc ** score_temperature)
                     weight_temp = 1 - score
                     position_penalty = delta * abs(i - j) / (n - 1) if n > 1 else 0
-                    weight = weight_temp - position_penalty
+                    weight = max(0.0, weight_temp - position_penalty)
                     graph[i][j] = weight
         
         return graph
@@ -265,6 +269,15 @@ class StructuralEntropyCalculator:
                 entropy -= p * math.log2(p)
         
         return entropy
+
+    @staticmethod
+    def normalize_entropy(entropy: float, node_count: int) -> float:
+        if node_count <= 1:
+            return 0.0
+        max_entropy = math.log2(node_count)
+        if max_entropy <= 0:
+            return 0.0
+        return entropy / max_entropy
     
     @staticmethod
     def find_edges_above_threshold(
@@ -377,6 +390,7 @@ class StickinessEvaluator:
         )
         degree_dist_complete = StructuralEntropyCalculator.build_degree_distribution(edges_complete)
         entropy_complete = StructuralEntropyCalculator.calculate_entropy(degree_dist_complete)
+        normalized_entropy_complete = StructuralEntropyCalculator.normalize_entropy(entropy_complete, n)
         
         # Step 5: 构建不完全图并计算结构熵
         graph_incomplete = self.graph_builder.create_incomplete_graph(graph_normalized)
@@ -386,10 +400,13 @@ class StickinessEvaluator:
         )
         degree_dist_incomplete = StructuralEntropyCalculator.build_degree_distribution(edges_incomplete)
         entropy_incomplete = StructuralEntropyCalculator.calculate_entropy(degree_dist_incomplete)
+        normalized_entropy_incomplete = StructuralEntropyCalculator.normalize_entropy(entropy_incomplete, n)
         
         result = StickinessResult(
             structural_entropy_complete=entropy_complete,
             structural_entropy_incomplete=entropy_incomplete,
+            normalized_structural_entropy_complete=normalized_entropy_complete,
+            normalized_structural_entropy_incomplete=normalized_entropy_incomplete,
             graph_complete=graph_normalized,
             graph_incomplete=graph_incomplete
         )

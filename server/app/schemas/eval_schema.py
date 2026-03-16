@@ -365,6 +365,8 @@ class ChunkStickinessRequest(BaseModel):
 class ChunkStickinessResult(BaseModel):
     structural_entropy_complete: float = Field(..., description="完全图结构熵")
     structural_entropy_incomplete: float = Field(..., description="不完全图结构熵")
+    normalized_structural_entropy_complete: float = Field(..., description="按 chunk 数量归一化后的完整图结构熵")
+    normalized_structural_entropy_incomplete: float = Field(..., description="按 chunk 数量归一化后的不完整图结构熵")
     graph_complete: dict[int, dict[int, float]] = Field(
         ...,
         description=(
