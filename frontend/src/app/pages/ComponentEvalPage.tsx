@@ -1678,7 +1678,7 @@ export default function ComponentEvalPage() {
                   {/* Visualizations */}
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                     {/* Force Graph – explicit size to prevent overflow */}
-                    <Card className="p-6 overflow-hidden xl:col-span-2">
+                    <Card className="p-6 overflow-hidden">
                       <div className="mb-4 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <Network className="w-5 h-5" />
@@ -1799,7 +1799,7 @@ export default function ComponentEvalPage() {
                       </DialogHeader>
                       {expandedVisualization === 'force' ? (
                         <div className="space-y-4">
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 680 }}>
+                          <div className="mx-auto w-full max-w-[1200px] rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 680 }}>
                             {forceGraphData && forceGraphData.nodes.length > 0 ? (
                               <ForceGraph2D
                                 graphData={forceGraphData}
@@ -1823,7 +1823,7 @@ export default function ComponentEvalPage() {
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between text-xs">
                             <span className="flex items-center gap-2">
                               <div className="h-1 w-8 rounded-full bg-slate-300" />
                               Lower edge value
@@ -1837,7 +1837,7 @@ export default function ComponentEvalPage() {
                         </div>
                       ) : heatmapData.length > 0 ? (
                         <div className="space-y-4">
-                          <ScrollArea className="h-[720px]">
+                          <ScrollArea className="mx-auto h-[720px] w-full max-w-[1200px]">
                             <div
                               className="grid gap-1"
                               style={{
@@ -1861,7 +1861,7 @@ export default function ComponentEvalPage() {
                               ))}
                             </div>
                           </ScrollArea>
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between text-xs">
                             <span className="flex items-center gap-2">
                               <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />
                               Low edge value
