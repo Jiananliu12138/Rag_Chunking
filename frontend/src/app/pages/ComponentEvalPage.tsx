@@ -31,12 +31,8 @@ import { PathPickerButton } from '../components/PathPickerButton';
 interface QualityConfigDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  pplModelPath: string;
-  setPplModelPath: (v: string) => void;
   simModelPath: string;
   setSimModelPath: (v: string) => void;
-  useVllm: boolean;
-  setUseVllm: (v: boolean) => void;
   vllmApiBase: string;
   setVllmApiBase: (v: string) => void;
   vllmModelName: string;
@@ -85,9 +81,7 @@ const chunkJsonPlaceholder = `{
 
 function QualityConfigDialog({
   open, onOpenChange,
-  pplModelPath, setPplModelPath,
   simModelPath, setSimModelPath,
-  useVllm, setUseVllm,
   vllmApiBase, setVllmApiBase,
   vllmModelName, setVllmModelName,
 }: QualityConfigDialogProps) {
@@ -102,21 +96,10 @@ function QualityConfigDialog({
         <DialogHeader>
           <DialogTitle>Chunk Quality Model Config</DialogTitle>
           <DialogDescription>
-            Override default model paths. Leave blank to use server defaults.
+            Configure semantic embedding and required vLLM settings for chunk quality evaluation.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div>
-            <Label>PPL Model Path</Label>
-            <Input
-              value={pplModelPath}
-              onChange={(e) => setPplModelPath(e.target.value)}
-              onKeyDown={(e) => fillPlaceholderOnTab(e, pplModelPath, e.currentTarget.placeholder, setPplModelPath)}
-              placeholder="/models/Qwen2.5-7B-Instruct"
-              className="mt-1.5"
-            />
-            <p className="text-xs text-slate-500 mt-1">Perplexity model for Boundary Clarity</p>
-          </div>
           <div>
             <Label>Sim Model Path</Label>
             <Input
@@ -128,37 +111,31 @@ function QualityConfigDialog({
             />
             <p className="text-xs text-slate-500 mt-1">Embedding model for Semantic Dissimilarity</p>
           </div>
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <div>
-              <Label className="text-sm">Use vLLM for PPL</Label>
-              <p className="text-xs text-slate-500">Call vLLM API instead of local model</p>
-            </div>
-            <Switch checked={useVllm} onCheckedChange={setUseVllm} />
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+            Boundary Clarity now always uses vLLM for perplexity scoring.
           </div>
-          {useVllm && (
-            <div className="space-y-3 pl-3 border-l-2 border-blue-200">
-              <div>
-                <Label>vLLM API Base</Label>
-                <Input
-                  value={vllmApiBase}
-                  onChange={(e) => setVllmApiBase(e.target.value)}
-                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
-                  placeholder="http://localhost:8005/v1"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label>vLLM Model Name</Label>
-                <Input
-                  value={vllmModelName}
-                  onChange={(e) => setVllmModelName(e.target.value)}
-                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
-                  placeholder="Qwen2.5-7B-Instruct"
-                  className="mt-1.5"
-                />
-              </div>
+          <div className="space-y-3 pl-3 border-l-2 border-blue-200">
+            <div>
+              <Label>vLLM API Base</Label>
+              <Input
+                value={vllmApiBase}
+                onChange={(e) => setVllmApiBase(e.target.value)}
+                onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
+                placeholder="http://localhost:8005/v1"
+                className="mt-1.5"
+              />
             </div>
-          )}
+            <div>
+              <Label>vLLM Model Name</Label>
+              <Input
+                value={vllmModelName}
+                onChange={(e) => setVllmModelName(e.target.value)}
+                onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
+                placeholder="Qwen2.5-7B-Instruct"
+                className="mt-1.5"
+              />
+            </div>
+          </div>
         </div>
         <div className="flex justify-end pt-2">
           <Button onClick={() => onOpenChange(false)}>Done</Button>
@@ -171,10 +148,6 @@ function QualityConfigDialog({
 interface StickinessConfigDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  modelPath: string;
-  setModelPath: (v: string) => void;
-  useVllm: boolean;
-  setUseVllm: (v: boolean) => void;
   vllmApiBase: string;
   setVllmApiBase: (v: string) => void;
   vllmModelName: string;
@@ -183,8 +156,6 @@ interface StickinessConfigDialogProps {
 
 function StickinessConfigDialog({
   open, onOpenChange,
-  modelPath, setModelPath,
-  useVllm, setUseVllm,
   vllmApiBase, setVllmApiBase,
   vllmModelName, setVllmModelName,
 }: StickinessConfigDialogProps) {
@@ -199,52 +170,35 @@ function StickinessConfigDialog({
         <DialogHeader>
           <DialogTitle>Chunk Stickiness Model Config</DialogTitle>
           <DialogDescription>
-            Override default model path. Leave blank to use server default.
+            Chunk stickiness now always uses vLLM for perplexity scoring.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div>
-            <Label>Model Path</Label>
-            <Input
-              value={modelPath}
-              onChange={(e) => setModelPath(e.target.value)}
-              onKeyDown={(e) => fillPlaceholderOnTab(e, modelPath, e.currentTarget.placeholder, setModelPath)}
-              placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
-              className="mt-1.5"
-            />
-            <p className="text-xs text-slate-500 mt-1">Embedding model for structural-entropy evaluation</p>
+          <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-xs text-orange-800">
+            Local language-model loading has been removed for stickiness evaluation.
           </div>
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="space-y-3 pl-3 border-l-2 border-orange-200">
             <div>
-              <Label className="text-sm">Use vLLM for PPL</Label>
-              <p className="text-xs text-slate-500">Call vLLM API instead of local model</p>
+              <Label>vLLM API Base</Label>
+              <Input
+                value={vllmApiBase}
+                onChange={(e) => setVllmApiBase(e.target.value)}
+                onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
+                placeholder="http://localhost:8005/v1"
+                className="mt-1.5"
+              />
             </div>
-            <Switch checked={useVllm} onCheckedChange={setUseVllm} />
+            <div>
+              <Label>vLLM Model Name</Label>
+              <Input
+                value={vllmModelName}
+                onChange={(e) => setVllmModelName(e.target.value)}
+                onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
+                placeholder="Qwen2.5-7B-Instruct"
+                className="mt-1.5"
+              />
+            </div>
           </div>
-          {useVllm && (
-            <div className="space-y-3 pl-3 border-l-2 border-orange-200">
-              <div>
-                <Label>vLLM API Base</Label>
-                <Input
-                  value={vllmApiBase}
-                  onChange={(e) => setVllmApiBase(e.target.value)}
-                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
-                  placeholder="http://localhost:8005/v1"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label>vLLM Model Name</Label>
-                <Input
-                  value={vllmModelName}
-                  onChange={(e) => setVllmModelName(e.target.value)}
-                  onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
-                  placeholder="Qwen2.5-7B-Instruct"
-                  className="mt-1.5"
-                />
-              </div>
-            </div>
-          )}
         </div>
         <div className="flex justify-end pt-2">
           <Button onClick={() => onOpenChange(false)}>Done</Button>
@@ -486,9 +440,7 @@ export default function ComponentEvalPage() {
 
   // ── Chunk Quality – Model Config (shared) ──────────────────────────────────
   const [qualityConfigOpen, setQualityConfigOpen] = useState(false);
-  const [pplModelPath, setPplModelPath] = useState('');
   const [simModelPath, setSimModelPath] = useState('');
-  const [qualityUseVllm, setQualityUseVllm] = useState(false);
   const [qualityVllmApiBase, setQualityVllmApiBase] = useState('http://localhost:8005/v1');
   const [qualityVllmModelName, setQualityVllmModelName] = useState('');
 
@@ -509,8 +461,6 @@ export default function ComponentEvalPage() {
 
   // ── Chunk Stickiness – Model Config (shared) ───────────────────────────────
   const [stickinessConfigOpen, setStickinessConfigOpen] = useState(false);
-  const [stickinessModelPath, setStickinessModelPath] = useState('');
-  const [stickinessUseVllm, setStickinessUseVllm] = useState(false);
   const [stickinessVllmApiBase, setStickinessVllmApiBase] = useState('http://localhost:8005/v1');
   const [stickinessVllmModelName, setStickinessVllmModelName] = useState('');
 
@@ -528,6 +478,8 @@ export default function ComponentEvalPage() {
   // ── Force graph container sizing ───────────────────────────────────────────
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const [graphSize, setGraphSize] = useState({ width: 460, height: 480 });
+  const expandedGraphContainerRef = useRef<HTMLDivElement>(null);
+  const [expandedGraphSize, setExpandedGraphSize] = useState({ width: 1200, height: 840 });
 
   useEffect(() => {
     if (!graphContainerRef.current) return;
@@ -545,6 +497,23 @@ export default function ComponentEvalPage() {
   }, []);
 
   useEffect(() => {
+    if (!expandedGraphContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        const nextWidth = Math.max(720, Math.floor(entry.contentRect.width));
+        const nextHeight = Math.max(720, Math.floor(entry.contentRect.height));
+        setExpandedGraphSize({
+          width: nextWidth,
+          height: nextHeight,
+        });
+      }
+    });
+    observer.observe(expandedGraphContainerRef.current);
+    return () => observer.disconnect();
+  }, [expandedVisualization]);
+
+  useEffect(() => {
     if (location.search.includes('section=retrieval')) {
       setActiveTab('retrieval');
     } else if (activeTab === 'retrieval') {
@@ -557,30 +526,22 @@ export default function ComponentEvalPage() {
     (base: Record<string, any>) => {
       const data: any = { ...base };
       data.score_temperature = scoreTemperature[0];
-      if (pplModelPath.trim()) data.ppl_model_path = pplModelPath.trim();
       if (simModelPath.trim()) data.sim_model_path = simModelPath.trim();
-      if (qualityUseVllm) {
-        data.use_vllm = true;
-        if (qualityVllmApiBase.trim()) data.vllm_api_base = qualityVllmApiBase.trim();
-        if (qualityVllmModelName.trim()) data.vllm_model_name = qualityVllmModelName.trim();
-      }
+      if (qualityVllmApiBase.trim()) data.vllm_api_base = qualityVllmApiBase.trim();
+      if (qualityVllmModelName.trim()) data.vllm_model_name = qualityVllmModelName.trim();
       return data;
     },
-    [scoreTemperature, pplModelPath, simModelPath, qualityUseVllm, qualityVllmApiBase, qualityVllmModelName],
+    [scoreTemperature, simModelPath, qualityVllmApiBase, qualityVllmModelName],
   );
 
   const buildStickinessData = useCallback(
     (base: Record<string, any>) => {
       const data: any = { ...base };
-      if (stickinessModelPath.trim()) data.model_path = stickinessModelPath.trim();
-      if (stickinessUseVllm) {
-        data.use_vllm = true;
-        if (stickinessVllmApiBase.trim()) data.vllm_api_base = stickinessVllmApiBase.trim();
-        if (stickinessVllmModelName.trim()) data.vllm_model_name = stickinessVllmModelName.trim();
-      }
+      if (stickinessVllmApiBase.trim()) data.vllm_api_base = stickinessVllmApiBase.trim();
+      if (stickinessVllmModelName.trim()) data.vllm_model_name = stickinessVllmModelName.trim();
       return data;
     },
-    [stickinessModelPath, stickinessUseVllm, stickinessVllmApiBase, stickinessVllmModelName],
+    [stickinessVllmApiBase, stickinessVllmModelName],
   );
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -1102,12 +1063,8 @@ export default function ComponentEvalPage() {
                     <QualityConfigDialog
                       open={qualityConfigOpen}
                       onOpenChange={setQualityConfigOpen}
-                      pplModelPath={pplModelPath}
-                      setPplModelPath={setPplModelPath}
                       simModelPath={simModelPath}
                       setSimModelPath={setSimModelPath}
-                      useVllm={qualityUseVllm}
-                      setUseVllm={setQualityUseVllm}
                       vllmApiBase={qualityVllmApiBase}
                       setVllmApiBase={setQualityVllmApiBase}
                       vllmModelName={qualityVllmModelName}
@@ -1157,12 +1114,8 @@ export default function ComponentEvalPage() {
                     <QualityConfigDialog
                       open={qualityConfigOpen}
                       onOpenChange={setQualityConfigOpen}
-                      pplModelPath={pplModelPath}
-                      setPplModelPath={setPplModelPath}
                       simModelPath={simModelPath}
                       setSimModelPath={setSimModelPath}
-                      useVllm={qualityUseVllm}
-                      setUseVllm={setQualityUseVllm}
                       vllmApiBase={qualityVllmApiBase}
                       setVllmApiBase={setQualityVllmApiBase}
                       vllmModelName={qualityVllmModelName}
@@ -1418,10 +1371,6 @@ export default function ComponentEvalPage() {
                     <StickinessConfigDialog
                       open={stickinessConfigOpen}
                       onOpenChange={setStickinessConfigOpen}
-                      modelPath={stickinessModelPath}
-                      setModelPath={setStickinessModelPath}
-                      useVllm={stickinessUseVllm}
-                      setUseVllm={setStickinessUseVllm}
                       vllmApiBase={stickinessVllmApiBase}
                       setVllmApiBase={setStickinessVllmApiBase}
                       vllmModelName={stickinessVllmModelName}
@@ -1455,10 +1404,6 @@ export default function ComponentEvalPage() {
                     <StickinessConfigDialog
                       open={stickinessConfigOpen}
                       onOpenChange={setStickinessConfigOpen}
-                      modelPath={stickinessModelPath}
-                      setModelPath={setStickinessModelPath}
-                      useVllm={stickinessUseVllm}
-                      setUseVllm={setStickinessUseVllm}
                       vllmApiBase={stickinessVllmApiBase}
                       setVllmApiBase={setStickinessVllmApiBase}
                       vllmModelName={stickinessVllmModelName}
@@ -1804,7 +1749,7 @@ export default function ComponentEvalPage() {
                   </div>
 
                     <Dialog open={expandedVisualization !== null} onOpenChange={(open) => !open && setExpandedVisualization(null)}>
-                    <DialogContent className="h-[96vh] w-[99vw] max-w-[99vw] overflow-y-auto p-6">
+                    <DialogContent className="h-[97vh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto p-4 sm:p-6">
                       <DialogHeader>
                         <DialogTitle>
                           {expandedVisualization === 'force' ? 'Chunk Dependency Graph' : 'Edge Value Heatmap'}
@@ -1817,16 +1762,20 @@ export default function ComponentEvalPage() {
                       </DialogHeader>
                       {expandedVisualization === 'force' ? (
                         <div className="space-y-4">
-                          <div className="mx-auto w-full rounded-lg border border-slate-200 bg-slate-50 overflow-hidden" style={{ height: 840 }}>
+                          <div
+                            ref={expandedGraphContainerRef}
+                            className="mx-auto w-full rounded-lg border border-slate-200 bg-slate-50 overflow-hidden"
+                            style={{ height: '78vh' }}
+                          >
                             {forceGraphData && forceGraphData.nodes.length > 0 ? (
                               <ForceGraph2D
                                 graphData={forceGraphData}
-                                width={1600}
-                                height={840}
+                                width={expandedGraphSize.width}
+                                height={expandedGraphSize.height}
                                 nodeLabel="name"
                                 nodeAutoColorBy="id"
-                            linkWidth={(link: any) => Math.max(1.4, Math.pow(link.value, 1.15) * 10)}
-                            linkColor={(link: any) => getForceLinkColor(link.value)}
+                                linkWidth={(link: any) => Math.max(1.4, Math.pow(link.value, 1.15) * 10)}
+                                linkColor={(link: any) => getForceLinkColor(link.value)}
                                 nodeRelSize={7}
                                 linkDirectionalParticles={2}
                                 linkDirectionalParticleWidth={(link: any) => link.value * 4}
@@ -1855,13 +1804,14 @@ export default function ComponentEvalPage() {
                         </div>
                       ) : heatmapData.length > 0 ? (
                         <div className="space-y-4">
-                          <ScrollArea className="mx-auto h-[82vh] w-full">
-                            <div
-                              className="grid gap-1"
-                              style={{
-                                gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(0, 1fr))`,
-                              }}
-                            >
+                          <div className="mx-auto w-full rounded-lg border border-slate-200 bg-slate-50 p-3 sm:p-4">
+                            <ScrollArea className="h-[80vh] w-full">
+                              <div
+                                className="grid gap-1"
+                                style={{
+                                  gridTemplateColumns: `repeat(${Math.round(Math.sqrt(heatmapData.length))}, minmax(0, 1fr))`,
+                                }}
+                              >
                               {heatmapData.map((cell, idx) => (
                                 <div
                                   key={`expanded-${idx}`}
@@ -1877,8 +1827,9 @@ export default function ComponentEvalPage() {
                                   </span>
                                 </div>
                               ))}
-                            </div>
-                          </ScrollArea>
+                              </div>
+                            </ScrollArea>
+                          </div>
                           <div className="mx-auto flex w-full items-center justify-between text-xs">
                             <span className="flex items-center gap-2">
                               <div className="w-4 h-4 bg-rose-100 rounded border border-slate-200" />

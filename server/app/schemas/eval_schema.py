@@ -229,25 +229,17 @@ class ChunkQualityRequest(BaseModel):
     score_temperature: Optional[float] = Field(
         None, ge=0.1, description="可选：BC score 温度参数；未提供时从配置读取"
     )
-    ppl_model_path: Optional[str] = Field(
-        None,
-        description="可选：覆盖默认的困惑度模型路径；未提供时使用 COMPONENT_PPL_MODEL_PATH。",
-    )
     sim_model_path: Optional[str] = Field(
         None,
         description="可选：覆盖默认的语义相似度模型路径；未提供时使用 COMPONENT_SIM_MODEL_PATH。",
     )
-    use_vllm: Optional[bool] = Field(
-        None,
-        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
-    )
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,
-        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 模型名称，未提供时从默认配置读取。",
     )
 
 
@@ -296,25 +288,17 @@ class ChunkQualityFileRequest(BaseModel):
     score_temperature: Optional[float] = Field(
         None, ge=0.1, description="可选：BC score 温度参数；未提供时从配置读取"
     )
-    ppl_model_path: Optional[str] = Field(
-        None,
-        description="可选：覆盖默认的困惑度模型路径；未提供时使用 COMPONENT_PPL_MODEL_PATH。",
-    )
     sim_model_path: Optional[str] = Field(
         None,
         description="可选：覆盖默认的语义相似度模型路径；未提供时使用 COMPONENT_SIM_MODEL_PATH。",
     )
-    use_vllm: Optional[bool] = Field(
-        None,
-        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
-    )
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,
-        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 模型名称，未提供时从默认配置读取。",
     )
 
 
@@ -350,21 +334,13 @@ class ChunkStickinessRequest(BaseModel):
     threshold: float = Field(0.8, ge=0.0, le=1.0, description="边权重阈值")
     delta: float = Field(0.0, ge=0.0, description="位置距离惩罚系数")
     score_temperature: float = Field(6.0, ge=0.1, description="BC score 温度参数")
-    model_path: Optional[str] = Field(
-        None,
-        description="可选：覆盖默认的黏连度评估模型路径；未提供时使用 STICKINESS_MODEL_PATH。",
-    )
-    use_vllm: Optional[bool] = Field(
-        None,
-        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
-    )
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,
-        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 模型名称，未提供时从默认配置读取。",
     )
 
 
@@ -420,21 +396,13 @@ class ChunkStickinessFileRequest(BaseModel):
     score_temperature: Optional[float] = Field(
         None, ge=0.1, description="可选：BC score 温度参数；未提供时从配置读取"
     )
-    model_path: Optional[str] = Field(
-        None,
-        description="可选：覆盖默认的黏连度评估模型路径；未提供时使用 STICKINESS_MODEL_PATH。",
-    )
-    use_vllm: Optional[bool] = Field(
-        None,
-        description="可选：是否使用 vLLM API 计算困惑度；未提供时默认为 False（本地模型）。",
-    )
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,
-        description="可选：vLLM 模型名称，use_vllm=True 时可覆盖默认配置。",
+        description="可选：vLLM 模型名称，未提供时从默认配置读取。",
     )
 
 

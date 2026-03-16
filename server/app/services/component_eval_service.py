@@ -35,9 +35,7 @@ class ComponentEvalService:
         enable_semantic_similarity: Optional[bool],
         enable_boundary_clarity: Optional[bool],
         score_temperature: Optional[float],
-        ppl_model_path: Optional[str],
         sim_model_path: Optional[str],
-        use_vllm: Optional[bool],
         vllm_api_base: Optional[str],
         vllm_model_name: Optional[str],
     ) -> ChunkQualityResult:
@@ -51,9 +49,6 @@ class ComponentEvalService:
             from chunk_eval_refactored import ChunkEvaluator, EvaluatorConfig  # noqa: PLC0415
 
             settings = get_settings()
-            ppl_path = ppl_model_path or settings.COMPONENT_PPL_MODEL_PATH
-            if not ppl_path:
-                raise ModelLoadException("未配置组件评估困惑度模型路径（COMPONENT_PPL_MODEL_PATH），且请求未指定 ppl_model_path")
             # 解析最终的开关配置（请求未提供时走全局配置）
             use_semantic = (
                 enable_semantic_similarity
@@ -75,17 +70,17 @@ class ComponentEvalService:
             if use_semantic and not sim_path:
                 raise ModelLoadException("未配置组件评估语义相似度模型路径（COMPONENT_SIM_MODEL_PATH），且请求未指定 sim_model_path")
 
-            use_vllm_flag = bool(use_vllm)
             vllm_base = vllm_api_base or settings.DEFAULT_VLLM_API_BASE
             vllm_model = vllm_model_name or settings.DEFAULT_VLLM_MODEL_NAME
+            if not vllm_base or not vllm_model:
+                raise ModelLoadException("Chunk 评估现在仅支持 vLLM，请配置 DEFAULT_VLLM_API_BASE / DEFAULT_VLLM_MODEL_NAME 或在请求中提供 vllm_api_base / vllm_model_name")
 
             config = EvaluatorConfig(
-                ppl_model_name=ppl_path,
                 sim_model_name=sim_path,
                 enable_semantic_similarity=use_semantic,
                 enable_boundary_clarity=use_boundary,
                 score_temperature=use_score_temperature,
-                use_vllm=use_vllm_flag,
+                use_vllm=True,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,
             )
@@ -140,9 +135,7 @@ class ComponentEvalService:
             enable_semantic_similarity=request.enable_semantic_similarity,
             enable_boundary_clarity=request.enable_boundary_clarity,
             score_temperature=request.score_temperature,
-            ppl_model_path=request.ppl_model_path,
             sim_model_path=request.sim_model_path,
-            use_vllm=request.use_vllm,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
         )
@@ -162,9 +155,7 @@ class ComponentEvalService:
             enable_semantic_similarity=request.enable_semantic_similarity,
             enable_boundary_clarity=request.enable_boundary_clarity,
             score_temperature=request.score_temperature,
-            ppl_model_path=request.ppl_model_path,
             sim_model_path=request.sim_model_path,
-            use_vllm=request.use_vllm,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
         )
@@ -189,8 +180,6 @@ class ComponentEvalService:
             threshold=request.threshold,
             delta=request.delta,
             score_temperature=request.score_temperature,
-            model_path=request.model_path,
-            use_vllm=request.use_vllm,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
         )
@@ -213,8 +202,6 @@ class ComponentEvalService:
             threshold=request.threshold,
             delta=request.delta,
             score_temperature=request.score_temperature,
-            model_path=request.model_path,
-            use_vllm=request.use_vllm,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
         )
@@ -228,8 +215,6 @@ class ComponentEvalService:
         threshold: Optional[float],
         delta: Optional[float],
         score_temperature: Optional[float],
-        model_path: Optional[str],
-        use_vllm: Optional[bool],
         vllm_api_base: Optional[str],
         vllm_model_name: Optional[str],
     ) -> ChunkStickinessResult:
@@ -240,10 +225,6 @@ class ComponentEvalService:
             from relation_eval_refactored import StickinessEvaluator, StickinessConfig  # noqa: PLC0415
 
             settings = get_settings()
-            stickiness_model = model_path or settings.STICKINESS_MODEL_PATH
-            if not stickiness_model:
-                raise ModelLoadException("未配置黏连度评估模型路径（STICKINESS_MODEL_PATH），且请求未指定 model_path")
-
             use_threshold = threshold if threshold is not None else settings.STICKINESS_THRESHOLD
             use_delta = delta if delta is not None else settings.STICKINESS_DELTA
             use_score_temperature = (
@@ -252,16 +233,16 @@ class ComponentEvalService:
                 else settings.STICKINESS_SCORE_TEMPERATURE
             )
 
-            use_vllm_flag = bool(use_vllm)
             vllm_base = vllm_api_base or settings.DEFAULT_VLLM_API_BASE
             vllm_model = vllm_model_name or settings.DEFAULT_VLLM_MODEL_NAME
+            if not vllm_base or not vllm_model:
+                raise ModelLoadException("Chunk 黏连度评估现在仅支持 vLLM，请配置 DEFAULT_VLLM_API_BASE / DEFAULT_VLLM_MODEL_NAME 或在请求中提供 vllm_api_base / vllm_model_name")
 
             config = StickinessConfig(
-                model_path=stickiness_model,
                 threshold=use_threshold,
                 delta=use_delta,
                 score_temperature=use_score_temperature,
-                use_vllm=use_vllm_flag,
+                use_vllm=True,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,
             )

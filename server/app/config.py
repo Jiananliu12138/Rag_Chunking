@@ -85,14 +85,12 @@ class Settings(BaseSettings):
 
     # ── 组件级评估默认配置 ───────────────────────────────────────
     # Chunk 质量评估（BC + 语义不相似度）
-    COMPONENT_PPL_MODEL_PATH: str = ""
     COMPONENT_SIM_MODEL_PATH: str = ""
     COMPONENT_ENABLE_SEMANTIC_SIMILARITY: bool = True
     COMPONENT_ENABLE_BOUNDARY_CLARITY: bool = True
     COMPONENT_SCORE_TEMPERATURE: float = 6.0
 
     # Chunk 黏连度评估（结构熵）
-    STICKINESS_MODEL_PATH: str = ""
     STICKINESS_THRESHOLD: float = 0.6
     STICKINESS_DELTA: float = 0.05
     STICKINESS_SCORE_TEMPERATURE: float = 6.0
