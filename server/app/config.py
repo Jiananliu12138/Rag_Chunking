@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # RRFRanker 的 k 参数（仅在使用 RRFRanker 时生效）
     MILVUS_HYBRID_RANKER_K: int = 60
     DEFAULT_ENABLE_RERANK: bool = False
-    DEFAULT_RERANK_MODEL_PATH: str = ""
+    DEFAULT_RERANK_MODEL_PATH: str = "/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3"
     DEFAULT_RERANK_DEVICE: str = "cuda:0"
 
     # ── 分块 / tiktoken 默认配置 ─────────────────────────────────
