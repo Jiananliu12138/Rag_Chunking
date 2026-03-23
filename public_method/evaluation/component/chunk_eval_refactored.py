@@ -604,7 +604,7 @@ python chunk_eval_refactored.py \\
 
 代码使用:
 ---------
-from chunk_eval_refactored import ChunkEvaluator, EvaluatorConfig
+from public_method.evaluation.component.chunk_eval_refactored import ChunkEvaluator, EvaluatorConfig
 
 # 方式1: 使用配置类
 config = EvaluatorConfig(

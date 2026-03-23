@@ -81,7 +81,7 @@ def chunk_file_endpoint(
         "- **semantic**：基于 HuggingFace 嵌入模型语义相似度切割\n"
         "- **llamaindex**：LlamaIndex SimpleNodeParser 固定窗口分块\n"
         "- **lumber**：调用 vLLM API 识别主题转换边界分块\n\n"
-        "返回格式与 Chunking_Methods 各模块一致：success, splits（每项 [text]）, time_cost, message。"
+        "返回格式与 public_method 各实现一致：success, splits（每项 [text]）, time_cost, message。"
     ),
     responses={422: _ERR_422, 500: _ERR_500},
 )

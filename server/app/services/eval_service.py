@@ -56,7 +56,7 @@ class EvalService:
             if cached is not None:
                 return cached
 
-            from eval_ragas import RAGASEvaluator  # noqa: PLC0415
+            from public_method.evaluation.longbench.eval_ragas import RAGASEvaluator
 
             eval_embeddings = get_ragas_embeddings(
                 model_path=embedding_model_path,
@@ -143,9 +143,9 @@ class EvalService:
         )
 
         try:
-            # 调用 eval_lite.py 中的带参数版本函数
-            # ensure_paths() 已将 EVAL_LONGBENCH_DIR 加入 sys.path
-            from eval_lite import calculate_traditional_metrics_with_params  # noqa: PLC0415
+            from public_method.evaluation.longbench.eval_lite import (
+                calculate_traditional_metrics_with_params,
+            )
 
             scores = calculate_traditional_metrics_with_params(
                 predictions=predictions,
@@ -199,8 +199,9 @@ class EvalService:
                 request.bert_score_device if request.bert_score_device else settings.DEFAULT_BERT_SCORE_DEVICE
             )
 
-            # 调用 eval_lite.py 中的带参数版本函数
-            from eval_lite import calculate_traditional_metrics_with_params  # noqa: PLC0415
+            from public_method.evaluation.longbench.eval_lite import (
+                calculate_traditional_metrics_with_params,
+            )
 
             scores = calculate_traditional_metrics_with_params(
                 predictions=predictions,
@@ -401,7 +402,7 @@ class EvalService:
         )
 
         try:
-            from eval_retrieval import RetrievalEvaluator  # noqa: PLC0415
+            from public_method.evaluation.longbench.eval_retrieval import RetrievalEvaluator
 
             evaluator = RetrievalEvaluator(cuts=cuts, skip_empty_gold=skip_empty_gold)
             rows = request.test if isinstance(request.test, list) else [request.test]
@@ -431,7 +432,7 @@ class EvalService:
         )
 
         try:
-            from eval_retrieval import RetrievalEvaluator  # noqa: PLC0415
+            from public_method.evaluation.longbench.eval_retrieval import RetrievalEvaluator
 
             evaluator = RetrievalEvaluator(cuts=cuts, skip_empty_gold=skip_empty_gold)
             rows = evaluator._load_rows(request.input_path)

@@ -18,10 +18,10 @@ class Config:
     # - user_input / input / query
     # - _id / id
     # - answers (list[str]) or reference (str)
-    INPUT_PATH: str = r"F:\thesis\Meta-Chunking\eval\LongBench\sample_data.jsonl"
+    INPUT_PATH: str = r"F:\thesis\Meta-Chunking\public_method\evaluation\longbench\sample_data.jsonl"
 
     # generate-file API will write this file directly (final output)
-    OUTPUT_PATH: str = r"F:\thesis\Meta-Chunking\eval\LongBench\sample_results_api.json"
+    OUTPUT_PATH: str = r"F:\thesis\Meta-Chunking\public_method\evaluation\longbench\sample_results_api.json"
 
     COLLECTION_NAME: str = "lumber_chunk"
     EMBED_MODEL_PATH: str = r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"

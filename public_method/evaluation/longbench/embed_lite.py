@@ -2,8 +2,8 @@ import os
 import json
 import asyncio
 import logging
-from base_lite import BaseRetrieverLite
-from embeddings.base import HuggingfaceEmbeddings
+from .base_lite import BaseRetrieverLite
+from .embeddings.base import HuggingfaceEmbeddings
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

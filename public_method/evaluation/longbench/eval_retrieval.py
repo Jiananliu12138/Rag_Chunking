@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Config:
-    INPUT_PATH: str = r"F:\thesis\Meta-Chunking\eval\LongBench\sample_results_api.json"
-    OUTPUT_PATH: str = r"F:\thesis\Meta-Chunking\eval\LongBench\sample_results_api_retrieval_eval.json"
+    INPUT_PATH: str = r"F:\thesis\Meta-Chunking\public_method\evaluation\longbench\sample_results_api.json"
+    OUTPUT_PATH: str = r"F:\thesis\Meta-Chunking\public_method\evaluation\longbench\sample_results_api_retrieval_eval.json"
     CUTS: tuple[int, ...] = (1, 3, 5, 10)
     SKIP_EMPTY_GOLD: bool = True
 
@@ -257,4 +257,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

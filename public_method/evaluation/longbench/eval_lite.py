@@ -11,7 +11,7 @@ from bert_score import BERTScorer
 from nltk.translate.bleu_score import SmoothingFunction, sentence_bleu
 from rouge import Rouge
 
-from metrics_lite import qa_f1_score
+from .metrics_lite import qa_f1_score
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

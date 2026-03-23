@@ -8,7 +8,6 @@ RAGAS 端到端评估器 (简化版)
 
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -26,11 +25,7 @@ from ragas.metrics._noise_sensitivity import NoiseSensitivity
 from ragas.llms import llm_factory
 from ragas.cache import DiskCacheBackend
 
-SERVER_DIR = Path(__file__).resolve().parents[2] / "server"
-if str(SERVER_DIR) not in sys.path:
-    sys.path.insert(0, str(SERVER_DIR))
-
-from app.core.model_factory import get_ragas_embeddings
+from public_method.models.factory import get_ragas_embeddings
 
 
 def _is_nan(value):

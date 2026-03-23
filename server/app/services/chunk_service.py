@@ -22,7 +22,7 @@ class ChunkService:
     # ── 文本分块（按 method 分发到四模块的 chunk_text）───────────────────────
 
     def chunk_text(self, request: ChunkTextRequest) -> ChunkTextResult:
-        """调用 Chunking_Methods 各模块的 chunk_text。"""
+        """调用 public_method 中的 chunk_text 实现。"""
         ensure_paths()
         logger.info("开始文本分块，方法=%s，文本长度=%d", request.method, len(request.text))
 
@@ -31,7 +31,7 @@ class ChunkService:
         cache_dir = settings.TIKTOKEN_CACHE_DIR or None
 
         if request.method == ChunkMethod.TOKEN:
-            from lightrag_token_chunk import chunk_text as _chunk_text
+            from public_method.chunking.lightrag_token_chunk import chunk_text as _chunk_text
 
             kwargs = {
                 "text_input": request.text,
@@ -49,7 +49,7 @@ class ChunkService:
             raw = _chunk_text(**kwargs)
 
         elif request.method == ChunkMethod.SEMANTIC:
-            from semantic_chunk import chunk_text as _chunk_text  
+            from public_method.chunking.semantic_chunk import chunk_text as _chunk_text
 
             p = request.semantic_params
             model_path = (
@@ -73,7 +73,7 @@ class ChunkService:
             raw = _chunk_text(**kwargs)
 
         elif request.method == ChunkMethod.LLAMAINDEX:
-            from chunk_llamaindex import chunk_text as _chunk_text  # noqa: PLC0415
+            from public_method.chunking.chunk_llamaindex import chunk_text as _chunk_text  # noqa: PLC0415
             kwargs = {
                 "text_input": request.text,
                 "num_workers": default_workers,
@@ -88,7 +88,7 @@ class ChunkService:
             raw = _chunk_text(**kwargs)
 
         elif request.method == ChunkMethod.LUMBER:
-            from lumber_chunk import chunk_text as _chunk_text  # noqa: PLC0415
+            from public_method.chunking.lumber_chunk import chunk_text as _chunk_text  # noqa: PLC0415
 
             p = request.lumber_params
             model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_VLLM_MODEL_NAME
@@ -128,7 +128,7 @@ class ChunkService:
     # ── 文件分块（按 method 分发到四模块的 chunk_file）───────────────────────
 
     def chunk_file(self, request: ChunkFileRequest) -> ChunkFileResult:
-        """调用 Chunking_Methods 各模块的 chunk_file。"""
+        """调用 public_method 中的 chunk_file 实现。"""
         ensure_paths()
         logger.info("开始文件分块，方法=%s，输入=%s", request.method, request.input_file)
 
@@ -137,7 +137,7 @@ class ChunkService:
         cache_dir = settings.TIKTOKEN_CACHE_DIR or None
 
         if request.method == ChunkMethod.TOKEN:
-            from lightrag_token_chunk import chunk_file as _chunk_file  
+            from public_method.chunking.lightrag_token_chunk import chunk_file as _chunk_file
 
             kwargs = {
                 "input_file": request.input_file,
@@ -156,7 +156,7 @@ class ChunkService:
             raw = _chunk_file(**kwargs)
 
         elif request.method == ChunkMethod.SEMANTIC:
-            from semantic_chunk import chunk_file as _chunk_file  
+            from public_method.chunking.semantic_chunk import chunk_file as _chunk_file
 
             p = request.semantic_params
             model_path = (
@@ -181,7 +181,7 @@ class ChunkService:
             raw = _chunk_file(**kwargs)
 
         elif request.method == ChunkMethod.LLAMAINDEX:
-            from chunk_llamaindex import chunk_file as _chunk_file  # noqa: PLC0415
+            from public_method.chunking.chunk_llamaindex import chunk_file as _chunk_file  # noqa: PLC0415
 
             kwargs = {
                 "input_file": request.input_file,
@@ -198,7 +198,7 @@ class ChunkService:
             raw = _chunk_file(**kwargs)
 
         elif request.method == ChunkMethod.LUMBER:
-            from lumber_chunk import chunk_file as _chunk_file  # noqa: PLC0415
+            from public_method.chunking.lumber_chunk import chunk_file as _chunk_file  # noqa: PLC0415
 
             p = request.lumber_params
             model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_VLLM_MODEL_NAME

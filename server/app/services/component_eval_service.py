@@ -46,7 +46,10 @@ class ComponentEvalService:
             from app.core.path_setup import ensure_paths
 
             ensure_paths()
-            from chunk_eval_refactored import ChunkEvaluator, EvaluatorConfig  # noqa: PLC0415
+            from public_method.evaluation.component.chunk_eval_refactored import (
+                ChunkEvaluator,
+                EvaluatorConfig,
+            )
 
             settings = get_settings()
             # 解析最终的开关配置（请求未提供时走全局配置）
@@ -222,7 +225,10 @@ class ComponentEvalService:
             from app.core.path_setup import ensure_paths
 
             ensure_paths()
-            from relation_eval_refactored import StickinessEvaluator, StickinessConfig  # noqa: PLC0415
+            from public_method.evaluation.component.relation_eval_refactored import (
+                StickinessConfig,
+                StickinessEvaluator,
+            )
 
             settings = get_settings()
             use_threshold = threshold if threshold is not None else settings.STICKINESS_THRESHOLD

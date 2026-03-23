@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,9 +27,6 @@ class Settings(BaseSettings):
     # ── 路径 ─────────────────────────────────────────────────────
     MILVUS_DATA_DIR: str = "F:/thesis/Meta-Chunking/database"
     MILVUS_URI: str = ""
-    CHUNKING_METHODS_DIR: str = str(BASE_DIR / "Chunking_Methods")
-    EVAL_LONGBENCH_DIR: str = str(BASE_DIR / "eval" / "LongBench")
-    MOC_METRICS_DIR: str = str(BASE_DIR / "component_eval" / "chunk")
 
     # ── 嵌入模型默认配置 ──────────────────────────────────────────
     DEFAULT_EMBEDDING_MODEL: str = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
@@ -97,11 +93,7 @@ class Settings(BaseSettings):
 
     @property
     def python_paths(self) -> list[str]:
-        return [
-            self.EVAL_LONGBENCH_DIR,
-            self.CHUNKING_METHODS_DIR,
-            self.MOC_METRICS_DIR,
-        ]
+        return [str(BASE_DIR)]
 
 
 @lru_cache

@@ -7,10 +7,10 @@ import json
 import asyncio
 import logging
 from tqdm import tqdm
-from base_lite import BaseRetrieverLite
-from embeddings.base import HuggingfaceEmbeddings
+from .base_lite import BaseRetrieverLite
+from .embeddings.base import HuggingfaceEmbeddings
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from llms.base import BaseLLM
+from .llms.base import BaseLLM
 import torch
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

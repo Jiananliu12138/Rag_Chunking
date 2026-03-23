@@ -1,20 +1,14 @@
 import json
 import time
 import os
-import sys
 import multiprocessing
-from pathlib import Path
 from functools import partial
 from threading import RLock
 from tqdm import tqdm
 from llama_index.core.node_parser import SemanticSplitterNodeParser
 from llama_index.core import Document
 
-SERVER_DIR = Path(__file__).resolve().parents[1] / "server"
-if str(SERVER_DIR) not in sys.path:
-    sys.path.insert(0, str(SERVER_DIR))
-
-from app.core.model_factory import get_llamaindex_embedding
+from public_method.models.factory import get_llamaindex_embedding
 
 # 配置
 INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl"

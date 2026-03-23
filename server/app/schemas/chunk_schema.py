@@ -130,7 +130,7 @@ class ChunkTextRequest(BaseModel):
 
 
 class ChunkTextResult(BaseModel):
-    """与 Chunking_Methods 各模块 chunk_text 返回格式一致。"""
+    """与 public_method 各实现的 chunk_text 返回格式一致。"""
     success: bool = Field(..., description="是否成功")
     splits: list[list[str]] = Field(..., description="分块结果，每项为 [text] 或 [text, doc_id]")
     time_cost: float = Field(..., description="耗时（秒）")
