@@ -69,14 +69,14 @@ class ComponentEvalService:
                 else settings.COMPONENT_SCORE_TEMPERATURE
             )
 
-            sim_path = sim_model_path or settings.COMPONENT_SIM_MODEL_PATH
+            sim_path = sim_model_path or settings.DEFAULT_EMBEDDING_MODEL
             if use_semantic and not sim_path:
-                raise ModelLoadException("未配置组件评估语义相似度模型路径（COMPONENT_SIM_MODEL_PATH），且请求未指定 sim_model_path")
+                raise ModelLoadException("未配置默认嵌入模型（DEFAULT_EMBEDDING_MODEL），且请求未指定 sim_model_path")
 
-            vllm_base = vllm_api_base or settings.DEFAULT_VLLM_API_BASE
-            vllm_model = vllm_model_name or settings.DEFAULT_VLLM_MODEL_NAME
+            vllm_base = vllm_api_base or settings.DEFAULT_LLM_API_BASE
+            vllm_model = vllm_model_name or settings.DEFAULT_LLM_MODEL
             if not vllm_base or not vllm_model:
-                raise ModelLoadException("Chunk 评估现在仅支持 vLLM，请配置 DEFAULT_VLLM_API_BASE / DEFAULT_VLLM_MODEL_NAME 或在请求中提供 vllm_api_base / vllm_model_name")
+                raise ModelLoadException("Chunk 评估现在仅支持 vLLM，请配置 DEFAULT_LLM_API_BASE / DEFAULT_LLM_MODEL 或在请求中提供 vllm_api_base / vllm_model_name")
 
             config = EvaluatorConfig(
                 sim_model_name=sim_path,
@@ -239,10 +239,10 @@ class ComponentEvalService:
                 else settings.STICKINESS_SCORE_TEMPERATURE
             )
 
-            vllm_base = vllm_api_base or settings.DEFAULT_VLLM_API_BASE
-            vllm_model = vllm_model_name or settings.DEFAULT_VLLM_MODEL_NAME
+            vllm_base = vllm_api_base or settings.DEFAULT_LLM_API_BASE
+            vllm_model = vllm_model_name or settings.DEFAULT_LLM_MODEL
             if not vllm_base or not vllm_model:
-                raise ModelLoadException("Chunk 黏连度评估现在仅支持 vLLM，请配置 DEFAULT_VLLM_API_BASE / DEFAULT_VLLM_MODEL_NAME 或在请求中提供 vllm_api_base / vllm_model_name")
+                raise ModelLoadException("Chunk 黏连度评估现在仅支持 vLLM，请配置 DEFAULT_LLM_API_BASE / DEFAULT_LLM_MODEL 或在请求中提供 vllm_api_base / vllm_model_name")
 
             config = StickinessConfig(
                 threshold=use_threshold,

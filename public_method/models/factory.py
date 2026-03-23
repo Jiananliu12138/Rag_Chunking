@@ -46,14 +46,22 @@ def get_sentence_transformer(
     device: str | None = None,
     cache_folder: str | None = None,
     model_kwargs: dict[str, Any] | None = None,
+    max_seq_length: int | None = None,
 ):
     normalized_device = _normalize_device(device)
     normalized_kwargs = dict(model_kwargs or {})
     normalized_kwargs.setdefault("device", normalized_device)
     normalized_path = str(model_path).strip()
+    normalized_max_seq_length = (
+        int(max_seq_length) if max_seq_length is not None else None
+    )
     key = _cache_key(
         "sentence_transformer",
         model_path=normalized_path,
+        device=normalized_device,
+        cache_folder=cache_folder,
+        model_kwargs=normalized_kwargs,
+        max_seq_length=normalized_max_seq_length,
     )
     with _CACHE_LOCK:
         cached = _MODEL_CACHE.get(key)
@@ -67,6 +75,8 @@ def get_sentence_transformer(
                 cache_folder=cache_folder,
                 **normalized_kwargs,
             )
+            if normalized_max_seq_length is not None:
+                model.max_seq_length = normalized_max_seq_length
         except Exception as exc:
             raise ModelLoadException(
                 f"嵌入模型加载失败 ({normalized_path}): {exc}"
@@ -80,14 +90,19 @@ def get_cross_encoder(
     *,
     device: str | None = None,
     model_kwargs: dict[str, Any] | None = None,
+    max_length: int | None = None,
 ):
     normalized_device = _normalize_device(device)
     normalized_kwargs = dict(model_kwargs or {})
     normalized_kwargs.setdefault("device", normalized_device)
     normalized_path = str(model_path).strip()
+    normalized_max_length = int(max_length) if max_length is not None else None
     key = _cache_key(
         "cross_encoder",
         model_path=normalized_path,
+        device=normalized_device,
+        model_kwargs=normalized_kwargs,
+        max_length=normalized_max_length,
     )
     with _CACHE_LOCK:
         cached = _MODEL_CACHE.get(key)
@@ -97,6 +112,7 @@ def get_cross_encoder(
             from sentence_transformers import CrossEncoder
             model = CrossEncoder(
                 normalized_path,
+                max_length=normalized_max_length,
                 **normalized_kwargs,
             )
         except Exception as exc:
@@ -164,6 +180,7 @@ def get_langchain_embeddings(
     encode_kwargs: dict[str, Any] | None = None,
     query_encode_kwargs: dict[str, Any] | None = None,
     show_progress: bool = False,
+    max_seq_length: int | None = None,
 ):
     normalized_model_kwargs = dict(model_kwargs or {})
     normalized_device = _normalize_device(device)
@@ -171,9 +188,19 @@ def get_langchain_embeddings(
     normalized_encode_kwargs = dict(encode_kwargs or {})
     normalized_query_kwargs = dict(query_encode_kwargs or {})
     normalized_path = str(model_path).strip()
+    normalized_max_seq_length = (
+        int(max_seq_length) if max_seq_length is not None else None
+    )
     key = _cache_key(
         "langchain_embeddings",
         model_path=normalized_path,
+        device=normalized_device,
+        cache_folder=cache_folder,
+        model_kwargs=normalized_model_kwargs,
+        encode_kwargs=normalized_encode_kwargs,
+        query_encode_kwargs=normalized_query_kwargs,
+        show_progress=show_progress,
+        max_seq_length=normalized_max_seq_length,
     )
 
     with _CACHE_LOCK:
@@ -186,6 +213,7 @@ def get_langchain_embeddings(
             device=normalized_device,
             cache_folder=cache_folder,
             model_kwargs=normalized_model_kwargs,
+            max_seq_length=normalized_max_seq_length,
         )
         adapter = SharedSentenceTransformerEmbeddings(
             model_path=normalized_path,
@@ -207,11 +235,27 @@ def get_ragas_embeddings(
     encode_kwargs: dict[str, Any] | None = None,
     query_encode_kwargs: dict[str, Any] | None = None,
     show_progress: bool = False,
+    max_seq_length: int | None = None,
 ):
     normalized_path = str(model_path).strip()
+    normalized_device = _normalize_device(device)
+    normalized_model_kwargs = dict(model_kwargs or {})
+    normalized_model_kwargs.setdefault("device", normalized_device)
+    normalized_encode_kwargs = dict(encode_kwargs or {})
+    normalized_query_kwargs = dict(query_encode_kwargs or {})
+    normalized_max_seq_length = (
+        int(max_seq_length) if max_seq_length is not None else None
+    )
     key = _cache_key(
         "ragas_embeddings",
         model_path=normalized_path,
+        device=normalized_device,
+        cache_folder=cache_folder,
+        model_kwargs=normalized_model_kwargs,
+        encode_kwargs=normalized_encode_kwargs,
+        query_encode_kwargs=normalized_query_kwargs,
+        show_progress=show_progress,
+        max_seq_length=normalized_max_seq_length,
     )
 
     with _CACHE_LOCK:
@@ -228,12 +272,13 @@ def get_ragas_embeddings(
 
         langchain_embeddings = get_langchain_embeddings(
             model_path=normalized_path,
-            device=device,
+            device=normalized_device,
             cache_folder=cache_folder,
-            model_kwargs=model_kwargs,
-            encode_kwargs=encode_kwargs,
-            query_encode_kwargs=query_encode_kwargs,
+            model_kwargs=normalized_model_kwargs,
+            encode_kwargs=normalized_encode_kwargs,
+            query_encode_kwargs=normalized_query_kwargs,
             show_progress=show_progress,
+            max_seq_length=normalized_max_seq_length,
         )
         adapter = LangchainEmbeddingsWrapper(langchain_embeddings)
         _ADAPTER_CACHE[key] = adapter
@@ -249,11 +294,27 @@ def get_llamaindex_embedding(
     encode_kwargs: dict[str, Any] | None = None,
     query_encode_kwargs: dict[str, Any] | None = None,
     show_progress: bool = False,
+    max_seq_length: int | None = None,
 ):
     normalized_path = str(model_path).strip()
+    normalized_device = _normalize_device(device)
+    normalized_model_kwargs = dict(model_kwargs or {})
+    normalized_model_kwargs.setdefault("device", normalized_device)
+    normalized_encode_kwargs = dict(encode_kwargs or {})
+    normalized_query_kwargs = dict(query_encode_kwargs or {})
+    normalized_max_seq_length = (
+        int(max_seq_length) if max_seq_length is not None else None
+    )
     key = _cache_key(
         "llamaindex_embeddings",
         model_path=normalized_path,
+        device=normalized_device,
+        cache_folder=cache_folder,
+        model_kwargs=normalized_model_kwargs,
+        encode_kwargs=normalized_encode_kwargs,
+        query_encode_kwargs=normalized_query_kwargs,
+        show_progress=show_progress,
+        max_seq_length=normalized_max_seq_length,
     )
 
     with _CACHE_LOCK:
@@ -270,12 +331,13 @@ def get_llamaindex_embedding(
 
         langchain_embeddings = get_langchain_embeddings(
             model_path=normalized_path,
-            device=device,
+            device=normalized_device,
             cache_folder=cache_folder,
-            model_kwargs=model_kwargs,
-            encode_kwargs=encode_kwargs,
-            query_encode_kwargs=query_encode_kwargs,
+            model_kwargs=normalized_model_kwargs,
+            encode_kwargs=normalized_encode_kwargs,
+            query_encode_kwargs=normalized_query_kwargs,
             show_progress=show_progress,
+            max_seq_length=normalized_max_seq_length,
         )
         adapter = LangchainEmbedding(langchain_embeddings)
         _ADAPTER_CACHE[key] = adapter

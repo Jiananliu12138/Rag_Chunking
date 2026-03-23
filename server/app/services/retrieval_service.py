@@ -104,9 +104,127 @@ class RetrievalService:
         return normalized
 
     @staticmethod
-    def _load_cross_encoder(model_path: str, device: str) -> Any:
+    def _count_tokens(
+        tokenizer: Any,
+        text: str,
+        *,
+        text_pair: str | None = None,
+    ) -> int | None:
         try:
-            return get_cross_encoder(model_path=model_path, device=device)
+            normalized_text = text.replace("\n", " ")
+            normalized_pair = text_pair.replace("\n", " ") if text_pair is not None else None
+            encoded = tokenizer(
+                normalized_text,
+                text_pair=normalized_pair,
+                add_special_tokens=True,
+                truncation=False,
+                return_attention_mask=False,
+                return_token_type_ids=False,
+            )
+            input_ids = encoded.get("input_ids")
+            if isinstance(input_ids, list):
+                if input_ids and isinstance(input_ids[0], list):
+                    return len(input_ids[0])
+                return len(input_ids)
+        except Exception:
+            return None
+        return None
+
+    @classmethod
+    def _warn_on_overlong_embedding_query(
+        cls,
+        *,
+        query: str,
+        embed_model: Any,
+        embedding_max_tokens: int | None,
+        operation: str,
+        collection_name: str,
+    ) -> None:
+        if not embedding_max_tokens:
+            return
+        client = getattr(embed_model, "_client", None)
+        tokenizer = getattr(client, "tokenizer", None) if client is not None else None
+        if tokenizer is None:
+            return
+        token_count = cls._count_tokens(tokenizer, query)
+        if token_count is None or token_count <= embedding_max_tokens:
+            return
+        logger.warning(
+            "检测到超长 query embedding 输入: collection=%s, operation=%s, query_tokens=%d, embedding_max_tokens=%d。"
+            "该 query 在 SentenceTransformers 编码时会被截断。",
+            collection_name,
+            operation,
+            token_count,
+            embedding_max_tokens,
+        )
+
+    @classmethod
+    def _warn_on_overlong_rerank_pairs(
+        cls,
+        *,
+        query: str,
+        context_items: list[SearchResultItem],
+        rerank_model: Any,
+        rerank_max_length: int | None,
+        operation: str,
+        collection_name: str,
+    ) -> None:
+        if not rerank_max_length:
+            return
+        tokenizer = getattr(rerank_model, "tokenizer", None)
+        if tokenizer is None:
+            return
+
+        overlong_count = 0
+        max_seen_tokens = 0
+        examples: list[str] = []
+        for idx, item in enumerate(context_items):
+            token_count = cls._count_tokens(tokenizer, query, text_pair=item.text)
+            if token_count is None:
+                continue
+            max_seen_tokens = max(max_seen_tokens, token_count)
+            if token_count <= rerank_max_length:
+                continue
+            overlong_count += 1
+            if len(examples) < 5:
+                examples.append(
+                    "idx=%d tokens=%d file_path=%s doc_id=%s chunk_id=%s"
+                    % (
+                        idx,
+                        token_count,
+                        item.filepath or "-",
+                        item.doc_id or "-",
+                        item.chunk_id or "-",
+                    )
+                )
+
+        if overlong_count == 0:
+            return
+        logger.warning(
+            "检测到超长 rerank pair: collection=%s, operation=%s, overlong=%d/%d, rerank_max_length=%d, max_seen_tokens=%d。"
+            "这些 query+chunk pair 在 CrossEncoder 编码时会被截断。示例: %s",
+            collection_name,
+            operation,
+            overlong_count,
+            len(context_items),
+            rerank_max_length,
+            max_seen_tokens,
+            " | ".join(examples),
+        )
+
+    @staticmethod
+    def _load_cross_encoder(
+        model_path: str,
+        device: str,
+        *,
+        max_length: int | None = None,
+    ) -> Any:
+        try:
+            return get_cross_encoder(
+                model_path=model_path,
+                device=device,
+                max_length=max_length,
+            )
         except Exception as exc:
             raise RetrievalException(f"加载 rerank 模型失败: {exc}") from exc
 
@@ -117,11 +235,26 @@ class RetrievalService:
         context_items: list[SearchResultItem],
         model_path: str,
         device: str,
+        max_length: int | None,
         final_top_k: int,
+        operation: str,
+        collection_name: str,
     ) -> list[SearchResultItem]:
         if not context_items:
             return []
-        model = self._load_cross_encoder(model_path=model_path, device=device)
+        model = self._load_cross_encoder(
+            model_path=model_path,
+            device=device,
+            max_length=max_length,
+        )
+        self._warn_on_overlong_rerank_pairs(
+            query=query,
+            context_items=context_items,
+            rerank_model=model,
+            rerank_max_length=max_length,
+            operation=operation,
+            collection_name=collection_name,
+        )
         pairs = [(query, item.text) for item in context_items]
         try:
             raw_scores = model.predict(pairs)
@@ -168,7 +301,23 @@ class RetrievalService:
             rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
             rerank_top_k=request.rerank_top_k if request.rerank_enabled else None,
         )
-        embed_model = IndexService._load_langchain_embed(request.embed_model_path)
+        embedding_max_tokens = (
+            request.embed_max_tokens
+            if request.embed_max_tokens is not None
+            else settings.DEFAULT_EMBEDDING_MAX_TOKENS
+        )
+        embed_model, _ = IndexService._load_langchain_embed(
+            request.embed_model_path,
+            embedding_device=settings.DEFAULT_EMBEDDING_DEVICE,
+            embedding_max_tokens=embedding_max_tokens,
+        )
+        self._warn_on_overlong_embedding_query(
+            query=request.query,
+            embed_model=embed_model,
+            embedding_max_tokens=embedding_max_tokens,
+            operation="search",
+            collection_name=request.collection_name,
+        )
         # 没有过滤条件 → 普通全库检索；有条件 → 调用带 metadata 过滤的方法
         if request.filepath is None and request.doc_id is None:
             raw_results = self._repo.search(
@@ -193,8 +342,13 @@ class RetrievalService:
         items = self._to_search_result_items(raw_results)
         if request.rerank_enabled:
             self._validate_rerank_type(request.rerank_type)
-            rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL_PATH
+            rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL
             rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
+            rerank_max_length = (
+                request.rerank_max_length
+                if request.rerank_max_length is not None
+                else settings.DEFAULT_RERANK_MAX_LENGTH
+            )
             if not rerank_model_path:
                 raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
             items = self._rerank_items_cross_encoder(
@@ -202,7 +356,10 @@ class RetrievalService:
                 context_items=items,
                 model_path=rerank_model_path,
                 device=rerank_device,
+                max_length=rerank_max_length,
                 final_top_k=final_top_k,
+                operation="search",
+                collection_name=request.collection_name,
             )
         else:
             items = items[:final_top_k]
@@ -227,7 +384,23 @@ class RetrievalService:
                 rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
                 rerank_top_k=request.rerank_top_k if request.rerank_enabled else None,
             )
-            embed_model = IndexService._load_langchain_embed(request.embed_model_path)
+            embedding_max_tokens = (
+                request.embed_max_tokens
+                if request.embed_max_tokens is not None
+                else settings.DEFAULT_EMBEDDING_MAX_TOKENS
+            )
+            embed_model, _ = IndexService._load_langchain_embed(
+                request.embed_model_path,
+                embedding_device=settings.DEFAULT_EMBEDDING_DEVICE,
+                embedding_max_tokens=embedding_max_tokens,
+            )
+            self._warn_on_overlong_embedding_query(
+                query=request.query,
+                embed_model=embed_model,
+                embedding_max_tokens=embedding_max_tokens,
+                operation="rag_generate",
+                collection_name=request.collection_name,
+            )
 
             if request.filepath is None and request.doc_id is None:
                 raw_results = self._repo.search(
@@ -253,8 +426,13 @@ class RetrievalService:
             context_items = self._to_search_result_items(raw_results)
             if request.rerank_enabled:
                 self._validate_rerank_type(request.rerank_type)
-                rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL_PATH
+                rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL
                 rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
+                rerank_max_length = (
+                    request.rerank_max_length
+                    if request.rerank_max_length is not None
+                    else settings.DEFAULT_RERANK_MAX_LENGTH
+                )
                 if not rerank_model_path:
                     raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
                 context_items = self._rerank_items_cross_encoder(
@@ -262,7 +440,10 @@ class RetrievalService:
                     context_items=context_items,
                     model_path=rerank_model_path,
                     device=rerank_device,
+                    max_length=rerank_max_length,
                     final_top_k=final_top_k,
+                    operation="rag_generate",
+                    collection_name=request.collection_name,
                 )
             else:
                 context_items = context_items[:final_top_k]
@@ -309,25 +490,39 @@ class RetrievalService:
         settings = get_settings()
         embed_model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
         embed_dim = request.embed_dim or settings.DEFAULT_EMBEDDING_DIM
-        llm_api_base = request.llm_api_base or settings.DEFAULT_VLLM_API_BASE
-        llm_model_name = request.llm_model_name or settings.DEFAULT_VLLM_MODEL_NAME
+        embedding_max_tokens = (
+            request.embed_max_tokens
+            if request.embed_max_tokens is not None
+            else settings.DEFAULT_EMBEDDING_MAX_TOKENS
+        )
+        llm_api_base = request.llm_api_base or settings.DEFAULT_LLM_API_BASE
+        llm_model_name = request.llm_model_name or settings.DEFAULT_LLM_MODEL
         if not embed_model_path:
             raise RetrievalException("未配置嵌入模型（DEFAULT_EMBEDDING_MODEL）")
         if not llm_model_name:
-            raise RetrievalException("未配置 LLM 模型（DEFAULT_VLLM_MODEL_NAME）")
+            raise RetrievalException("未配置 LLM 模型（DEFAULT_LLM_MODEL）")
         retrieve_top_k, final_top_k = self._normalize_retrieve_and_final_top_k(
             request_top_k=request.top_k,
             rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
             rerank_top_k=request.rerank_top_k if request.rerank_enabled else None,
         )
-        rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL_PATH
+        rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL
         rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
+        rerank_max_length = (
+            request.rerank_max_length
+            if request.rerank_max_length is not None
+            else settings.DEFAULT_RERANK_MAX_LENGTH
+        )
         if request.rerank_enabled:
             self._validate_rerank_type(request.rerank_type)
             if not rerank_model_path:
                 raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
 
-        embed_model = IndexService._load_langchain_embed(embed_model_path)
+        embed_model, _ = IndexService._load_langchain_embed(
+            embed_model_path,
+            embedding_device=settings.DEFAULT_EMBEDDING_DEVICE,
+            embedding_max_tokens=embedding_max_tokens,
+        )
         retrieval_save_list: list[dict] = []
         total_failed = 0
 
@@ -411,6 +606,13 @@ class RetrievalService:
                     pbar.set_postfix(
                         {"ID": auto_id, "Query": query[:10] + "..." if len(query) > 30 else query}
                     )
+                    self._warn_on_overlong_embedding_query(
+                        query=query,
+                        embed_model=embed_model,
+                        embedding_max_tokens=embedding_max_tokens,
+                        operation=f"rag_generate_file:auto_id={auto_id}",
+                        collection_name=request.collection_name,
+                    )
                     raw_results = self._repo.search(
                         collection_name=request.collection_name,
                         query=query,
@@ -427,7 +629,10 @@ class RetrievalService:
                             context_items=context_items,
                             model_path=rerank_model_path,
                             device=rerank_device,
+                            max_length=rerank_max_length,
                             final_top_k=final_top_k,
+                            operation=f"rag_generate_file:auto_id={auto_id}",
+                            collection_name=request.collection_name,
                         )
                     else:
                         context_items = context_items[:final_top_k]

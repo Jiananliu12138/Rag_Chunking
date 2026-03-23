@@ -113,16 +113,21 @@ class RAGASEvalRequest(BaseModel):
         ),
     )
     vllm_api_base: Optional[str] = Field(
-        None, description="vLLM API 地址（可选，未提供时从配置读取 DEFAULT_RAGAS_VLLM_API_BASE）"
+        None, description="vLLM API 地址（可选，未提供时从配置读取 DEFAULT_LLM_API_BASE）"
     )
     vllm_api_key: Optional[str] = Field(
-        None, description="API Key（可选，未提供时从配置读取 DEFAULT_RAGAS_VLLM_API_KEY）"
+        None, description="API Key（可选，未提供时从配置读取 DEFAULT_LLM_API_KEY）"
     )
     vllm_model_name: Optional[str] = Field(
-        None, description="评估用 LLM 模型名称（可选，未提供时从配置读取 DEFAULT_RAGAS_VLLM_MODEL_NAME）"
+        None, description="评估用 LLM 模型名称（可选，未提供时从配置读取 DEFAULT_LLM_MODEL）"
     )
     embedding_model_path: Optional[str] = Field(
-        None, description="评估用嵌入模型路径（可选，未提供时从配置读取 DEFAULT_RAGAS_EMBEDDING_MODEL_PATH）"
+        None, description="评估用嵌入模型路径（可选，未提供时从配置读取 DEFAULT_EMBEDDING_MODEL）"
+    )
+    embedding_max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        description="评估用嵌入模型 max_seq_length（可选，未提供时从配置读取 DEFAULT_EMBEDDING_MAX_TOKENS）",
     )
     device: Optional[str] = Field(
         None, description="评估设备（可选，未提供时从配置读取 DEFAULT_RAGAS_DEVICE）"
@@ -175,6 +180,11 @@ class RAGASEvalFileRequest(BaseModel):
     vllm_api_key: Optional[str] = Field(None, description="API Key（可选，未提供时从配置读取）")
     vllm_model_name: Optional[str] = Field(None, description="评估用 LLM 模型名称（可选，未提供时从配置读取）")
     embedding_model_path: Optional[str] = Field(None, description="评估用嵌入模型路径（可选，未提供时从配置读取）")
+    embedding_max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        description="评估用嵌入模型 max_seq_length（可选，未提供时从配置读取 DEFAULT_EMBEDDING_MAX_TOKENS）",
+    )
     device: Optional[str] = Field(None, description="评估设备（可选，未提供时从配置读取）")
     enable_cache: Optional[bool] = Field(None, description="是否启用 RAGAS 磁盘缓存（可选，未提供时从配置读取）")
     cache_dir: Optional[str] = Field(None, description="缓存目录（可选，未提供时从配置读取）")
@@ -231,7 +241,7 @@ class ChunkQualityRequest(BaseModel):
     )
     sim_model_path: Optional[str] = Field(
         None,
-        description="可选：覆盖默认的语义相似度模型路径；未提供时使用 COMPONENT_SIM_MODEL_PATH。",
+        description="可选：覆盖默认的语义相似度模型路径；未提供时使用 DEFAULT_EMBEDDING_MODEL。",
     )
     vllm_api_base: Optional[str] = Field(
         None,
@@ -290,7 +300,7 @@ class ChunkQualityFileRequest(BaseModel):
     )
     sim_model_path: Optional[str] = Field(
         None,
-        description="可选：覆盖默认的语义相似度模型路径；未提供时使用 COMPONENT_SIM_MODEL_PATH。",
+        description="可选：覆盖默认的语义相似度模型路径；未提供时使用 DEFAULT_EMBEDDING_MODEL。",
     )
     vllm_api_base: Optional[str] = Field(
         None,

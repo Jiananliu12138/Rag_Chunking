@@ -1,5 +1,5 @@
 const API_BASE_URL = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL
-  ?? 'http://127.0.0.1:8080/api/v1';
+  ?? 'http://127.0.0.1:8081/api/v1';
 
 export interface ApiResponse<T = any> {
   success: boolean;

@@ -38,6 +38,8 @@ class EvalService:
         vllm_api_key: str,
         vllm_model_name: str,
         embedding_model_path: str,
+        embedding_device: str | None,
+        embedding_max_tokens: int | None,
         device: str,
         enable_cache: bool,
         cache_dir: str,
@@ -47,6 +49,8 @@ class EvalService:
             str(vllm_api_key).strip(),
             str(vllm_model_name).strip(),
             str(embedding_model_path).strip(),
+            str(embedding_device).strip(),
+            str(embedding_max_tokens).strip(),
             str(device).strip(),
             bool(enable_cache),
             str(cache_dir).strip(),
@@ -60,8 +64,9 @@ class EvalService:
 
             eval_embeddings = get_ragas_embeddings(
                 model_path=embedding_model_path,
-                device=device,
+                device=embedding_device,
                 encode_kwargs={"batch_size": 16, "normalize_embeddings": True},
+                max_seq_length=embedding_max_tokens,
             )
             evaluator = RAGASEvaluator(
                 vllm_api_base=vllm_api_base,
@@ -245,11 +250,17 @@ class EvalService:
 
             # 从配置读取 RAGAS 参数（request 中未提供时使用配置默认值）
             settings = get_settings()
-            vllm_api_base = request.vllm_api_base or settings.DEFAULT_RAGAS_VLLM_API_BASE
-            vllm_api_key = request.vllm_api_key or settings.DEFAULT_RAGAS_VLLM_API_KEY
-            vllm_model_name = request.vllm_model_name or settings.DEFAULT_RAGAS_VLLM_MODEL_NAME
+            vllm_api_base = request.vllm_api_base or settings.DEFAULT_LLM_API_BASE
+            vllm_api_key = request.vllm_api_key or settings.DEFAULT_LLM_API_KEY
+            vllm_model_name = request.vllm_model_name or settings.DEFAULT_LLM_MODEL
             embedding_model_path = (
-                request.embedding_model_path or settings.DEFAULT_RAGAS_EMBEDDING_MODEL_PATH
+                request.embedding_model_path or settings.DEFAULT_EMBEDDING_MODEL
+            )
+            embedding_device = settings.DEFAULT_EMBEDDING_DEVICE
+            embedding_max_tokens = (
+                request.embedding_max_tokens
+                if request.embedding_max_tokens is not None
+                else settings.DEFAULT_EMBEDDING_MAX_TOKENS
             )
             device = request.device or settings.DEFAULT_RAGAS_DEVICE
             enable_cache = (
@@ -258,15 +269,17 @@ class EvalService:
             cache_dir = request.cache_dir or settings.DEFAULT_RAGAS_CACHE_DIR
 
             if not vllm_model_name:
-                raise EvaluationException("未配置 RAGAS LLM 模型（DEFAULT_RAGAS_VLLM_MODEL_NAME）")
+                raise EvaluationException("未配置默认 LLM 模型（DEFAULT_LLM_MODEL）")
             if not embedding_model_path:
-                raise EvaluationException("未配置 RAGAS 嵌入模型（DEFAULT_RAGAS_EMBEDDING_MODEL_PATH）")
+                raise EvaluationException("未配置默认嵌入模型（DEFAULT_EMBEDDING_MODEL）")
 
             evaluator = self._get_ragas_evaluator(
                 vllm_api_base=vllm_api_base,
                 vllm_api_key=vllm_api_key,
                 vllm_model_name=vllm_model_name,
                 embedding_model_path=embedding_model_path,
+                embedding_device=embedding_device,
+                embedding_max_tokens=embedding_max_tokens,
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,
@@ -323,11 +336,17 @@ class EvalService:
 
             # 从配置读取 RAGAS 参数（request 中未提供时使用配置默认值）
             settings = get_settings()
-            vllm_api_base = request.vllm_api_base or settings.DEFAULT_RAGAS_VLLM_API_BASE
-            vllm_api_key = request.vllm_api_key or settings.DEFAULT_RAGAS_VLLM_API_KEY
-            vllm_model_name = request.vllm_model_name or settings.DEFAULT_RAGAS_VLLM_MODEL_NAME
+            vllm_api_base = request.vllm_api_base or settings.DEFAULT_LLM_API_BASE
+            vllm_api_key = request.vllm_api_key or settings.DEFAULT_LLM_API_KEY
+            vllm_model_name = request.vllm_model_name or settings.DEFAULT_LLM_MODEL
             embedding_model_path = (
-                request.embedding_model_path or settings.DEFAULT_RAGAS_EMBEDDING_MODEL_PATH
+                request.embedding_model_path or settings.DEFAULT_EMBEDDING_MODEL
+            )
+            embedding_device = settings.DEFAULT_EMBEDDING_DEVICE
+            embedding_max_tokens = (
+                request.embedding_max_tokens
+                if request.embedding_max_tokens is not None
+                else settings.DEFAULT_EMBEDDING_MAX_TOKENS
             )
             device = request.device or settings.DEFAULT_RAGAS_DEVICE
             enable_cache = (
@@ -336,15 +355,17 @@ class EvalService:
             cache_dir = request.cache_dir or settings.DEFAULT_RAGAS_CACHE_DIR
 
             if not vllm_model_name:
-                raise EvaluationException("未配置 RAGAS LLM 模型（DEFAULT_RAGAS_VLLM_MODEL_NAME）")
+                raise EvaluationException("未配置默认 LLM 模型（DEFAULT_LLM_MODEL）")
             if not embedding_model_path:
-                raise EvaluationException("未配置 RAGAS 嵌入模型（DEFAULT_RAGAS_EMBEDDING_MODEL_PATH）")
+                raise EvaluationException("未配置默认嵌入模型（DEFAULT_EMBEDDING_MODEL）")
 
             evaluator = self._get_ragas_evaluator(
                 vllm_api_base=vllm_api_base,
                 vllm_api_key=vllm_api_key,
                 vllm_model_name=vllm_model_name,
                 embedding_model_path=embedding_model_path,
+                embedding_device=embedding_device,
+                embedding_max_tokens=embedding_max_tokens,
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,

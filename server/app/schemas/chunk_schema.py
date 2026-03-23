@@ -48,14 +48,14 @@ class LumberChunkParams(BaseModel):
         None,
         description=(
             "可选：覆盖默认 vLLM 服务地址。"
-            "如不提供，将使用 DEFAULT_VLLM_API_BASE（通常形如 http://host:port/v1）。"
+            "如不提供，将使用 DEFAULT_LLM_API_BASE（通常形如 http://host:port/v1）。"
         ),
     )
     model_type: Optional[str] = Field(
         None,
         description=(
             "可选：覆盖默认模型名称。"
-            "如不提供，将使用 DEFAULT_VLLM_MODEL_NAME。"
+            "如不提供，将使用 DEFAULT_LLM_MODEL。"
         ),
     )
     temperature: Optional[float] = Field(

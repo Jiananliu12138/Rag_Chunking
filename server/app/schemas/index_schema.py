@@ -49,6 +49,11 @@ class IndexBuildRequest(BaseModel):
             "可选：覆盖默认的嵌入维度。未提供时使用配置 DEFAULT_EMBEDDING_DIM。"
         ),
     )
+    embed_max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖嵌入模型 max_seq_length；未提供时使用 DEFAULT_EMBEDDING_MAX_TOKENS。",
+    )
 
 
 class IndexAddRequest(BaseModel):
@@ -86,6 +91,11 @@ class IndexAddRequest(BaseModel):
             "可选：覆盖默认的嵌入模型路径。未提供时使用配置 DEFAULT_EMBEDDING_MODEL。"
             "请确保与构建该 collection 时使用的模型/维度保持一致。"
         ),
+    )
+    embed_max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖嵌入模型 max_seq_length；未提供时使用 DEFAULT_EMBEDDING_MAX_TOKENS。",
     )
 
 

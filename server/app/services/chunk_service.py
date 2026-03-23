@@ -91,10 +91,10 @@ class ChunkService:
             from public_method.chunking.lumber_chunk import chunk_text as _chunk_text  # noqa: PLC0415
 
             p = request.lumber_params
-            model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_VLLM_MODEL_NAME
+            model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_LLM_MODEL
             if not model_type:
-                raise ChunkingException("DEFAULT_VLLM_MODEL_NAME 未配置，无法进行 Lumber 分块")
-            base = p.llm_api_base if p and p.llm_api_base else settings.DEFAULT_VLLM_API_BASE
+                raise ChunkingException("DEFAULT_LLM_MODEL 未配置，无法进行 Lumber 分块")
+            base = p.llm_api_base if p and p.llm_api_base else settings.DEFAULT_LLM_API_BASE
             ds_base_url = base.rsplit("/v1", 1)[0] if base.endswith("/v1") else base
 
             temperature = (
@@ -201,11 +201,11 @@ class ChunkService:
             from public_method.chunking.lumber_chunk import chunk_file as _chunk_file  # noqa: PLC0415
 
             p = request.lumber_params
-            model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_VLLM_MODEL_NAME
+            model_type = (p.model_type if p and p.model_type else None) or settings.DEFAULT_LLM_MODEL
             if not model_type:
-                raise ChunkingException("DEFAULT_VLLM_MODEL_NAME 未配置，无法进行 Lumber 文件分块")
+                raise ChunkingException("DEFAULT_LLM_MODEL 未配置，无法进行 Lumber 文件分块")
 
-            base = p.llm_api_base if p and p.llm_api_base else settings.DEFAULT_VLLM_API_BASE
+            base = p.llm_api_base if p and p.llm_api_base else settings.DEFAULT_LLM_API_BASE
             ds_base_url = base.rsplit("/v1", 1)[0] if base.endswith("/v1") else base
 
             temperature = (

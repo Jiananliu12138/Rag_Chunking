@@ -19,6 +19,11 @@ class SearchRequest(BaseModel):
     collection_name: str = Field(..., description="目标 collection 名称")
     embed_model_path: str = Field(..., description="嵌入模型路径")
     embed_dim: int = Field(1024, ge=64, description="嵌入向量维度")
+    embed_max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖嵌入模型 max_seq_length；未提供时使用 DEFAULT_EMBEDDING_MAX_TOKENS。",
+    )
     top_k: int = Field(5, ge=1, le=100, description="返回最相关文档数量")
     use_hybrid_search: Optional[bool] = Field(
         None,
@@ -39,6 +44,11 @@ class SearchRequest(BaseModel):
     rerank_device: str = Field(
         "cpu",
         description="rerank 设备（如 cpu / cuda:0）。",
+    )
+    rerank_max_length: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖 CrossEncoder 的 max_length；未提供时使用 DEFAULT_RERANK_MAX_LENGTH。",
     )
     rerank_candidate_k: Optional[int] = Field(
         None,
@@ -106,6 +116,11 @@ class RAGRequest(BaseModel):
     collection_name: str = Field(..., description="目标 collection 名称")
     embed_model_path: str = Field(..., description="嵌入模型路径")
     embed_dim: int = Field(1024, ge=64, description="嵌入向量维度")
+    embed_max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖嵌入模型 max_seq_length；未提供时使用 DEFAULT_EMBEDDING_MAX_TOKENS。",
+    )
     top_k: int = Field(5, ge=1, le=100, description="检索 top-k 数量")
     enable_rag: bool = Field(
         True,
@@ -130,6 +145,11 @@ class RAGRequest(BaseModel):
     rerank_device: str = Field(
         "cpu",
         description="rerank 设备（如 cpu / cuda:0）。",
+    )
+    rerank_max_length: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖 CrossEncoder 的 max_length；未提供时使用 DEFAULT_RERANK_MAX_LENGTH。",
     )
     rerank_candidate_k: Optional[int] = Field(
         None,
@@ -181,6 +201,11 @@ class RAGGenerateFileRequest(BaseModel):
     collection_name: str = Field(..., description="目标 collection 名称")
     embed_model_path: Optional[str] = Field(None, description="嵌入模型路径，空则从配置读取")
     embed_dim: Optional[int] = Field(None, ge=64, description="嵌入维度，空则从配置读取")
+    embed_max_tokens: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖嵌入模型 max_seq_length；未提供时使用 DEFAULT_EMBEDDING_MAX_TOKENS。",
+    )
     top_k: int = Field(5, ge=1, le=100, description="检索 top-k")
     use_hybrid_search: Optional[bool] = Field(
         None,
@@ -201,6 +226,11 @@ class RAGGenerateFileRequest(BaseModel):
     rerank_device: str = Field(
         "cpu",
         description="rerank 设备（如 cpu / cuda:0）。",
+    )
+    rerank_max_length: Optional[int] = Field(
+        None,
+        ge=1,
+        description="可选：覆盖 CrossEncoder 的 max_length；未提供时使用 DEFAULT_RERANK_MAX_LENGTH。",
     )
     rerank_candidate_k: Optional[int] = Field(
         None,

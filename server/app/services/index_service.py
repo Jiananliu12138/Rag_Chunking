@@ -22,22 +22,176 @@ from app.schemas.index_schema import (
     IndexDeleteByMetadataRequest,
 )
 
+
 class IndexService:
     def __init__(self, milvus_repo: MilvusRepository):
         self._repo = milvus_repo
 
     @staticmethod
-    def _load_langchain_embed(embed_model_path: str):
+    def _load_langchain_embed(
+        embed_model_path: str,
+        *,
+        embedding_device: str | None = None,
+        embedding_max_tokens: int | None = None,
+    ):
         """Load and cache the embedding model used by retrieval and indexing."""
         try:
-            return get_langchain_embeddings(
+            embed_model = get_langchain_embeddings(
                 model_path=embed_model_path,
+                device=embedding_device,
                 encode_kwargs={"normalize_embeddings": True},
+                max_seq_length=embedding_max_tokens,
             )
+            resolved_max_tokens = IndexService._configure_embedding_max_tokens(
+                embed_model,
+                embedding_max_tokens=embedding_max_tokens,
+            )
+            return embed_model, resolved_max_tokens
         except Exception as exc:
             raise ModelLoadException(
                 f"嵌入模型加载失败 ({embed_model_path}): {exc}"
             ) from exc
+
+    @staticmethod
+    def _configure_embedding_max_tokens(
+        embed_model,
+        *,
+        embedding_max_tokens: int | None = None,
+    ) -> int | None:
+        client = getattr(embed_model, "_client", None)
+        if client is None:
+            return None
+
+        configured_max_tokens = (
+            int(embedding_max_tokens) if embedding_max_tokens is not None else None
+        )
+        model_max_tokens = getattr(client, "max_seq_length", None)
+        resolved_max_tokens = configured_max_tokens or model_max_tokens
+
+        if configured_max_tokens and model_max_tokens != configured_max_tokens:
+            try:
+                client.max_seq_length = configured_max_tokens
+                logger.info(
+                    "嵌入模型 max_seq_length 已显式设置为 %d（原值=%s）",
+                    configured_max_tokens,
+                    model_max_tokens,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "无法将嵌入模型 max_seq_length 设置为 %d: %s",
+                    configured_max_tokens,
+                    exc,
+                )
+            resolved_max_tokens = configured_max_tokens
+
+        if resolved_max_tokens is not None:
+            try:
+                resolved_max_tokens = int(resolved_max_tokens)
+            except (TypeError, ValueError):
+                return None
+            if resolved_max_tokens <= 0:
+                return None
+
+        return resolved_max_tokens
+
+    @staticmethod
+    def _count_embedding_tokens(tokenizer, text: str) -> int | None:
+        try:
+            normalized_text = text.replace("\n", " ")
+            encoded = tokenizer(
+                normalized_text,
+                add_special_tokens=True,
+                truncation=False,
+                return_attention_mask=False,
+                return_token_type_ids=False,
+            )
+            input_ids = encoded.get("input_ids")
+            if isinstance(input_ids, list):
+                if input_ids and isinstance(input_ids[0], list):
+                    return len(input_ids[0])
+                return len(input_ids)
+        except Exception:
+            return None
+        return None
+
+    @classmethod
+    def _warn_on_overlong_chunks(
+        cls,
+        *,
+        chunks: list[str],
+        metadatas: list[dict[str, Any]],
+        embed_model,
+        embedding_max_tokens: int | None,
+        operation: str,
+        collection_name: str,
+    ) -> None:
+        if not embedding_max_tokens:
+            logger.info(
+                "未配置嵌入模型 max token 长度，跳过索引前超长 chunk 检测: collection=%s",
+                collection_name,
+            )
+            return
+
+        client = getattr(embed_model, "_client", None)
+        tokenizer = getattr(client, "tokenizer", None) if client is not None else None
+        if tokenizer is None:
+            logger.warning(
+                "嵌入模型未暴露 tokenizer，无法执行索引前超长检测: collection=%s",
+                collection_name,
+            )
+            return
+
+        overlong_examples: list[str] = []
+        overlong_count = 0
+        max_seen_tokens = 0
+
+        for idx, chunk in enumerate(chunks):
+            token_count = cls._count_embedding_tokens(tokenizer, chunk)
+            if token_count is None:
+                continue
+            max_seen_tokens = max(max_seen_tokens, token_count)
+            if token_count <= embedding_max_tokens:
+                continue
+
+            overlong_count += 1
+            if len(overlong_examples) < 5:
+                metadata = metadatas[idx] if idx < len(metadatas) else {}
+                file_path = metadata.get("file_path") if isinstance(metadata, dict) else None
+                doc_id = metadata.get("doc_id") if isinstance(metadata, dict) else None
+                chunk_id = metadata.get("chunk_id") if isinstance(metadata, dict) else None
+                overlong_examples.append(
+                    "idx=%d tokens=%d file_path=%s doc_id=%s chunk_id=%s"
+                    % (
+                        idx,
+                        token_count,
+                        file_path or "-",
+                        doc_id or "-",
+                        chunk_id or "-",
+                    )
+                )
+
+        if overlong_count == 0:
+            logger.info(
+                "索引前超长检测完成: collection=%s, operation=%s, total_chunks=%d, max_seen_tokens=%d, limit=%d, overlong=0",
+                collection_name,
+                operation,
+                len(chunks),
+                max_seen_tokens,
+                embedding_max_tokens,
+            )
+            return
+
+        logger.warning(
+            "检测到超长 chunk: collection=%s, operation=%s, overlong=%d/%d, embedding_max_tokens=%d, max_seen_tokens=%d。"
+            "这些 chunk 在 SentenceTransformers 编码时会被截断。示例: %s",
+            collection_name,
+            operation,
+            overlong_count,
+            len(chunks),
+            embedding_max_tokens,
+            max_seen_tokens,
+            " | ".join(overlong_examples),
+        )
 
     @classmethod
     def _load_chunks_and_metadata_from_file(
@@ -129,9 +283,27 @@ class IndexService:
 
         settings = get_settings()
         model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
+        embedding_device = settings.DEFAULT_EMBEDDING_DEVICE
         embed_dim = request.embed_dim or settings.DEFAULT_EMBEDDING_DIM
+        embedding_max_tokens = (
+            request.embed_max_tokens
+            if getattr(request, "embed_max_tokens", None) is not None
+            else settings.DEFAULT_EMBEDDING_MAX_TOKENS
+        )
 
-        embed_model = self._load_langchain_embed(model_path)
+        embed_model, resolved_max_tokens = self._load_langchain_embed(
+            model_path,
+            embedding_device=embedding_device,
+            embedding_max_tokens=embedding_max_tokens,
+        )
+        self._warn_on_overlong_chunks(
+            chunks=chunks,
+            metadatas=metadatas,
+            embed_model=embed_model,
+            embedding_max_tokens=resolved_max_tokens,
+            operation="build_index",
+            collection_name=request.collection_name,
+        )
         info = self._repo.build_index(
             collection_name=request.collection_name,
             chunks=chunks,
@@ -170,8 +342,26 @@ class IndexService:
 
         settings = get_settings()
         model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
+        embedding_device = settings.DEFAULT_EMBEDDING_DEVICE
+        embedding_max_tokens = (
+            request.embed_max_tokens
+            if getattr(request, "embed_max_tokens", None) is not None
+            else settings.DEFAULT_EMBEDDING_MAX_TOKENS
+        )
 
-        embed_model = self._load_langchain_embed(model_path)
+        embed_model, resolved_max_tokens = self._load_langchain_embed(
+            model_path,
+            embedding_device=embedding_device,
+            embedding_max_tokens=embedding_max_tokens,
+        )
+        self._warn_on_overlong_chunks(
+            chunks=chunks,
+            metadatas=metadatas,
+            embed_model=embed_model,
+            embedding_max_tokens=resolved_max_tokens,
+            operation="add_index",
+            collection_name=request.collection_name,
+        )
         info = self._repo.add_index(
             collection_name=request.collection_name,
             chunks=chunks,
