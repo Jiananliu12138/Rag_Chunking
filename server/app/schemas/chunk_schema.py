@@ -110,7 +110,7 @@ class ChunkTextRequest(BaseModel):
                         "text": "Section 1: Introduction to Machine Learning...\n\nSection 2: Deep Neural Networks...",
                         "method": "lumber",
                         "lumber_params": {
-                            "llm_api_base": "http://localhost:8005",
+                            "llm_api_base": "http://localhost:8001/v1",
                             "model_type": "Qwen2.5-7B-Instruct",
                             "temperature": 0.2,
                             "max_tokens": 3072,

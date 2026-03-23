@@ -94,7 +94,7 @@ class RAGASEvalRequest(BaseModel):
                         ],
                     }
                 ],
-                "vllm_api_base": "http://localhost:8005/v1",
+                "vllm_api_base": "http://localhost:8001/v1",
                 "vllm_api_key": "EMPTY",
                 "vllm_model_name": "/path/to/Qwen2.5-7B-Instruct",
                 "embedding_model_path": "/path/to/bge-large-en-v1.5",
@@ -245,7 +245,7 @@ class ChunkQualityRequest(BaseModel):
     )
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8001/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,
@@ -304,7 +304,7 @@ class ChunkQualityFileRequest(BaseModel):
     )
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8001/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,
@@ -346,7 +346,7 @@ class ChunkStickinessRequest(BaseModel):
     score_temperature: float = Field(6.0, ge=0.1, description="BC score 温度参数")
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8001/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,
@@ -408,7 +408,7 @@ class ChunkStickinessFileRequest(BaseModel):
     )
     vllm_api_base: Optional[str] = Field(
         None,
-        description="可选：vLLM 服务地址（例如 http://localhost:8005/v1），未提供时从默认配置读取。",
+        description="可选：vLLM 服务地址（例如 http://localhost:8001/v1），未提供时从默认配置读取。",
     )
     vllm_model_name: Optional[str] = Field(
         None,

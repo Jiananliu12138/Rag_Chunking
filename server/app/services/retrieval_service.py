@@ -296,6 +296,8 @@ class RetrievalService:
             request.collection_name, request.query[:30], request.top_k,
         )
         settings = get_settings()
+        embed_model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
+        embed_dim = request.embed_dim or settings.DEFAULT_EMBEDDING_DIM
         retrieve_top_k, final_top_k = self._normalize_retrieve_and_final_top_k(
             request_top_k=request.top_k,
             rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
@@ -307,7 +309,7 @@ class RetrievalService:
             else settings.DEFAULT_EMBEDDING_MAX_TOKENS
         )
         embed_model, _ = IndexService._load_langchain_embed(
-            request.embed_model_path,
+            embed_model_path,
             embedding_device=settings.DEFAULT_EMBEDDING_DEVICE,
             embedding_max_tokens=embedding_max_tokens,
         )
@@ -324,7 +326,7 @@ class RetrievalService:
                 collection_name=request.collection_name,
                 query=request.query,
                 langchain_embed=embed_model,
-                embed_dim=request.embed_dim,
+                embed_dim=embed_dim,
                 top_k=retrieve_top_k,
                 use_hybrid_search=request.use_hybrid_search,
             )
@@ -333,7 +335,7 @@ class RetrievalService:
                 collection_name=request.collection_name,
                 query=request.query,
                 langchain_embed=embed_model,
-                embed_dim=request.embed_dim,
+                embed_dim=embed_dim,
                 top_k=retrieve_top_k,
                 filepath=request.filepath,
                 doc_id=request.doc_id,
@@ -371,6 +373,22 @@ class RetrievalService:
         )
 
     def rag_generate(self, request: RAGRequest) -> RAGResult:
+        settings = get_settings()
+        llm_api_base = request.llm_api_base or settings.DEFAULT_LLM_API_BASE
+        llm_model_name = request.llm_model_name or settings.DEFAULT_LLM_MODEL
+        temperature = (
+            request.temperature
+            if request.temperature is not None
+            else settings.DEFAULT_LLM_TEMPERATURE
+        )
+        max_new_tokens = (
+            request.max_new_tokens
+            if request.max_new_tokens is not None
+            else settings.DEFAULT_LLM_MAX_TOKENS
+        )
+        if not llm_model_name:
+            raise RetrievalException("未配置 LLM 模型（DEFAULT_LLM_MODEL）")
+
         # Step 1: （可选）向量检索 + 上下文构造
         if request.enable_rag:
             logger.info(
@@ -378,7 +396,8 @@ class RetrievalService:
                 request.collection_name,
                 request.query[:30],
             )
-            settings = get_settings()
+            embed_model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
+            embed_dim = request.embed_dim or settings.DEFAULT_EMBEDDING_DIM
             retrieve_top_k, final_top_k = self._normalize_retrieve_and_final_top_k(
                 request_top_k=request.top_k,
                 rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
@@ -390,7 +409,7 @@ class RetrievalService:
                 else settings.DEFAULT_EMBEDDING_MAX_TOKENS
             )
             embed_model, _ = IndexService._load_langchain_embed(
-                request.embed_model_path,
+                embed_model_path,
                 embedding_device=settings.DEFAULT_EMBEDDING_DEVICE,
                 embedding_max_tokens=embedding_max_tokens,
             )
@@ -407,7 +426,7 @@ class RetrievalService:
                     collection_name=request.collection_name,
                     query=request.query,
                     langchain_embed=embed_model,
-                    embed_dim=request.embed_dim,
+                    embed_dim=embed_dim,
                     top_k=retrieve_top_k,
                     use_hybrid_search=request.use_hybrid_search,
                 )
@@ -416,7 +435,7 @@ class RetrievalService:
                     collection_name=request.collection_name,
                     query=request.query,
                     langchain_embed=embed_model,
-                    embed_dim=request.embed_dim,
+                    embed_dim=embed_dim,
                     top_k=retrieve_top_k,
                     filepath=request.filepath,
                     doc_id=request.doc_id,
@@ -464,10 +483,10 @@ class RetrievalService:
         try:
             answer = self._call_vllm(
                 prompt=prompt,
-                api_base=request.llm_api_base,
-                model_name=request.llm_model_name,
-                temperature=request.temperature,
-                max_new_tokens=request.max_new_tokens,
+                api_base=llm_api_base,
+                model_name=llm_model_name,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
             )
         except Exception as exc:
             logger.exception("LLM 调用失败: %s", exc)
@@ -497,6 +516,16 @@ class RetrievalService:
         )
         llm_api_base = request.llm_api_base or settings.DEFAULT_LLM_API_BASE
         llm_model_name = request.llm_model_name or settings.DEFAULT_LLM_MODEL
+        temperature = (
+            request.temperature
+            if request.temperature is not None
+            else settings.DEFAULT_LLM_TEMPERATURE
+        )
+        max_new_tokens = (
+            request.max_new_tokens
+            if request.max_new_tokens is not None
+            else settings.DEFAULT_LLM_MAX_TOKENS
+        )
         if not embed_model_path:
             raise RetrievalException("未配置嵌入模型（DEFAULT_EMBEDDING_MODEL）")
         if not llm_model_name:
@@ -666,8 +695,8 @@ class RetrievalService:
                         prompt=prompt,
                         api_base=llm_api_base,
                         model_name=llm_model_name,
-                        temperature=request.temperature,
-                        max_new_tokens=request.max_new_tokens,
+                        temperature=temperature,
+                        max_new_tokens=max_new_tokens,
                     )
                     save = {
                         "_id": auto_id,

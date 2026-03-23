@@ -17,8 +17,8 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, description="检索查询文本")
     collection_name: str = Field(..., description="目标 collection 名称")
-    embed_model_path: str = Field(..., description="嵌入模型路径")
-    embed_dim: int = Field(1024, ge=64, description="嵌入向量维度")
+    embed_model_path: Optional[str] = Field(None, description="嵌入模型路径，空则从配置读取")
+    embed_dim: Optional[int] = Field(None, ge=64, description="嵌入向量维度，空则从配置读取")
     embed_max_tokens: Optional[int] = Field(
         None,
         ge=1,
@@ -41,9 +41,9 @@ class SearchRequest(BaseModel):
         None,
         description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
     )
-    rerank_device: str = Field(
-        "cpu",
-        description="rerank 设备（如 cpu / cuda:0）。",
+    rerank_device: Optional[str] = Field(
+        None,
+        description="rerank 设备（如 cpu / cuda:0），空则从配置读取。",
     )
     rerank_max_length: Optional[int] = Field(
         None,
@@ -104,7 +104,7 @@ class RAGRequest(BaseModel):
                 "embed_model_path": "/path/to/bge-large-en-v1.5",
                 "embed_dim": 1024,
                 "top_k": 5,
-                "llm_api_base": "http://localhost:8005/v1",
+                "llm_api_base": "http://localhost:8001/v1",
                 "llm_model_name": "/path/to/Qwen2.5-7B-Instruct",
                 "temperature": 0.1,
                 "max_new_tokens": 1280,
@@ -114,8 +114,8 @@ class RAGRequest(BaseModel):
 
     query: str = Field(..., min_length=1, description="用户问题")
     collection_name: str = Field(..., description="目标 collection 名称")
-    embed_model_path: str = Field(..., description="嵌入模型路径")
-    embed_dim: int = Field(1024, ge=64, description="嵌入向量维度")
+    embed_model_path: Optional[str] = Field(None, description="嵌入模型路径，空则从配置读取")
+    embed_dim: Optional[int] = Field(None, ge=64, description="嵌入向量维度，空则从配置读取")
     embed_max_tokens: Optional[int] = Field(
         None,
         ge=1,
@@ -142,9 +142,9 @@ class RAGRequest(BaseModel):
         None,
         description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
     )
-    rerank_device: str = Field(
-        "cpu",
-        description="rerank 设备（如 cpu / cuda:0）。",
+    rerank_device: Optional[str] = Field(
+        None,
+        description="rerank 设备（如 cpu / cuda:0），空则从配置读取。",
     )
     rerank_max_length: Optional[int] = Field(
         None,
@@ -177,10 +177,10 @@ class RAGRequest(BaseModel):
             "既支持单个字符串，也支持字符串列表。"
         ),
     )
-    llm_api_base: str = Field("http://localhost:8005/v1", description="vLLM API 地址")
-    llm_model_name: str = Field(..., description="LLM 模型名称/路径")
-    temperature: float = Field(0.1, ge=0.0, le=2.0, description="生成温度，越低越稳定")
-    max_new_tokens: int = Field(1280, ge=64, description="最大生成 token 数")
+    llm_api_base: Optional[str] = Field(None, description="vLLM API 地址，空则从配置读取")
+    llm_model_name: Optional[str] = Field(None, description="LLM 模型名称/路径，空则从配置读取")
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="生成温度，空则从配置读取")
+    max_new_tokens: Optional[int] = Field(None, ge=64, description="最大生成 token 数，空则从配置读取")
 
 
 class RAGResult(BaseModel):
@@ -223,9 +223,9 @@ class RAGGenerateFileRequest(BaseModel):
         None,
         description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
     )
-    rerank_device: str = Field(
-        "cpu",
-        description="rerank 设备（如 cpu / cuda:0）。",
+    rerank_device: Optional[str] = Field(
+        None,
+        description="rerank 设备（如 cpu / cuda:0），空则从配置读取。",
     )
     rerank_max_length: Optional[int] = Field(
         None,
@@ -246,8 +246,8 @@ class RAGGenerateFileRequest(BaseModel):
     )
     llm_api_base: Optional[str] = Field(None, description="vLLM API 地址，空则从配置读取")
     llm_model_name: Optional[str] = Field(None, description="LLM 模型名，空则从配置读取")
-    temperature: float = Field(0.1, ge=0.0, le=2.0, description="生成温度")
-    max_new_tokens: int = Field(1280, ge=64, description="最大生成 token 数")
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="生成温度，空则从配置读取")
+    max_new_tokens: Optional[int] = Field(None, ge=64, description="最大生成 token 数，空则从配置读取")
 
 
 class RAGGenerateFileResult(BaseModel):

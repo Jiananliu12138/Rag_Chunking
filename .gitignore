@@ -95,3 +95,4 @@ QA_corpus/*.jsonl
 **/*.pyc
 
 test_database/
+.env
