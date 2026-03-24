@@ -172,13 +172,33 @@ def get_final_chunks(new_id_list, id_chunks):
     return new_final_chunks
 
 
+def split_context_units(context_text):
+    """Prefer line-based chunks, but fall back to sentence splitting for single-block inputs."""
+    line_chunks = [line.strip() for line in context_text.strip().splitlines() if line.strip()]
+    if len(line_chunks) >= 6:
+        return line_chunks
+
+    normalized_text = re.sub(r"\s+", " ", context_text.strip())
+    if not normalized_text:
+        return []
+
+    sentence_chunks = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", normalized_text)
+        if sentence.strip()
+    ]
+    if len(sentence_chunks) >= 2:
+        return sentence_chunks
+
+    return line_chunks or [normalized_text]
+
+
 def process_context(context_text, doc_id):
     """对单个 context 进行分块"""
     start_time = time.time()
     
     # 按行分割 context (每个 Passage 作为一个段落)
-    paragraph_chunks = context_text.strip().splitlines()
-    paragraph_chunks = [line.strip() for line in paragraph_chunks if line.strip()]
+    paragraph_chunks = split_context_units(context_text)
     
     current_id = 0
     id_chunks = []
@@ -244,8 +264,7 @@ def process_context(context_text, doc_id):
 def process_context_with_params(context_text, doc_id, model_type=MODEL_TYPE, ds_base_url=DS_BASE_URL, temperature=TEMPERATURE, max_tokens=MAX_TOKENS):
     start_time = time.time()
     
-    paragraph_chunks = context_text.strip().splitlines()
-    paragraph_chunks = [line.strip() for line in paragraph_chunks if line.strip()]
+    paragraph_chunks = split_context_units(context_text)
     
     current_id = 0
     id_chunks = []
