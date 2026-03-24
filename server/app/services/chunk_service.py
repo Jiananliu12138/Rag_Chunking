@@ -98,10 +98,10 @@ class ChunkService:
             ds_base_url = base.rsplit("/v1", 1)[0] if base.endswith("/v1") else base
 
             temperature = (
-                p.temperature if p and p.temperature is not None else settings.DEFAULT_LLM_TEMPERATURE
+                p.temperature if p and p.temperature is not None else 0.2
             )
             max_tokens = (
-                p.max_tokens if p and p.max_tokens is not None else settings.DEFAULT_LLM_MAX_TOKENS
+                p.max_tokens if p and p.max_tokens is not None else 64
             )
 
             kwargs = {
@@ -209,10 +209,10 @@ class ChunkService:
             ds_base_url = base.rsplit("/v1", 1)[0] if base.endswith("/v1") else base
 
             temperature = (
-                p.temperature if p and p.temperature is not None else settings.DEFAULT_LLM_TEMPERATURE
+                p.temperature if p and p.temperature is not None else 0.2
             )
             max_tokens = (
-                p.max_tokens if p and p.max_tokens is not None else settings.DEFAULT_LLM_MAX_TOKENS
+                p.max_tokens if p and p.max_tokens is not None else 64
             )
 
             kwargs = {

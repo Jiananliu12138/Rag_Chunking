@@ -54,26 +54,40 @@ class RetrievalService:
         max_new_tokens: int,
     ) -> str:
         """
-        通过 vLLM completions 接口调用，prompt 包装与 Qwen_7B_Chat.request() 一致：
-        system + user( RAG prompt ) + assistant，模型只生成 Answer 部分。
+        通过 vLLM/OpenAI-compatible chat.completions 接口调用。
         """
         import requests
 
-        # 与 retrieval_lite 中 Qwen_7B_Chat.request 的包装格式一致
-        full_prompt = (
-            "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
-            "<|im_start|>user\n{prompt}<|im_end|>\n"
-            "<|im_start|>assistant\n"
-        ).format(prompt=prompt)
         payload = {
             "model": model_name,
-            "prompt": full_prompt,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
             "temperature": temperature,
             "max_tokens": max_new_tokens,
         }
-        resp = requests.post(f"{api_base}/completions", json=payload, timeout=120)
+        resp = requests.post(f"{api_base}/chat/completions", json=payload, timeout=120)
         resp.raise_for_status()
-        return resp.json()["choices"][0]["text"].strip()
+        data = resp.json()
+        choices = data.get("choices") if isinstance(data, dict) else None
+        if not choices:
+            raise RetrievalException(f"LLM 返回中缺少 choices: {data}")
+
+        message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+        content = message.get("content")
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "text" and isinstance(item.get("text"), str):
+                    text_parts.append(item["text"])
+            if text_parts:
+                return "".join(text_parts).strip()
+        raise RetrievalException(f"LLM 返回了无法解析的 chat content: {data}")
 
     @staticmethod
     def _normalize_retrieve_and_final_top_k(

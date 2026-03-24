@@ -266,7 +266,7 @@ export default function ChunkingPage() {
               <Label>Max Tokens</Label>
               <Input
                 type="number"
-                value={params.max_tokens || 3072}
+                value={params.max_tokens || 64}
                 onChange={(e) => setParams({ ...params, max_tokens: parseInt(e.target.value) })}
               />
             </div>

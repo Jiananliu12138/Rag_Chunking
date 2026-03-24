@@ -14,7 +14,7 @@ MODEL_TYPE = "Qwen2.5-7B-Instruct"
 DS_BASE_URL = os.environ.get('DS_BASE_URL', 'http://localhost:8005')
 NUM_WORKERS = 4
 TEMPERATURE = 0.2
-MAX_TOKENS = 3072
+MAX_TOKENS = 64
 
 
 def create_directory(path):
@@ -54,22 +54,52 @@ Additional Considerations: Avoid very long groups of paragraphs.
 Aim for a good balance between identifying content shifts and keeping groups manageable."""
 
 
+def extract_chat_text(res):
+    choices = res.get("choices") if isinstance(res, dict) else None
+    if not choices:
+        raise RuntimeError(f"Lumber upstream API returned no choices: {res}")
+
+    message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        text_parts = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "text" and isinstance(item.get("text"), str):
+                text_parts.append(item["text"])
+        if text_parts:
+            return "".join(text_parts)
+
+    raise RuntimeError(f"Lumber upstream API returned unexpected chat payload: {res}")
+
+
 def qw_prompt(user_prompt):
     while True:
         try:
-            _prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
             _post_data = {
                 "model": MODEL_TYPE,
                 "temperature": TEMPERATURE,
-                "prompt": _prompt,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 'max_tokens': MAX_TOKENS,
             }
-            response = requests.post(f"{DS_BASE_URL}/v1/completions", json=_post_data, timeout=600)
+            response = requests.post(f"{DS_BASE_URL}/v1/chat/completions", json=_post_data, timeout=600)
             res = response.json()
-            return res['choices'][0]['text']
-        except KeyError as e:
-            print(f"KeyError: {e}. Full response: {res}")
-            time.sleep(60)
+            if response.status_code >= 400:
+                error = res.get("error", {}) if isinstance(res, dict) else {}
+                message = error.get("message") or str(res)
+                raise RuntimeError(
+                    f"Lumber upstream API request failed ({response.status_code}): {message}"
+                )
+            return extract_chat_text(res)
+        except RuntimeError:
+            raise
         except Exception as e:
             if str(e) == "list index out of range":
                 print("Model thinks prompt is unsafe")
@@ -82,19 +112,26 @@ def qw_prompt(user_prompt):
 def qw_prompt_with_params(user_prompt, model_type=MODEL_TYPE, ds_base_url=DS_BASE_URL, temperature=TEMPERATURE, max_tokens=MAX_TOKENS):
     while True:
         try:
-            _prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
             _post_data = {
                 "model": model_type,
                 "temperature": temperature,
-                "prompt": _prompt,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 'max_tokens': max_tokens,
             }
-            response = requests.post(f"{ds_base_url}/v1/completions", json=_post_data, timeout=600)
+            response = requests.post(f"{ds_base_url}/v1/chat/completions", json=_post_data, timeout=600)
             res = response.json()
-            return res['choices'][0]['text']
-        except KeyError as e:
-            print(f"KeyError: {e}. Full response: {res}")
-            time.sleep(60)
+            if response.status_code >= 400:
+                error = res.get("error", {}) if isinstance(res, dict) else {}
+                message = error.get("message") or str(res)
+                raise RuntimeError(
+                    f"Lumber upstream API request failed ({response.status_code}): {message}"
+                )
+            return extract_chat_text(res)
+        except RuntimeError:
+            raise
         except Exception as e:
             if str(e) == "list index out of range":
                 print("Model thinks prompt is unsafe")

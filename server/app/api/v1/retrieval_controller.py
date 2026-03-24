@@ -20,21 +20,30 @@ from app.schemas.retrieval_schema import (
 )
 from app.services.retrieval_service import RetrievalService
 
-router = APIRouter(prefix="/retrieval", tags=["检索与生成 / Retrieval & Generation"])
+router = APIRouter(prefix="/retrieval", tags=["Retrieval & Generation"])
 
 _ERR_404 = {
-    "description": "指定的 collection 不存在，请先调用 /index/build 构建索引",
+    "description": "The target collection does not exist. Build the index first.",
     "content": {
         "application/json": {
-            "example": {"success": False, "message": "Collection 'wiki_chunks' 不存在，请先构建索引", "data": None}
+            "example": {
+                "success": False,
+                "message": "Collection 'wiki_chunks' does not exist. Build the index first.",
+                "data": None,
+            }
         }
     },
 }
+
 _ERR_500 = {
-    "description": "检索或 LLM 调用失败",
+    "description": "Retrieval or LLM generation failed.",
     "content": {
         "application/json": {
-            "example": {"success": False, "message": "LLM 生成失败: Connection refused", "data": None}
+            "example": {
+                "success": False,
+                "message": "LLM generation failed: Connection refused",
+                "data": None,
+            }
         }
     },
 }
@@ -47,12 +56,11 @@ def _get_retrieval_service() -> RetrievalService:
 @router.post(
     "/search",
     response_model=BaseResponse[SearchResult],
-    summary="向量相似度检索",
+    summary="Vector similarity search",
     description=(
-        "在指定 collection 中执行向量相似度检索，返回与查询最相关的 top-k 文档片段。\n\n"
-        "**前置条件**：对应 collection 已通过 `/index/build` 构建完毕，"
-        "且 `embed_model_path` 与构建索引时使用的模型一致（维度需匹配）。\n\n"
-        "返回结果中每条 `score` 为余弦相似度（0–1，越高越相关）。"
+        "Search the target collection and return the top-k most relevant chunks. "
+        "The collection must already be built, and the embedding model/dimension "
+        "should match the index configuration."
     ),
     responses={404: _ERR_404, 500: _ERR_500},
 )
@@ -72,18 +80,10 @@ async def search(
 @router.post(
     "/generate",
     response_model=BaseResponse[RAGResult],
-    summary="RAG 检索增强生成",
+    summary="RAG generation",
     description=(
-        "完整的 RAG 流程：**向量检索** → **拼接上下文** → **vLLM 生成答案**。\n\n"
-        "**流程详情**：\n"
-        "1. 使用 `embed_model_path` 将 `query` 嵌入为向量\n"
-        "2. 在 Milvus 中检索 `top_k` 个最相关文档片段\n"
-        "3. 将文档拼接为上下文，构造 Qwen 格式 Prompt\n"
-        "4. 调用 `llm_api_base` 的 `/completions` 接口生成回答\n\n"
-        "**前置条件**：\n"
-        "- 目标 collection 已构建索引\n"
-        "- `llm_api_base` 对应的 vLLM 服务已启动且模型已加载\n\n"
-        "响应中 `contexts` 字段返回实际使用的检索文档，可用于后续 RAGAS 评估。"
+        "Full RAG flow: embed query, retrieve top-k chunks from Milvus, assemble context, "
+        "and call the configured LLM chat endpoint (`/chat/completions`) to generate the answer."
     ),
     responses={404: _ERR_404, 500: _ERR_500},
 )
@@ -103,13 +103,10 @@ async def rag_generate(
 @router.post(
     "/generate-file",
     response_model=BaseResponse[RAGGenerateFileResult],
-    summary="RAG 文件批处理（检索+生成）",
+    summary="Batch RAG generation from file",
     description=(
-        "仿照 eval/LongBench/retrieval_lite.py：从 **jsonl 文件** 读入问题列表，逐条执行检索与 vLLM 生成，"
-        "结果写入 **JSON 文件**。\n\n"
-        "**输入**：每行一个 JSON，需含 `input`（或 `query`）作为检索查询，以及可选的 `reference_contexts` / `meta.reference_contexts`。\n"
-        "**输出**：单个 JSON 数组，每项为 `{_id, input, llm_ans, answer, rag_retrieval, gold_reference}`（与 retrieval_api.py 对齐）。\n\n"
-        "嵌入模型、vLLM 地址/模型名等未填时从配置（.env）读取。"
+        "Read a jsonl input file, run retrieval plus chat-based generation for each record, "
+        "and write the aggregated JSON result file."
     ),
     responses={404: _ERR_404, 500: _ERR_500},
 )
@@ -119,7 +116,7 @@ async def rag_generate_file(
 ) -> BaseResponse[RAGGenerateFileResult]:
     try:
         result = service.rag_generate_file(request)
-        return BaseResponse.ok(result, message="RAG 文件生成完成")
+        return BaseResponse.ok(result, message="RAG file generation completed")
     except (CollectionNotFoundException, ModelLoadException, RetrievalException) as exc:
         raise to_http_exception(exc)
     except Exception as exc:
