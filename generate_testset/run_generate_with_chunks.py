@@ -47,6 +47,8 @@ MAX_WORKERS = 4
 MAX_RETRIES = 3
 MAX_WAIT_SECONDS = 20
 RUN_TIMEOUT_SECONDS = 120
+LLM_MAX_TOKENS = 4096
+FAIL_FAST = False
 
 # In many local-vLLM runs, CustomNodeFilter produces excessive "no summary" logs
 # and does not filter effectively for pre-chunked inputs. Keep this True by default.
@@ -255,11 +257,15 @@ def _build_llm():
     client = AsyncOpenAI(
         api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT_SECONDS
     )
+    llm_kwargs = {}
+    if LLM_MAX_TOKENS is not None:
+        llm_kwargs["max_tokens"] = LLM_MAX_TOKENS
     return llm_factory(
         model=LLM_MODEL,
         provider=LLM_PROVIDER,
         client=client,
         adapter=LLM_ADAPTER,
+        **llm_kwargs,
     )
 
 
@@ -336,6 +342,39 @@ def _configure_logging():
         logging.getLogger("ragas.testset.transforms.filters").setLevel(logging.ERROR)
 
 
+def _split_success_and_failed_rows(result: Any) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    if not hasattr(result, "to_list") or not callable(getattr(result, "to_list")):
+        raise TypeError(
+            "Expected generation result with callable .to_list(), "
+            f"got {type(result).__name__}"
+        )
+
+    raw_rows = result.to_list()
+    rows: List[Dict[str, Any]] = []
+    failed_rows: List[Dict[str, Any]] = []
+
+    for index, row in enumerate(raw_rows):
+        if isinstance(row, dict):
+            rows.append(row)
+            continue
+
+        failed_rows.append(
+            {
+                "index": index,
+                "type": type(row).__name__,
+                "repr": repr(row),
+            }
+        )
+
+    return rows, failed_rows
+
+
+def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 def main():
     _configure_logging()
     _preflight_check_model_endpoint()
@@ -367,26 +406,27 @@ def main():
         callbacks=None,
         token_usage_parser=None,
         with_debugging_logs=WITH_DEBUGGING_LOGS,
-        raise_exceptions=True,
+        raise_exceptions=FAIL_FAST,
         return_executor=False,
     )
-    if not hasattr(result, "to_list") or not callable(getattr(result, "to_list")):
-        raise TypeError(
-            "Expected generation result with callable .to_list(), "
-            f"got {type(result).__name__}"
-        )
-    rows = result.to_list()
+    rows, failed_rows = _split_success_and_failed_rows(result)
 
     _extract_reference_contexts_meta(rows)
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT_FILE.open("w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    _write_jsonl(OUTPUT_FILE, rows)
+
+    if failed_rows:
+        failed_output_file = OUTPUT_FILE.with_name(f"{OUTPUT_FILE.stem}.failed.jsonl")
+        _write_jsonl(failed_output_file, failed_rows)
+        print(
+            f"[warn] Encountered {len(failed_rows)} failed generations. "
+            f"Details saved to {failed_output_file.resolve()}"
+        )
 
     if len(rows) < TESTSET_SIZE:
         print(
             f"[warn] Requested {TESTSET_SIZE} samples, generated {len(rows)}. "
-            "This usually means scenario candidates were insufficient after graph transforms."
+            "This usually means some generations failed or scenario candidates were insufficient after graph transforms."
         )
     print(f"Done: {len(rows)} samples -> {OUTPUT_FILE.resolve()}")
 
