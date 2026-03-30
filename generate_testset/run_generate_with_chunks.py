@@ -337,49 +337,182 @@ def _build_failed_generation_record(
 
 
 def _patch_ragas_transforms_error_handling() -> None:
-    """Patch Extractor.generate_execution_plan to skip failed nodes gracefully."""
-    from ragas.testset.transforms.base import Extractor
+    """Patch Extractor and RelationshipBuilder to skip failures gracefully."""
+    from ragas.testset.transforms.base import Extractor, RelationshipBuilder
     import logging as _logging
-
-    if getattr(Extractor.generate_execution_plan, "_mc_fault_tolerant", False):
-        return
 
     _ext_logger = _logging.getLogger("ragas.testset.transforms.base")
 
-    def _fault_tolerant_generate_execution_plan(self, kg):
-        async def safe_apply_extract(node):
-            try:
-                property_name, property_value = await self.extract(node)
-                if node.get_property(property_name) is None:
-                    node.add_property(property_name, property_value)
-                else:
+    # ── 1. Extractor: skip individual node extraction failures ──────────
+    if not getattr(Extractor.generate_execution_plan, "_mc_fault_tolerant", False):
+
+        def _fault_tolerant_generate_execution_plan(self, kg):
+            async def safe_apply_extract(node):
+                try:
+                    property_name, property_value = await self.extract(node)
+                    if node.get_property(property_name) is None:
+                        node.add_property(property_name, property_value)
+                    else:
+                        _ext_logger.warning(
+                            "Property '%s' already exists in node '%.6s'. Skipping!",
+                            property_name,
+                            node.id,
+                        )
+                except Exception as exc:
                     _ext_logger.warning(
-                        "Property '%s' already exists in node '%.6s'. Skipping!",
-                        property_name,
+                        "[%s] Extraction failed for node '%.6s', skipping. "
+                        "%s: %s",
+                        self.__class__.__name__,
                         node.id,
+                        type(exc).__name__,
+                        str(exc)[:300],
                     )
-            except Exception as exc:
-                _ext_logger.warning(
-                    "[%s] Extraction failed for node '%.6s', skipping. "
-                    "%s: %s",
-                    self.__class__.__name__,
-                    node.id,
-                    type(exc).__name__,
-                    str(exc)[:300],
-                )
 
-        filtered = self.filter(kg)
-        plan = [safe_apply_extract(node) for node in filtered.nodes]
-        _ext_logger.debug(
-            "Created %d coroutines for %s (fault-tolerant)",
-            len(plan),
-            self.__class__.__name__,
+            filtered = self.filter(kg)
+            plan = [safe_apply_extract(node) for node in filtered.nodes]
+            _ext_logger.debug(
+                "Created %d coroutines for %s (fault-tolerant)",
+                len(plan),
+                self.__class__.__name__,
+            )
+            return plan
+
+        _fault_tolerant_generate_execution_plan._mc_fault_tolerant = True
+        Extractor.generate_execution_plan = _fault_tolerant_generate_execution_plan
+        _ext_logger.info("Patched Extractor.generate_execution_plan for fault tolerance")
+
+    # ── 2. RelationshipBuilder: skip when nodes are missing properties ──
+    if not getattr(RelationshipBuilder.generate_execution_plan, "_mc_fault_tolerant", False):
+
+        def _fault_tolerant_rb_execution_plan(self, kg):
+            async def safe_apply_build_relationships(filtered_kg, original_kg):
+                try:
+                    relationships = await self.transform(filtered_kg)
+                    original_kg.relationships.extend(relationships)
+                except Exception as exc:
+                    _ext_logger.warning(
+                        "[%s] Relationship building failed, skipping. %s: %s",
+                        self.__class__.__name__,
+                        type(exc).__name__,
+                        str(exc)[:300],
+                    )
+
+            filtered_kg = self.filter(kg)
+            plan = [safe_apply_build_relationships(filtered_kg=filtered_kg, original_kg=kg)]
+            _ext_logger.debug(
+                "Created %d coroutines for %s (fault-tolerant)",
+                len(plan),
+                self.__class__.__name__,
+            )
+            return plan
+
+        _fault_tolerant_rb_execution_plan._mc_fault_tolerant = True
+        RelationshipBuilder.generate_execution_plan = _fault_tolerant_rb_execution_plan
+        _ext_logger.info("Patched RelationshipBuilder.generate_execution_plan for fault tolerance")
+
+    # ── 3. OverlapScoreBuilder / JaccardSimilarityBuilder: skip missing-property pairs ──
+    try:
+        from ragas.testset.transforms.relationship_builders.traditional import (
+            OverlapScoreBuilder,
+            JaccardSimilarityBuilder,
         )
-        return plan
+    except ImportError:
+        return
 
-    _fault_tolerant_generate_execution_plan._mc_fault_tolerant = True
-    Extractor.generate_execution_plan = _fault_tolerant_generate_execution_plan
-    _ext_logger.info("Patched Extractor.generate_execution_plan for fault tolerance")
+    if not getattr(OverlapScoreBuilder, "_mc_patched_transform", False):
+
+        async def _safe_overlap_transform(self, kg):
+            from ragas.testset.graph import Relationship as _Rel
+
+            distance_measure = self.distance_measure_map[self.distance_measure]
+            noisy_items = self._get_noisy_items(kg.nodes, self.property_name)
+            relationships = []
+            skipped = 0
+            for i, node_x in enumerate(kg.nodes):
+                for j, node_y in enumerate(kg.nodes):
+                    if i >= j:
+                        continue
+                    node_x_items = node_x.get_property(self.property_name)
+                    node_y_items = node_y.get_property(self.property_name)
+                    if node_x_items is None or node_y_items is None:
+                        skipped += 1
+                        continue
+                    if self.key_name is not None:
+                        node_x_items = node_x_items.get(self.key_name, [])
+                        node_y_items = node_y_items.get(self.key_name, [])
+
+                    overlaps = []
+                    overlapped_items = []
+                    for x in node_x_items:
+                        if x not in noisy_items:
+                            for y in node_y_items:
+                                if y not in noisy_items:
+                                    similarity = 1 - distance_measure.distance(
+                                        x.lower(), y.lower()
+                                    )
+                                    verdict = similarity >= self.distance_threshold
+                                    overlaps.append(verdict)
+                                    if verdict:
+                                        overlapped_items.append((x, y))
+
+                    similarity = self._overlap_score(overlaps)
+                    if similarity >= self.threshold:
+                        relationships.append(
+                            _Rel(
+                                source=node_x,
+                                target=node_y,
+                                type=f"{self.property_name}_overlap",
+                                properties={
+                                    f"{self.property_name}_{self.new_property_name}": similarity,
+                                    "overlapped_items": overlapped_items,
+                                },
+                                bidirectional=True,
+                            )
+                        )
+
+            if skipped:
+                _ext_logger.info(
+                    "OverlapScoreBuilder: skipped %d node pairs with missing '%s'",
+                    skipped,
+                    self.property_name,
+                )
+            return relationships
+
+        OverlapScoreBuilder.transform = _safe_overlap_transform
+        OverlapScoreBuilder._mc_patched_transform = True
+        _ext_logger.info("Patched OverlapScoreBuilder.transform to skip missing properties")
+
+    if not getattr(JaccardSimilarityBuilder, "_mc_patched_find", False):
+
+        def _safe_jaccard_find(self, kg):
+            import itertools
+
+            similar_pairs = set()
+            skipped = 0
+            for (i, node1), (j, node2) in itertools.combinations(enumerate(kg.nodes), 2):
+                items1 = node1.get_property(self.property_name)
+                items2 = node2.get_property(self.property_name)
+                if items1 is None or items2 is None:
+                    skipped += 1
+                    continue
+                if self.key_name is not None:
+                    items1 = items1.get(self.key_name, [])
+                    items2 = items2.get(self.key_name, [])
+                similarity = self._jaccard_similarity(set(items1), set(items2))
+                if similarity >= self.threshold:
+                    similar_pairs.add((i, j, similarity))
+
+            if skipped:
+                _ext_logger.info(
+                    "JaccardSimilarityBuilder: skipped %d node pairs with missing '%s'",
+                    skipped,
+                    self.property_name,
+                )
+            return list(similar_pairs)
+
+        JaccardSimilarityBuilder._find_similar_embedding_pairs = _safe_jaccard_find
+        JaccardSimilarityBuilder._mc_patched_find = True
+        _ext_logger.info("Patched JaccardSimilarityBuilder to skip missing properties")
 
 
 def _patch_ragas_safe_generate() -> None:
