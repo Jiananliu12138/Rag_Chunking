@@ -570,6 +570,56 @@ def _patch_ragas_transforms_error_handling() -> None:
     _ext_logger.info("Patched Extractor.generate_execution_plan for fault tolerance")
 
 
+def _patch_ragas_multihop_prompt() -> None:
+    """Strengthen multi-hop QA prompt to require ALL context segments, not just two."""
+    from ragas.testset.synthesizers.multi_hop.base import MultiHopQuerySynthesizer
+    import ragas.testset.synthesizers as synth_pkg
+    import ragas.testset.synthesizers.generate as gen_module
+
+    if getattr(synth_pkg, "_mc_multihop_patched", False):
+        return
+
+    _MULTIHOP_INSTRUCTION = (
+        "Generate a multi-hop query and answer based on the specified conditions "
+        "(persona, themes, style, length) and the provided context. "
+        "The themes represent phrases extracted or generated from the context, "
+        "highlighting the suitability of the selected context for multi-hop query creation. "
+        "Ensure the query explicitly incorporates these themes.\n"
+        "### Instructions:\n"
+        "1. **Generate a Multi-Hop Query**: Use the provided context segments and themes "
+        "to form a query that requires combining information from ALL provided segments "
+        "(e.g., `<1-hop>`, `<2-hop>`, `<3-hop>`, etc.). The query MUST require information "
+        "from EVERY segment to be fully answered — not just some of them.\n"
+        "2. **Generate an Answer**: Use only the content from the provided context to create "
+        "a detailed and faithful answer. The answer MUST reference information from ALL "
+        "provided context segments. Do not add information not present in the context.\n"
+        "3. **Multi-Hop Context Tags**:\n"
+        "   - Each context segment is tagged as `<1-hop>`, `<2-hop>`, etc.\n"
+        "   - The query MUST use information from ALL tagged segments and connect them "
+        "meaningfully.\n"
+        "   - If 3 segments are provided, all 3 must contribute to answering the query.\n"
+        "4. **Additional Context** (if provided): If llm_context is provided, use it as "
+        "guidance for what type of question to generate and how to structure the answer. "
+        "Still ensure the content comes only from the provided context.\n"
+        "5. Your entire response must be under 500 tokens."
+    )
+
+    _orig_default_qd = gen_module.default_query_distribution
+
+    def _patched_default_qd(llm, kg=None, llm_context=None):
+        distribution = _orig_default_qd(llm, kg, llm_context)
+        for synthesizer, _ in distribution:
+            if isinstance(synthesizer, MultiHopQuerySynthesizer):
+                synthesizer.generate_query_reference_prompt.instruction = (
+                    _MULTIHOP_INSTRUCTION
+                )
+        return distribution
+
+    gen_module.default_query_distribution = _patched_default_qd
+    synth_pkg.default_query_distribution = _patched_default_qd
+    synth_pkg._mc_multihop_patched = True
+
+
 def _patch_ragas_safe_generate() -> None:
     import ragas.testset.synthesizers.generate as ragas_generate
 
@@ -793,6 +843,7 @@ def main():
     _configure_logging()
     _preflight_check_model_endpoint()
     _patch_ragas_transforms_error_handling()
+    _patch_ragas_multihop_prompt()
     _patch_ragas_safe_generate()
 
     chunks = _load_chunks(CHUNKS_FILE)
