@@ -25,8 +25,12 @@ from ragas.testset.transforms import (
 )
 from ragas.testset.transforms.extractors.llm_based import (
     NERExtractor,
+    NERPrompt,
+    SummaryExtractorPrompt,
+    ThemesAndConceptsExtractorPrompt,
     ThemesExtractor,
 )
+from ragas.prompt import StringIO
 os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache"
 Chunk = Union[str, Document]
 
@@ -270,19 +274,128 @@ def _build_llm():
     )
 
 
+_STRICT_SUMMARY_PROMPT = SummaryExtractorPrompt(
+    instruction=(
+        "Summarize the given text in at most 3 sentences.\n"
+        "Rules:\n"
+        "- Capture only the most important points. Be concise.\n"
+        "- Do NOT repeat sentences or paraphrase the same idea multiple times.\n"
+        "- If the text is very short, a single sentence is acceptable.\n"
+        "- Output ONLY the summary text, nothing else.\n"
+        "- Your entire output must be under 200 tokens."
+    ),
+    examples=[
+        (
+            StringIO(
+                text=(
+                    "Artificial intelligence\n\n"
+                    "Artificial intelligence is transforming various industries by "
+                    "automating tasks that previously required human intelligence. "
+                    "From healthcare to finance, AI is being used to analyze vast "
+                    "amounts of data quickly and accurately. This technology is also "
+                    "driving innovations in areas like self-driving cars and "
+                    "personalized recommendations."
+                )
+            ),
+            StringIO(
+                text=(
+                    "AI is revolutionizing industries by automating tasks, analyzing "
+                    "data, and driving innovations like self-driving cars and "
+                    "personalized recommendations."
+                )
+            ),
+        ),
+        (
+            StringIO(
+                text=(
+                    "The Apollo program was a series of space missions run by NASA "
+                    "between 1961 and 1972. Its primary goal was to land humans on "
+                    "the Moon and return them safely to Earth. Apollo 11, launched on "
+                    "July 16, 1969, was the first mission to achieve this goal when "
+                    "astronauts Neil Armstrong and Buzz Aldrin walked on the lunar "
+                    "surface. The program involved extensive development of spacecraft, "
+                    "including the Saturn V rocket, the Command Module, and the Lunar "
+                    "Module. Over the course of the program, twelve astronauts walked "
+                    "on the Moon across six successful landing missions. The Apollo "
+                    "program had lasting impacts on science, technology, and "
+                    "international space policy."
+                )
+            ),
+            StringIO(
+                text=(
+                    "The Apollo program (1961-1972) was NASA's effort to land humans "
+                    "on the Moon. Apollo 11 achieved the first lunar landing in 1969. "
+                    "Twelve astronauts walked on the Moon across six missions, leaving "
+                    "a lasting impact on science and space policy."
+                )
+            ),
+        ),
+    ],
+)
+
+_STRICT_NER_PROMPT = NERPrompt(
+    instruction=(
+        "Extract the most important named entities from the given text.\n"
+        "Rules:\n"
+        "- Return AT MOST max_num entities. Fewer is fine if the text has fewer.\n"
+        "- Each entity must be UNIQUE — never repeat the same entity or a trivial variant.\n"
+        "- Only include proper nouns, specific terms, or clearly defined concepts.\n"
+        "- Do NOT pad the list with generic words, descriptions, or rephrased duplicates.\n"
+        "- Keep each entity name short (1-5 words).\n"
+        "- Your entire output must be under 300 tokens.\n"
+        "\n"
+        "BAD output (duplicates — NEVER do this):\n"
+        '  {"entities": ["taxable income", "taxable income", "taxable income"]}\n'
+        "GOOD output (unique, concise):\n"
+        '  {"entities": ["taxable income", "IRS", "Form 1040"]}'
+    ),
+)
+
+_STRICT_THEMES_PROMPT = ThemesAndConceptsExtractorPrompt(
+    instruction=(
+        "Extract the main themes and concepts from the given text.\n"
+        "Rules:\n"
+        "- Return AT MOST max_num themes. Fewer is fine if the text covers fewer topics.\n"
+        "- Each theme must be UNIQUE — do NOT repeat the same theme in different wording.\n"
+        "- Use short, specific phrases (1-5 words each).\n"
+        "- Do NOT pad the list with vague or overlapping terms.\n"
+        "- Your entire output must be under 300 tokens.\n"
+        "\n"
+        "BAD output (overlapping — NEVER do this):\n"
+        '  {"output": ["machine learning", "ML techniques", "machine learning methods"]}\n'
+        "GOOD output (distinct, specific):\n"
+        '  {"output": ["machine learning", "neural networks", "data preprocessing"]}'
+    ),
+)
+
+
 def _build_transforms(llm, embedding_model):
     def filter_chunks(node):
         return node.type.name == "CHUNK"
 
-    summary_extractor = SummaryExtractor(llm=llm, filter_nodes=filter_chunks)
+    summary_extractor = SummaryExtractor(
+        llm=llm,
+        prompt=_STRICT_SUMMARY_PROMPT,
+        filter_nodes=filter_chunks,
+    )
     summary_emb_extractor = EmbeddingExtractor(
         embedding_model=embedding_model,
         property_name="summary_embedding",
         embed_property_name="summary",
         filter_nodes=filter_chunks,
     )
-    theme_extractor = ThemesExtractor(llm=llm, filter_nodes=filter_chunks)
-    ner_extractor = NERExtractor(llm=llm, filter_nodes=filter_chunks)
+    theme_extractor = ThemesExtractor(
+        llm=llm,
+        prompt=_STRICT_THEMES_PROMPT,
+        max_num_themes=10,
+        filter_nodes=filter_chunks,
+    )
+    ner_extractor = NERExtractor(
+        llm=llm,
+        prompt=_STRICT_NER_PROMPT,
+        max_num_entities=10,
+        filter_nodes=filter_chunks,
+    )
     cosine_sim_builder = CosineSimilarityBuilder(
         property_name="summary_embedding",
         new_property_name="summary_similarity",
