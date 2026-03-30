@@ -1,36 +1,24 @@
 import json
 import logging
-import statistics
 import os
 import math
 
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Union
-from urllib import request
 
 from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings as LCHuggingFaceEmbeddings
-from openai import AsyncOpenAI
 
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.llms import llm_factory
 from ragas.run_config import RunConfig
 from ragas.testset.synthesizers.generate import TestsetGenerator
-from ragas.testset.transforms import (
-    CosineSimilarityBuilder,
-    EmbeddingExtractor,
-    OverlapScoreBuilder,
-    Parallel,
-    SummaryExtractor,
+
+from testset_config import (
+    build_embedding_model,
+    build_llm,
+    build_query_distribution,
+    build_transforms,
+    patch_multihop_prompt,
 )
-from ragas.testset.transforms.extractors.llm_based import (
-    NERExtractor,
-    NERPrompt,
-    SummaryExtractorPrompt,
-    ThemesAndConceptsExtractorPrompt,
-    ThemesExtractor,
-)
-from ragas.prompt import StringIO
+
 os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache"
 Chunk = Union[str, Document]
 
@@ -40,31 +28,22 @@ OUTPUT_FILE = Path("/data/h50056789/Rag_Chunking/test_database/rag_testset.jsonl
 TESTSET_SIZE = 10
 WITH_DEBUGGING_LOGS = True
 
-LLM_BASE_URL = "http://127.0.0.1:8001/v1"
-LLM_API_KEY = "EMPTY"
-LLM_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8"
-LLM_PROVIDER = "openai"
-LLM_ADAPTER = "auto"
-LLM_TIMEOUT_SECONDS = 120
-LLM_PREFLIGHT_TIMEOUT_SECONDS = 8
-
 MAX_WORKERS = 4
 MAX_RETRIES = 3
 MAX_WAIT_SECONDS = 20
 RUN_TIMEOUT_SECONDS = 120
-LLM_MAX_TOKENS = 4096
 FAIL_FAST = False
 
-# In many local-vLLM runs, CustomNodeFilter produces excessive "no summary" logs
-# and does not filter effectively for pre-chunked inputs. Keep this True by default.
 SKIP_CUSTOM_NODE_FILTER = True
 QUIET_FILTER_WARNINGS = True
 
-EMBEDDING_MODEL_PATH = Path(r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5")
-EMBEDDING_DEVICE = "cuda"
+LLM_PREFLIGHT_TIMEOUT_SECONDS = 8
 
 CHUNK_META_PREFIX = "<<<MC_META>>>"
 CHUNK_META_SUFFIX = "<<<END_MC_META>>>"
+
+
+# ===== Chunk loading =====
 
 
 def _load_chunks(path: Path) -> List[Chunk]:
@@ -172,6 +151,9 @@ def _normalize_chunks(items: Sequence[Any]) -> List[Chunk]:
     return normalized
 
 
+# ===== Chunk meta injection / extraction =====
+
+
 def _inject_chunk_meta_into_text(
     text: str,
     source_article_id: Any = None,
@@ -205,7 +187,6 @@ def extract_all_chunk_meta_from_text(text: str) -> Dict[str, Any]:
         pieces.append(text[cursor:prefix_pos])
         suffix_pos = text.find(CHUNK_META_SUFFIX, prefix_pos + len(CHUNK_META_PREFIX))
         if suffix_pos == -1:
-            # Broken marker: keep original tail to avoid data loss.
             pieces.append(text[prefix_pos:])
             break
 
@@ -251,182 +232,13 @@ def _extract_reference_contexts_meta(rows: List[Dict[str, Any]]) -> None:
         row["meta"] = existing_meta
 
 
-def _chunk_text(chunk: Chunk) -> str:
-    if isinstance(chunk, Document):
-        return chunk.page_content
-    return chunk
-
-
-def _build_llm():
-    # Use async client so ragas async transforms do not block the event loop.
-    client = AsyncOpenAI(
-        api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT_SECONDS
-    )
-    llm_kwargs = {}
-    if LLM_MAX_TOKENS is not None:
-        llm_kwargs["max_tokens"] = LLM_MAX_TOKENS
-    return llm_factory(
-        model=LLM_MODEL,
-        provider=LLM_PROVIDER,
-        client=client,
-        adapter=LLM_ADAPTER,
-        **llm_kwargs,
-    )
-
-
-_STRICT_SUMMARY_PROMPT = SummaryExtractorPrompt(
-    instruction=(
-        "Summarize the given text in at most 3 sentences.\n"
-        "Rules:\n"
-        "- Capture only the most important points. Be concise.\n"
-        "- Do NOT repeat sentences or paraphrase the same idea multiple times.\n"
-        "- If the text is very short, a single sentence is acceptable.\n"
-        "- Output ONLY the summary text, nothing else.\n"
-        "- Your entire output must be under 200 tokens."
-    ),
-    examples=[
-        (
-            StringIO(
-                text=(
-                    "Artificial intelligence\n\n"
-                    "Artificial intelligence is transforming various industries by "
-                    "automating tasks that previously required human intelligence. "
-                    "From healthcare to finance, AI is being used to analyze vast "
-                    "amounts of data quickly and accurately. This technology is also "
-                    "driving innovations in areas like self-driving cars and "
-                    "personalized recommendations."
-                )
-            ),
-            StringIO(
-                text=(
-                    "AI is revolutionizing industries by automating tasks, analyzing "
-                    "data, and driving innovations like self-driving cars and "
-                    "personalized recommendations."
-                )
-            ),
-        ),
-        (
-            StringIO(
-                text=(
-                    "The Apollo program was a series of space missions run by NASA "
-                    "between 1961 and 1972. Its primary goal was to land humans on "
-                    "the Moon and return them safely to Earth. Apollo 11, launched on "
-                    "July 16, 1969, was the first mission to achieve this goal when "
-                    "astronauts Neil Armstrong and Buzz Aldrin walked on the lunar "
-                    "surface. The program involved extensive development of spacecraft, "
-                    "including the Saturn V rocket, the Command Module, and the Lunar "
-                    "Module. Over the course of the program, twelve astronauts walked "
-                    "on the Moon across six successful landing missions. The Apollo "
-                    "program had lasting impacts on science, technology, and "
-                    "international space policy."
-                )
-            ),
-            StringIO(
-                text=(
-                    "The Apollo program (1961-1972) was NASA's effort to land humans "
-                    "on the Moon. Apollo 11 achieved the first lunar landing in 1969. "
-                    "Twelve astronauts walked on the Moon across six missions, leaving "
-                    "a lasting impact on science and space policy."
-                )
-            ),
-        ),
-    ],
-)
-
-_STRICT_NER_PROMPT = NERPrompt(
-    instruction=(
-        "Extract the most important named entities from the given text.\n"
-        "Rules:\n"
-        "- Return AT MOST max_num entities. Fewer is fine if the text has fewer.\n"
-        "- Each entity must be UNIQUE — never repeat the same entity or a trivial variant.\n"
-        "- Only include proper nouns, specific terms, or clearly defined concepts.\n"
-        "- Do NOT pad the list with generic words, descriptions, or rephrased duplicates.\n"
-        "- Keep each entity name short (1-5 words).\n"
-        "- Your entire output must be under 300 tokens.\n"
-        "\n"
-        "BAD output (duplicates — NEVER do this):\n"
-        '  {"entities": ["taxable income", "taxable income", "taxable income"]}\n'
-        "GOOD output (unique, concise):\n"
-        '  {"entities": ["taxable income", "IRS", "Form 1040"]}'
-    ),
-)
-
-_STRICT_THEMES_PROMPT = ThemesAndConceptsExtractorPrompt(
-    instruction=(
-        "Extract the main themes and concepts from the given text.\n"
-        "Rules:\n"
-        "- Return AT MOST max_num themes. Fewer is fine if the text covers fewer topics.\n"
-        "- Each theme must be UNIQUE — do NOT repeat the same theme in different wording.\n"
-        "- Use short, specific phrases (1-5 words each).\n"
-        "- Do NOT pad the list with vague or overlapping terms.\n"
-        "- Your entire output must be under 300 tokens.\n"
-        "\n"
-        "BAD output (overlapping — NEVER do this):\n"
-        '  {"output": ["machine learning", "ML techniques", "machine learning methods"]}\n'
-        "GOOD output (distinct, specific):\n"
-        '  {"output": ["machine learning", "neural networks", "data preprocessing"]}'
-    ),
-)
-
-
-def _build_transforms(llm, embedding_model):
-    def filter_chunks(node):
-        return node.type.name == "CHUNK"
-
-    summary_extractor = SummaryExtractor(
-        llm=llm,
-        prompt=_STRICT_SUMMARY_PROMPT,
-        filter_nodes=filter_chunks,
-    )
-    summary_emb_extractor = EmbeddingExtractor(
-        embedding_model=embedding_model,
-        property_name="summary_embedding",
-        embed_property_name="summary",
-        filter_nodes=filter_chunks,
-    )
-    theme_extractor = ThemesExtractor(
-        llm=llm,
-        prompt=_STRICT_THEMES_PROMPT,
-        max_num_themes=10,
-        filter_nodes=filter_chunks,
-    )
-    ner_extractor = NERExtractor(
-        llm=llm,
-        prompt=_STRICT_NER_PROMPT,
-        max_num_entities=10,
-        filter_nodes=filter_chunks,
-    )
-    cosine_sim_builder = CosineSimilarityBuilder(
-        property_name="summary_embedding",
-        new_property_name="summary_similarity",
-        threshold=0.7,
-        filter_nodes=filter_chunks,
-    )
-    ner_overlap_sim = OverlapScoreBuilder(threshold=0.01, filter_nodes=filter_chunks)
-
-    transforms = [
-        summary_extractor,
-        Parallel(summary_emb_extractor, theme_extractor, ner_extractor),
-        Parallel(cosine_sim_builder, ner_overlap_sim),
-    ]
-    return transforms
-
-
-def _build_embedding_model():
-    model_path = EMBEDDING_MODEL_PATH.expanduser()
-    if not model_path.exists():
-        raise FileNotFoundError(
-            f"Local embedding model path not found: {model_path.resolve()}"
-        )
-    langchain_embeddings = LCHuggingFaceEmbeddings(
-        model_name=str(model_path),
-        model_kwargs={"device": EMBEDDING_DEVICE},
-        encode_kwargs={"normalize_embeddings": True},
-    )
-    return LangchainEmbeddingsWrapper(langchain_embeddings)
+# ===== Preflight =====
 
 
 def _preflight_check_model_endpoint():
+    from testset_config import LLM_BASE_URL, LLM_API_KEY, LLM_MODEL
+    from urllib import request
+
     base = LLM_BASE_URL.rstrip("/")
     models_url = f"{base}/models"
     req = request.Request(
@@ -454,6 +266,9 @@ def _preflight_check_model_endpoint():
 def _configure_logging():
     if QUIET_FILTER_WARNINGS:
         logging.getLogger("ragas.testset.transforms.filters").setLevel(logging.ERROR)
+
+
+# ===== Result processing helpers =====
 
 
 def _split_success_and_failed_rows(result: Any) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -486,7 +301,7 @@ def _split_success_and_failed_rows(result: Any) -> tuple[List[Dict[str, Any]], L
 def _safe_repr(value: Any, max_len: int = 1000) -> str:
     try:
         text = repr(value)
-    except Exception as exc:  # pragma: no cover - defensive logging helper
+    except Exception as exc:
         text = f"<repr failed: {type(exc).__name__}: {exc}>"
     if len(text) > max_len:
         return text[:max_len] + "...<truncated>"
@@ -518,11 +333,11 @@ def _build_failed_generation_record(
     return record
 
 
+# ===== Ragas monkey-patches (error tolerance) =====
+
+
 def _patch_ragas_transforms_error_handling() -> None:
-    """Monkey-patch ragas Extractor so that individual node extraction failures
-    (e.g. IncompleteOutputException from instructor) are logged and skipped
-    instead of crashing the entire transform pipeline.
-    """
+    """Patch Extractor.generate_execution_plan to skip failed nodes gracefully."""
     from ragas.testset.transforms.base import Extractor
     import logging as _logging
 
@@ -530,8 +345,6 @@ def _patch_ragas_transforms_error_handling() -> None:
         return
 
     _ext_logger = _logging.getLogger("ragas.testset.transforms.base")
-
-    _original_gen_plan = Extractor.generate_execution_plan
 
     def _fault_tolerant_generate_execution_plan(self, kg):
         async def safe_apply_extract(node):
@@ -566,61 +379,11 @@ def _patch_ragas_transforms_error_handling() -> None:
 
     _fault_tolerant_generate_execution_plan._mc_fault_tolerant = True
     Extractor.generate_execution_plan = _fault_tolerant_generate_execution_plan
-
     _ext_logger.info("Patched Extractor.generate_execution_plan for fault tolerance")
 
 
-def _patch_ragas_multihop_prompt() -> None:
-    """Strengthen multi-hop QA prompt to require ALL context segments, not just two."""
-    from ragas.testset.synthesizers.multi_hop.base import MultiHopQuerySynthesizer
-    import ragas.testset.synthesizers as synth_pkg
-    import ragas.testset.synthesizers.generate as gen_module
-
-    if getattr(synth_pkg, "_mc_multihop_patched", False):
-        return
-
-    _MULTIHOP_INSTRUCTION = (
-        "Generate a multi-hop query and answer based on the specified conditions "
-        "(persona, themes, style, length) and the provided context. "
-        "The themes represent phrases extracted or generated from the context, "
-        "highlighting the suitability of the selected context for multi-hop query creation. "
-        "Ensure the query explicitly incorporates these themes.\n"
-        "### Instructions:\n"
-        "1. **Generate a Multi-Hop Query**: Use the provided context segments and themes "
-        "to form a query that requires combining information from ALL provided segments "
-        "(e.g., `<1-hop>`, `<2-hop>`, `<3-hop>`, etc.). The query MUST require information "
-        "from EVERY segment to be fully answered — not just some of them.\n"
-        "2. **Generate an Answer**: Use only the content from the provided context to create "
-        "a detailed and faithful answer. The answer MUST reference information from ALL "
-        "provided context segments. Do not add information not present in the context.\n"
-        "3. **Multi-Hop Context Tags**:\n"
-        "   - Each context segment is tagged as `<1-hop>`, `<2-hop>`, etc.\n"
-        "   - The query MUST use information from ALL tagged segments and connect them "
-        "meaningfully.\n"
-        "   - If 3 segments are provided, all 3 must contribute to answering the query.\n"
-        "4. **Additional Context** (if provided): If llm_context is provided, use it as "
-        "guidance for what type of question to generate and how to structure the answer. "
-        "Still ensure the content comes only from the provided context.\n"
-        "5. Your entire response must be under 500 tokens."
-    )
-
-    _orig_default_qd = gen_module.default_query_distribution
-
-    def _patched_default_qd(llm, kg=None, llm_context=None):
-        distribution = _orig_default_qd(llm, kg, llm_context)
-        for synthesizer, _ in distribution:
-            if isinstance(synthesizer, MultiHopQuerySynthesizer):
-                synthesizer.generate_query_reference_prompt.instruction = (
-                    _MULTIHOP_INSTRUCTION
-                )
-        return distribution
-
-    gen_module.default_query_distribution = _patched_default_qd
-    synth_pkg.default_query_distribution = _patched_default_qd
-    synth_pkg._mc_multihop_patched = True
-
-
 def _patch_ragas_safe_generate() -> None:
+    """Patch TestsetGenerator.generate to tolerate NaN / malformed samples."""
     import ragas.testset.synthesizers.generate as ragas_generate
 
     if getattr(ragas_generate.TestsetGenerator.generate, "_mc_safe_patched", False):
@@ -833,24 +596,31 @@ def _patch_ragas_safe_generate() -> None:
     ragas_generate.TestsetGenerator.generate = _safe_generate
 
 
+# ===== Output =====
+
+
 def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+# ===== Main =====
+
+
 def main():
     _configure_logging()
     _preflight_check_model_endpoint()
     _patch_ragas_transforms_error_handling()
-    _patch_ragas_multihop_prompt()
+    patch_multihop_prompt()
     _patch_ragas_safe_generate()
 
     chunks = _load_chunks(CHUNKS_FILE)
 
-    llm = _build_llm()
-    embedding_model = _build_embedding_model()
-    transforms = _build_transforms(llm, embedding_model) if SKIP_CUSTOM_NODE_FILTER else None
+    llm = build_llm()
+    embedding_model = build_embedding_model()
+    transforms = build_transforms(llm, embedding_model) if SKIP_CUSTOM_NODE_FILTER else None
+    query_distribution = build_query_distribution(llm)
 
     generator = TestsetGenerator(
         llm=llm,
@@ -864,7 +634,7 @@ def main():
         transforms=transforms,
         transforms_llm=None,
         transforms_embedding_model=None,
-        query_distribution=None,
+        query_distribution=query_distribution,
         run_config=RunConfig(
             timeout=RUN_TIMEOUT_SECONDS,
             max_retries=MAX_RETRIES,
