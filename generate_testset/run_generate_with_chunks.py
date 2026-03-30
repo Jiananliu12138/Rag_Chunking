@@ -601,8 +601,9 @@ def _patch_ragas_safe_generate() -> None:
 
 def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        for idx, row in enumerate(rows, start=1):
+            row_with_id = {"question_id": idx, **row}
+            f.write(json.dumps(row_with_id, ensure_ascii=False) + "\n")
 
 
 # ===== Main =====

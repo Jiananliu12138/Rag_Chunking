@@ -518,7 +518,7 @@ class RetrievalService:
         """
         仿照 eval/LongBench/retrieval_lite.py：从 jsonl 读入问题，逐条检索+生成，结果写入 JSON。
         每行 JSON 需含 user_input/input/query，gold 参考可来自 reference_contexts + meta.reference_contexts。
-        输出列表元素为 {_id, input, llm_ans, answer, rag_retrieval, gold_reference}。
+        输出列表元素为 {_id, question_id, input, llm_ans, reference, rag_retrieval, gold_reference, generation_api_base, generation_model_name}。
         """
         settings = get_settings()
         embed_model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
@@ -712,13 +712,18 @@ class RetrievalService:
                         temperature=temperature,
                         max_new_tokens=max_new_tokens,
                     )
+                    source_question_id = data.get("question_id")
+                    source_record_id = data.get("_id")
                     save = {
-                        "_id": auto_id,
+                        "_id": source_record_id if source_record_id is not None else (source_question_id if source_question_id is not None else auto_id),
+                        "question_id": source_question_id if source_question_id is not None else auto_id,
                         "input": query,
                         "llm_ans": llm_ans,
-                        "answer": data.get("reference"),
+                        "reference": data.get("reference"),
                         "rag_retrieval": rag_retrieval,
                         "gold_reference": gold_reference,
+                        "generation_api_base": llm_api_base,
+                        "generation_model_name": llm_model_name,
                     }
                     retrieval_save_list.append(save)
                 except Exception as e:

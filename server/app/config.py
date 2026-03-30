@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     DEFAULT_ENABLE_BERT_SCORE: bool = False
     DEFAULT_BERT_SCORE_MODEL: str = "roberta-large"
     DEFAULT_BERT_SCORE_DEVICE: str = "cuda:0"
+    DEFAULT_ENABLE_LLM_JUDGE: bool = False
 
     # RAGAS evaluation runtime defaults
     DEFAULT_RAGAS_DEVICE: str = "cuda:0"

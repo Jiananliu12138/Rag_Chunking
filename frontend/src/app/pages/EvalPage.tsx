@@ -38,10 +38,11 @@ export default function EvalPage() {
 
   const traditionalPlaceholder = `[
 \t{
+\t\t"question_id": 1,
 \t\t"_id": 1,
 \t\t"input": "According to the 19th-century writer Baron Ernouf, who was the brother of Waldrada of Lotharingia?",
 \t\t"llm_ans": "According to Baron Ernouf, Waldrada was the sister of Thietgaud, bishop of Trier, so her brother was Thietgaud.",
-\t\t"answer": "Baron Ernouf suggested that Waldrada was the sister of Thietgaud, the bishop of Trier.",
+\t\t"reference": "Baron Ernouf suggested that Waldrada was the sister of Thietgaud, the bishop of Trier.",
 \t\t"rag_retrieval": [
 \t\t\t{
 \t\t\t\t"text": "Baron Ernouf suggested that Waldrada was the sister of Thietgaud, the bishop of Trier.",
@@ -113,6 +114,8 @@ Format 2 - Current Eval Format:
     { label: 'BLEU original paper (Papineni et al., 2002)', url: 'https://aclanthology.org/P02-1040/' },
     { label: 'ROUGE package paper (Lin, 2004)', url: 'https://aclanthology.org/W04-1013/' },
     { label: 'BERTScore paper (Zhang et al., 2020)', url: 'https://openreview.net/forum?id=SkeHuCVFDr' },
+    { label: 'LangChain OpenEvals (LLM-as-a-judge)', url: 'https://github.com/langchain-ai/openevals' },
+    { label: 'OpenAI practical guide for prompting GPT-5', url: 'https://cdn.openai.com/pdf/47c0215b-8976-4f60-8e13-d69c2ddbc15e/a-practical-guide-to-building-with-gpt-5.pdf' },
     { label: 'Project implementation: eval_lite.py', url: 'file:///F:/thesis/Meta-Chunking/eval/LongBench/eval_lite.py' },
   ];
 
@@ -228,6 +231,38 @@ Format 2 - Current Eval Format:
         String.raw`\mathrm{sim}(e_i,e_j):\ \text{cosine similarity between two token embeddings}`,
       ],
       projectExample: ['When llm_ans is a paraphrase of the reference, BERTScore is often higher than BLEU/ROUGE.'],
+    },
+    llm_judge_success_rate: {
+      title: 'LLM Judge Success Rate',
+      blurb: 'End-to-end 0/1 accuracy from an LLM judge that checks whether llm_ans matches the reference answer.',
+      formulaLatex: String.raw`SuccessRate=\frac{1}{N}\sum_{i=1}^{N}\mathbb{1}\left[\mathrm{Judge}(\hat{y}_i, G_i, q_i)=1\right]`,
+      interpretation: 'Higher is better. The judge returns 1 only when the generated answer is semantically equivalent to at least one reference answer for the same question; otherwise it returns 0.',
+      variables: [
+        String.raw`\hat{y}_i:\ \text{generated answer }(\mathtt{llm\_ans})`,
+        String.raw`G_i:\ \text{reference answer set from }\mathtt{reference}/\mathtt{answer}/\mathtt{answers}`,
+        String.raw`q_i:\ \text{question text, used for disambiguation when available}`,
+        String.raw`\mathbb{1}[\cdot]:\ \text{indicator that equals 1 for a judged match and 0 otherwise}`,
+      ],
+      projectExample: [
+        'If llm_ans says the same thing as the reference with different wording, the judge can still return 1.',
+        'If a key entity, number, date, negation, or relation is different, the judge returns 0 even if lexical overlap is high.',
+      ],
+    },
+    llm_judge_correct_count: {
+      title: 'LLM Judge Correct Count',
+      blurb: 'How many evaluated questions were judged correct by the LLM-as-a-judge metric.',
+      formulaLatex: String.raw`Correct=\sum_{i=1}^{N}\mathbb{1}\left[\mathrm{Judge}(\hat{y}_i, G_i, q_i)=1\right]`,
+      interpretation: 'Higher is better. This is the numerator of the success rate.',
+      variables: [String.raw`N:\ \text{sample count}`],
+      projectExample: ['Use together with incorrect count and the detailed table to see which question_ids passed.'],
+    },
+    llm_judge_incorrect_count: {
+      title: 'LLM Judge Incorrect Count',
+      blurb: 'How many evaluated questions were judged incorrect by the LLM-as-a-judge metric.',
+      formulaLatex: String.raw`Incorrect=N-Correct`,
+      interpretation: 'Lower is better. These rows appear in the per-question judge detail table with their short reason.',
+      variables: [String.raw`N:\ \text{sample count}`],
+      projectExample: ['Helpful for quickly spotting failure cases in an end-to-end run.'],
     },
     sample_count: {
       title: 'Sample Count',
@@ -348,6 +383,9 @@ Format 2 - Current Eval Format:
   // Traditional Eval - Direct Input
   const [testDataJson, setTestDataJson] = useState('');
   const [enableBertScore, setEnableBertScore] = useState(false);
+  const [enableLlmJudge, setEnableLlmJudge] = useState(true);
+  const [traditionalJudgeApiBase, setTraditionalJudgeApiBase] = useState('');
+  const [traditionalJudgeModelName, setTraditionalJudgeModelName] = useState('');
   const [traditionalResult, setTraditionalResult] = useState<any>(null);
 
   // Traditional Eval - File Input
@@ -383,7 +421,14 @@ Format 2 - Current Eval Format:
       const data: any = {
         test: testData,
         enable_bert_score: enableBertScore,
+        enable_llm_judge: enableLlmJudge,
       };
+      if (traditionalJudgeApiBase.trim()) {
+        data.vllm_api_base = traditionalJudgeApiBase.trim();
+      }
+      if (traditionalJudgeModelName.trim()) {
+        data.vllm_model_name = traditionalJudgeModelName.trim();
+      }
 
       const response = await api.traditionalEval(data);
       if (response.success) {
@@ -410,9 +455,16 @@ Format 2 - Current Eval Format:
       const data: any = {
         input_path: traditionalFilePaths[0],
         enable_bert_score: enableBertScore,
+        enable_llm_judge: enableLlmJudge,
       };
       if (traditionalOutputPath.trim()) {
         data.output_path = traditionalOutputPath.trim();
+      }
+      if (traditionalJudgeApiBase.trim()) {
+        data.vllm_api_base = traditionalJudgeApiBase.trim();
+      }
+      if (traditionalJudgeModelName.trim()) {
+        data.vllm_model_name = traditionalJudgeModelName.trim();
       }
 
       const response = await api.traditionalEvalFile(data);
@@ -675,7 +727,7 @@ Format 2 - Current Eval Format:
                         className="h-[280px] resize-none overflow-y-auto font-mono text-xs"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        💡 Press Tab on an empty editor to insert the example. Each item should include: _id, input, llm_ans, answer, rag_retrieval, gold_reference
+                        💡 Press Tab on an empty editor to insert the example. Prefer `reference` as the single ground-truth field; `answer` is still accepted for backward compatibility.
                       </p>
                     </div>
 
@@ -689,6 +741,43 @@ Format 2 - Current Eval Format:
                         onCheckedChange={setEnableBertScore}
                       />
                     </div>
+
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                      <div>
+                        <Label className="text-sm">Enable LLM Judge</Label>
+                        <p className="text-xs text-slate-500">Return 1 when llm_ans matches the reference answer, otherwise 0</p>
+                      </div>
+                      <Switch
+                        checked={enableLlmJudge}
+                        onCheckedChange={setEnableLlmJudge}
+                      />
+                    </div>
+
+                    {enableLlmJudge && (
+                      <div className="grid grid-cols-1 gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+                        <div>
+                          <Label className="text-sm">Judge API Base Override</Label>
+                          <Input
+                            value={traditionalJudgeApiBase}
+                            onChange={(e) => setTraditionalJudgeApiBase(e.target.value)}
+                            onKeyDown={(e) => fillPlaceholderOnTab(e, traditionalJudgeApiBase, 'http://localhost:8001/v1', setTraditionalJudgeApiBase)}
+                            placeholder="Leave blank to reuse generation API base from the file, otherwise backend default"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Judge Model Override</Label>
+                          <Input
+                            value={traditionalJudgeModelName}
+                            onChange={(e) => setTraditionalJudgeModelName(e.target.value)}
+                            onKeyDown={(e) => fillPlaceholderOnTab(e, traditionalJudgeModelName, 'Qwen/Qwen3-VL-30B-A3B-Instruct-FP8', setTraditionalJudgeModelName)}
+                            placeholder="Leave blank to reuse generation model from the file, otherwise backend default"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          Blank means no override. File evaluation first reuses the LLM recorded in the generation result; if that metadata is missing, the backend falls back to its default LLM.
+                        </p>
+                      </div>
+                    )}
 
                     <Button
                       onClick={handleTraditionalEval}
@@ -817,6 +906,43 @@ Format 2 - Current Eval Format:
                       />
                     </div>
 
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                      <div>
+                        <Label className="text-sm">Enable LLM Judge</Label>
+                        <p className="text-xs text-slate-500">Generate question-level 0/1 correctness and success rate</p>
+                      </div>
+                      <Switch
+                        checked={enableLlmJudge}
+                        onCheckedChange={setEnableLlmJudge}
+                      />
+                    </div>
+
+                    {enableLlmJudge && (
+                      <div className="grid grid-cols-1 gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+                        <div>
+                          <Label className="text-sm">Judge API Base Override</Label>
+                          <Input
+                            value={traditionalJudgeApiBase}
+                            onChange={(e) => setTraditionalJudgeApiBase(e.target.value)}
+                            onKeyDown={(e) => fillPlaceholderOnTab(e, traditionalJudgeApiBase, 'http://localhost:8001/v1', setTraditionalJudgeApiBase)}
+                            placeholder="Leave blank to reuse generation API base from the file, otherwise backend default"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Judge Model Override</Label>
+                          <Input
+                            value={traditionalJudgeModelName}
+                            onChange={(e) => setTraditionalJudgeModelName(e.target.value)}
+                            onKeyDown={(e) => fillPlaceholderOnTab(e, traditionalJudgeModelName, 'Qwen/Qwen3-VL-30B-A3B-Instruct-FP8', setTraditionalJudgeModelName)}
+                            placeholder="Leave blank to reuse generation model from the file, otherwise backend default"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          Fill either field only when you want a judge different from the generation LLM. Returned details still include question_id, score, and reason.
+                        </p>
+                      </div>
+                    )}
+
                     <Button
                       onClick={handleTraditionalFileEval}
                       disabled={loading}
@@ -941,6 +1067,7 @@ Format 2 - Current Eval Format:
                             }
 
                             const metricInfo = traditionalMetricInfo[key];
+                            const isCountMetric = ['sample_count', 'llm_judge_correct_count', 'llm_judge_incorrect_count'].includes(key);
                             return (
                               <button
                                 key={key}
@@ -955,12 +1082,66 @@ Format 2 - Current Eval Format:
                                     <span className="rounded-full border border-blue-300 bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-blue-700">Formula</span>
                                   )}
                                 </div>
-                                <div className="text-2xl font-bold text-blue-900">{key === 'sample_count' ? Math.round(value as number) : (value as number).toFixed(4)}</div>
+                                <div className="text-2xl font-bold text-blue-900">{isCountMetric ? Math.round(value as number) : (value as number).toFixed(4)}</div>
                                 {metricInfo && <p className="mt-2 text-xs leading-5 text-slate-600">{metricInfo.blurb}</p>}
                               </button>
                             );
                           })}
                       </div>
+
+                      {traditionalResult.judge_details && traditionalResult.judge_details.length > 0 && (
+                        <div>
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-medium">LLM Judge Details</h3>
+                              <p className="text-xs text-slate-500 mt-1">Per-question 0/1 decisions using the reference answer as the judging target.</p>
+                            </div>
+                            {traditionalResult.llm_judge_model && (
+                              <div className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-medium text-blue-700">
+                                {traditionalResult.llm_judge_model}
+                              </div>
+                            )}
+                          </div>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Question ID</TableHead>
+                                <TableHead>Record ID</TableHead>
+                                <TableHead>Question</TableHead>
+                                <TableHead>Score</TableHead>
+                                <TableHead>Reason</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {traditionalResult.judge_details.map((detail: any, idx: number) => (
+                                <TableRow key={`${detail.question_id ?? detail.record_id ?? idx}`}>
+                                  <TableCell className="font-mono text-xs">
+                                    {detail.question_id ?? '-'}
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs">
+                                    {detail.record_id ?? '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="max-w-xs truncate" title={detail.question || '-'}>
+                                      {detail.question || '-'}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${detail.score === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                      {detail.score === 1 ? '1 / Correct' : '0 / Incorrect'}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="max-w-md text-xs leading-5 text-slate-600">
+                                      {detail.reason || '-'}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
 
                       {/* Raw JSON */}
                       <div className="min-w-0">

@@ -26,6 +26,20 @@ message TraditionalEvalRequest {
   optional bool enable_bert_score = 4;
   optional string bert_score_model = 5;
   optional string bert_score_device = 6;
+  optional bool enable_llm_judge = 7;
+  optional string vllm_api_base = 8;
+  optional string vllm_api_key = 9;
+  optional string vllm_model_name = 10;
+}
+
+message TraditionalJudgeDetail {
+  int32 row_index = 1;
+  optional string question_id = 2;
+  optional string record_id = 3;
+  optional string question = 4;
+  int32 score = 5;
+  bool matched = 6;
+  string reason = 7;
 }
 
 message TraditionalEvalResponse {
@@ -37,6 +51,12 @@ message TraditionalEvalResponse {
   double bleu_4 = 6;
   optional double bert_score_f1 = 7;
   int32 sample_count = 8;
+  optional double llm_judge_success_rate = 9;
+  optional int32 llm_judge_correct_count = 10;
+  optional int32 llm_judge_incorrect_count = 11;
+  optional string llm_judge_model = 12;
+  optional string llm_judge_prompt_version = 13;
+  repeated TraditionalJudgeDetail judge_details = 14;
 }
 
 message RagasMetricSummary {

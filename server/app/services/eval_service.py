@@ -114,26 +114,125 @@ class EvalService:
             normalized.append(merged_row)
         return normalized
 
-    # ── 传统指标 ──────────────────────────────────────────────────────────────
-
-    def evaluate_traditional(self, request: TraditionalEvalRequest) -> TraditionalEvalResult:
-        ensure_paths()
-
-        # 从 request 提取 predictions 和 answers
-        if request.test is not None:
-            # 方式1：从 test 字段提取（评估结果 JSON 格式）
-            predictions, answers = FileRepository.parse_eval_results_from_json(request.test)
-        elif request.predictions is not None and request.answers is not None:
-            # 方式2：直接使用 predictions 和 answers
-            predictions = request.predictions
-            answers = request.answers
-        else:
-            raise EvaluationException("必须提供 test 字段或 predictions+answers 字段")
-
+    @staticmethod
+    def _build_traditional_rows_from_lists(
+        predictions: list[str],
+        answers: list[list[str]],
+    ) -> list[dict]:
         if len(predictions) != len(answers):
             raise EvaluationException("predictions 与 answers 长度不一致")
 
-        # 从配置读取 BERTScore 参数（request 中未提供时使用配置默认值）
+        rows: list[dict] = []
+        for idx, (prediction, refs) in enumerate(zip(predictions, answers), start=1):
+            normalized_refs = [str(ref) for ref in refs if ref is not None and str(ref).strip()]
+            if not normalized_refs:
+                raise EvaluationException(f"answers[{idx - 1}] 不能为空")
+            rows.append(
+                {
+                    "row_index": idx,
+                    "question_id": None,
+                    "record_id": None,
+                    "question": None,
+                    "prediction": str(prediction),
+                    "references": normalized_refs,
+                }
+            )
+        return rows
+
+    def _resolve_traditional_rows(
+        self,
+        request: TraditionalEvalRequest | TraditionalEvalFileRequest,
+    ) -> list[dict]:
+        if getattr(request, "test", None) is not None:
+            rows = FileRepository.parse_traditional_eval_rows_from_json(request.test)
+        elif getattr(request, "predictions", None) is not None and getattr(request, "answers", None) is not None:
+            rows = self._build_traditional_rows_from_lists(request.predictions, request.answers)
+        else:
+            raise EvaluationException("必须提供 test 字段或 predictions+answers 字段")
+
+        if not rows:
+            raise EvaluationException("没有可评估的样本，请检查 llm_ans/prediction 与 answer/reference/answers 字段")
+        return rows
+
+    @staticmethod
+    def _pick_single_runtime_value(
+        rows: list[dict],
+        field_name: str,
+    ) -> str | None:
+        values = {
+            str(row.get(field_name)).strip()
+            for row in rows
+            if row.get(field_name) is not None and str(row.get(field_name)).strip()
+        }
+        if len(values) == 1:
+            return next(iter(values))
+        if len(values) > 1:
+            logger.warning(
+                "Multiple generation runtime values found for %s; falling back to service defaults unless overridden.",
+                field_name,
+            )
+        return None
+
+    def _run_llm_judge(
+        self,
+        *,
+        rows: list[dict],
+        request: TraditionalEvalRequest | TraditionalEvalFileRequest,
+        settings,
+    ) -> dict:
+        enable_llm_judge = (
+            request.enable_llm_judge
+            if request.enable_llm_judge is not None
+            else settings.DEFAULT_ENABLE_LLM_JUDGE
+        )
+        if not enable_llm_judge:
+            return {}
+
+        generation_api_base = self._pick_single_runtime_value(rows, "generation_api_base")
+        generation_model_name = self._pick_single_runtime_value(rows, "generation_model_name")
+
+        vllm_api_base = request.vllm_api_base or generation_api_base or settings.DEFAULT_LLM_API_BASE
+        vllm_api_key = request.vllm_api_key or settings.DEFAULT_LLM_API_KEY
+        vllm_model_name = request.vllm_model_name or generation_model_name or settings.DEFAULT_LLM_MODEL
+
+        if not vllm_api_base:
+            raise EvaluationException("未配置 judge 模型 API 地址（DEFAULT_LLM_API_BASE）")
+        if not vllm_model_name:
+            raise EvaluationException("未配置 judge 模型名称（DEFAULT_LLM_MODEL）")
+
+        try:
+            from public_method.evaluation.end_to_end import JudgeSample, evaluate_answer_equivalence
+
+            judge_samples = [
+                JudgeSample(
+                    row_index=int(row["row_index"]),
+                    question_id=row.get("question_id"),
+                    record_id=row.get("record_id"),
+                    question=row.get("question"),
+                    prediction=row["prediction"],
+                    references=list(row["references"]),
+                )
+                for row in rows
+            ]
+            return evaluate_answer_equivalence(
+                samples=judge_samples,
+                api_base=vllm_api_base,
+                api_key=vllm_api_key,
+                model_name=vllm_model_name,
+            )
+        except Exception as exc:
+            logger.exception("LLM judge evaluation failed: %s", exc)
+            raise EvaluationException(f"LLM judge 评估失败: {exc}") from exc
+
+    def _evaluate_traditional_core(
+        self,
+        *,
+        rows: list[dict],
+        request: TraditionalEvalRequest | TraditionalEvalFileRequest,
+    ) -> TraditionalEvalResult:
+        predictions = [row["prediction"] for row in rows]
+        answers = [row["references"] for row in rows]
+
         settings = get_settings()
         enable_bert_score = (
             request.enable_bert_score
@@ -147,31 +246,49 @@ class EvalService:
             request.bert_score_device if request.bert_score_device else settings.DEFAULT_BERT_SCORE_DEVICE
         )
 
+        from public_method.evaluation.longbench.eval_lite import (
+            calculate_traditional_metrics_with_params,
+        )
+
+        scores = calculate_traditional_metrics_with_params(
+            predictions=predictions,
+            answers=answers,
+            enable_bert_score=enable_bert_score,
+            bert_score_model=bert_score_model,
+            bert_score_device=bert_score_device,
+            hf_home=None,
+        )
+        judge_scores = self._run_llm_judge(rows=rows, request=request, settings=settings)
+
+        return TraditionalEvalResult(
+            f1=float(scores["f1"]),
+            rouge_l=float(scores["rouge_l"]),
+            bleu_1=float(scores["bleu_1"]),
+            bleu_2=float(scores["bleu_2"]),
+            bleu_3=float(scores["bleu_3"]),
+            bleu_4=float(scores["bleu_4"]),
+            bert_score_f1=float(scores["bert_score_f1"]) if scores.get("bert_score_f1") is not None else None,
+            sample_count=len(rows),
+            llm_judge_success_rate=(
+                float(judge_scores["llm_judge_success_rate"])
+                if judge_scores.get("llm_judge_success_rate") is not None
+                else None
+            ),
+            llm_judge_correct_count=judge_scores.get("llm_judge_correct_count"),
+            llm_judge_incorrect_count=judge_scores.get("llm_judge_incorrect_count"),
+            llm_judge_model=judge_scores.get("llm_judge_model"),
+            llm_judge_prompt_version=judge_scores.get("llm_judge_prompt_version"),
+            judge_details=judge_scores.get("judge_details", []),
+        )
+
+    # ── 传统指标 ──────────────────────────────────────────────────────────────
+
+    def evaluate_traditional(self, request: TraditionalEvalRequest) -> TraditionalEvalResult:
+        ensure_paths()
+
         try:
-            from public_method.evaluation.longbench.eval_lite import (
-                calculate_traditional_metrics_with_params,
-            )
-
-            scores = calculate_traditional_metrics_with_params(
-                predictions=predictions,
-                answers=answers,
-                enable_bert_score=enable_bert_score,
-                bert_score_model=bert_score_model,
-                bert_score_device=bert_score_device,
-                hf_home=None,  # 服务层不设置 HF_HOME，使用系统默认
-            )
-
-            result = TraditionalEvalResult(
-                f1=float(scores["f1"]),
-                rouge_l=float(scores["rouge_l"]),
-                bleu_1=float(scores["bleu_1"]),
-                bleu_2=float(scores["bleu_2"]),
-                bleu_3=float(scores["bleu_3"]),
-                bleu_4=float(scores["bleu_4"]),
-                bert_score_f1=float(scores["bert_score_f1"]) if scores.get("bert_score_f1") is not None else None,
-                sample_count=len(predictions),
-            )
-            return result
+            rows = self._resolve_traditional_rows(request)
+            return self._evaluate_traditional_core(rows=rows, request=request)
         except ImportError as exc:
             raise EvaluationException(f"无法导入 eval_lite 模块: {exc}") from exc
         except Exception as exc:
@@ -183,54 +300,17 @@ class EvalService:
         ensure_paths()
 
         try:
-            # 读取文件并提取 predictions 和 answers
             data = FileRepository.read_json(request.input_path)
-            predictions, answers = FileRepository.parse_eval_results_from_json(data)
-
-            if len(predictions) != len(answers):
-                raise EvaluationException("从文件解析出的 predictions 与 answers 长度不一致")
-
-            # 从配置读取 BERTScore 参数（request 中未提供时使用配置默认值）
-            settings = get_settings()
-            enable_bert_score = (
-                request.enable_bert_score
-                if request.enable_bert_score is not None
-                else settings.DEFAULT_ENABLE_BERT_SCORE
-            )
-            bert_score_model = (
-                request.bert_score_model if request.bert_score_model else settings.DEFAULT_BERT_SCORE_MODEL
-            )
-            bert_score_device = (
-                request.bert_score_device if request.bert_score_device else settings.DEFAULT_BERT_SCORE_DEVICE
-            )
-
-            from public_method.evaluation.longbench.eval_lite import (
-                calculate_traditional_metrics_with_params,
-            )
-
-            scores = calculate_traditional_metrics_with_params(
-                predictions=predictions,
-                answers=answers,
-                enable_bert_score=enable_bert_score,
-                bert_score_model=bert_score_model,
-                bert_score_device=bert_score_device,
-                hf_home=None,
-            )
-
-            result = TraditionalEvalResult(
-                f1=float(scores["f1"]),
-                rouge_l=float(scores["rouge_l"]),
-                bleu_1=float(scores["bleu_1"]),
-                bleu_2=float(scores["bleu_2"]),
-                bleu_3=float(scores["bleu_3"]),
-                bleu_4=float(scores["bleu_4"]),
-                bert_score_f1=float(scores["bert_score_f1"]) if scores.get("bert_score_f1") is not None else None,
-                sample_count=len(predictions),
-            )
+            rows = FileRepository.parse_traditional_eval_rows_from_json(data)
+            result = self._evaluate_traditional_core(rows=rows, request=request)
             if request.output_path:
+                payload = result.model_dump()
                 FileRepository.write_json(
                     request.output_path,
-                    {"summary": result.model_dump()},
+                    {
+                        "summary": {k: v for k, v in payload.items() if k != "judge_details"},
+                        "judge_details": payload.get("judge_details", []),
+                    },
                 )
             return result
         except FileNotFoundError as exc:

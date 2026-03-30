@@ -132,6 +132,35 @@ def _build_chunk_pair_result(details: Iterable) -> list[pb2.ChunkPairResult]:
     return items
 
 
+def _stringify_optional(value) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text else None
+
+
+def _build_traditional_judge_details(details: Iterable) -> list[pb2.TraditionalJudgeDetail]:
+    items: list[pb2.TraditionalJudgeDetail] = []
+    for detail in details:
+        item = pb2.TraditionalJudgeDetail(
+            row_index=int(detail.row_index),
+            score=int(detail.score),
+            matched=bool(detail.matched),
+            reason=str(detail.reason),
+        )
+        question_id = _stringify_optional(detail.question_id)
+        record_id = _stringify_optional(detail.record_id)
+        question = _stringify_optional(detail.question)
+        if question_id is not None:
+            item.question_id = question_id
+        if record_id is not None:
+            item.record_id = record_id
+        if question is not None:
+            item.question = question
+        items.append(item)
+    return items
+
+
 def _field_default(model_cls, field_name: str):
     return model_cls.model_fields[field_name].default
 
@@ -153,6 +182,10 @@ class EvalRpcServicer(pb2_grpc.EvalRpcServiceServicer):
                 enable_bert_score=_optional_scalar(request, "enable_bert_score"),
                 bert_score_model=_optional_scalar(request, "bert_score_model"),
                 bert_score_device=_optional_scalar(request, "bert_score_device"),
+                enable_llm_judge=_optional_scalar(request, "enable_llm_judge"),
+                vllm_api_base=_optional_scalar(request, "vllm_api_base"),
+                vllm_api_key=_optional_scalar(request, "vllm_api_key"),
+                vllm_model_name=_optional_scalar(request, "vllm_model_name"),
             )
             result = self._eval_service.evaluate_traditional(payload)
             response = pb2.TraditionalEvalResponse(
@@ -163,9 +196,20 @@ class EvalRpcServicer(pb2_grpc.EvalRpcServiceServicer):
                 bleu_3=result.bleu_3,
                 bleu_4=result.bleu_4,
                 sample_count=result.sample_count,
+                judge_details=_build_traditional_judge_details(result.judge_details),
             )
             if result.bert_score_f1 is not None:
                 response.bert_score_f1 = result.bert_score_f1
+            if result.llm_judge_success_rate is not None:
+                response.llm_judge_success_rate = result.llm_judge_success_rate
+            if result.llm_judge_correct_count is not None:
+                response.llm_judge_correct_count = result.llm_judge_correct_count
+            if result.llm_judge_incorrect_count is not None:
+                response.llm_judge_incorrect_count = result.llm_judge_incorrect_count
+            if result.llm_judge_model is not None:
+                response.llm_judge_model = result.llm_judge_model
+            if result.llm_judge_prompt_version is not None:
+                response.llm_judge_prompt_version = result.llm_judge_prompt_version
             return response
         except (ValidationError, RAGBaseException, Exception) as exc:
             _abort_from_exception(context, exc)

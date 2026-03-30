@@ -61,6 +61,28 @@ class TraditionalEvalRequest(BaseModel):
     bert_score_device: Optional[str] = Field(
         None, description="BERTScore 计算设备（可选，未提供时从配置读取 DEFAULT_BERT_SCORE_DEVICE）"
     )
+    enable_llm_judge: Optional[bool] = Field(
+        None, description="是否启用 LLM judge，对 llm_ans 与 reference/answer 做 0/1 等价性判定。"
+    )
+    vllm_api_base: Optional[str] = Field(
+        None, description="Judge 模型的 OpenAI-compatible API base。未提供时优先复用生成结果中记录的 generation_api_base，再回退 DEFAULT_LLM_API_BASE。"
+    )
+    vllm_api_key: Optional[str] = Field(
+        None, description="Judge 模型 API Key，未提供时读取 DEFAULT_LLM_API_KEY。"
+    )
+    vllm_model_name: Optional[str] = Field(
+        None, description="Judge 模型名称。未提供时优先复用生成结果中记录的 generation_model_name，再回退 DEFAULT_LLM_MODEL。"
+    )
+
+
+class TraditionalJudgeDetail(BaseModel):
+    row_index: int
+    question_id: Optional[str | int] = None
+    record_id: Optional[str | int] = None
+    question: Optional[str] = None
+    score: int
+    matched: bool
+    reason: str
 
 
 class TraditionalEvalResult(BaseModel):
@@ -72,6 +94,12 @@ class TraditionalEvalResult(BaseModel):
     bleu_4: float
     bert_score_f1: Optional[float] = None
     sample_count: int
+    llm_judge_success_rate: Optional[float] = None
+    llm_judge_correct_count: Optional[int] = None
+    llm_judge_incorrect_count: Optional[int] = None
+    llm_judge_model: Optional[str] = None
+    llm_judge_prompt_version: Optional[str] = None
+    judge_details: list[TraditionalJudgeDetail] = Field(default_factory=list)
 
 
 # ── RAGAS 评估 ────────────────────────────────────────────────────────────────
@@ -430,6 +458,18 @@ class TraditionalEvalFileRequest(BaseModel):
     )
     bert_score_device: Optional[str] = Field(
         None, description="BERTScore 计算设备（可选，未提供时从配置读取 DEFAULT_BERT_SCORE_DEVICE）"
+    )
+    enable_llm_judge: Optional[bool] = Field(
+        None, description="是否启用 LLM judge，对 llm_ans 与 reference/answer 做 0/1 等价性判定。"
+    )
+    vllm_api_base: Optional[str] = Field(
+        None, description="Judge 模型的 OpenAI-compatible API base。未提供时优先复用生成结果中记录的 generation_api_base，再回退 DEFAULT_LLM_API_BASE。"
+    )
+    vllm_api_key: Optional[str] = Field(
+        None, description="Judge 模型 API Key，未提供时读取 DEFAULT_LLM_API_KEY。"
+    )
+    vllm_model_name: Optional[str] = Field(
+        None, description="Judge 模型名称。未提供时优先复用生成结果中记录的 generation_model_name，再回退 DEFAULT_LLM_MODEL。"
     )
 
 

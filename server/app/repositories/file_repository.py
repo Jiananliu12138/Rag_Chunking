@@ -122,34 +122,53 @@ class FileRepository:
     def parse_eval_results_from_json(data: Any) -> tuple[list[str], list[list[str]]]:
         """
         从评估结果 JSON 中提取 predictions 和 answers。
-        
-        输入格式：列表，每项为 {"llm_ans": str, "answers": list[str], ...}
-        
-        Returns:
-            (predictions, answers) 元组
         """
+        rows = FileRepository.parse_traditional_eval_rows_from_json(data)
+        predictions = [row["prediction"] for row in rows]
+        answers = [row["references"] for row in rows]
+        return predictions, answers
+
+    @staticmethod
+    def parse_traditional_eval_rows_from_json(data: Any) -> list[dict[str, Any]]:
+        """Normalize traditional end-to-end eval rows from a JSON array."""
         if not isinstance(data, list):
             raise ValueError(f"评估结果 JSON 应为列表格式，当前为 {type(data)}")
-        
-        predictions: list[str] = []
-        answers: list[list[str]] = []
-        
-        for item in data:
+
+        rows: list[dict[str, Any]] = []
+        for idx, item in enumerate(data, start=1):
             if not isinstance(item, dict):
                 continue
+
             llm_ans = item.get("llm_ans") or item.get("prediction") or ""
             ans_list = (
                 FileRepository._normalize_string_list(item.get("answers"))
                 or FileRepository._normalize_string_list(item.get("ground_truth"))
+                or FileRepository._normalize_string_list(item.get("reference"))
                 or FileRepository._normalize_string_list(item.get("answer"))
             )
             if not ans_list:
                 continue
-            
-            predictions.append(str(llm_ans))
-            answers.append(ans_list)
-        
-        return predictions, answers
+
+            question = (
+                item.get("user_input")
+                or item.get("input")
+                or item.get("question")
+                or item.get("query")
+            )
+            rows.append(
+                {
+                    "row_index": idx,
+                    "question_id": item.get("question_id"),
+                    "record_id": item.get("_id") or item.get("id"),
+                    "question": str(question) if question is not None else None,
+                    "prediction": str(llm_ans),
+                    "references": [str(answer) for answer in ans_list],
+                    "generation_api_base": item.get("generation_api_base") or item.get("llm_api_base"),
+                    "generation_model_name": item.get("generation_model_name") or item.get("llm_model_name"),
+                }
+            )
+
+        return rows
 
     @staticmethod
     def parse_ragas_dataset_from_json(data: Any) -> dict[str, list]:
@@ -200,6 +219,7 @@ class FileRepository:
                 ground_truth_list = (
                     FileRepository._normalize_string_list(item.get("answers"))
                     or FileRepository._normalize_string_list(item.get("ground_truth"))
+                    or FileRepository._normalize_string_list(item.get("reference"))
                     or FileRepository._normalize_string_list(item.get("answer"))
                 )
                 ground_truth = " ".join(ground_truth_list)
