@@ -405,6 +405,58 @@ def _build_failed_generation_record(
     return record
 
 
+def _patch_ragas_transforms_error_handling() -> None:
+    """Monkey-patch ragas Extractor so that individual node extraction failures
+    (e.g. IncompleteOutputException from instructor) are logged and skipped
+    instead of crashing the entire transform pipeline.
+    """
+    from ragas.testset.transforms.base import Extractor
+    import logging as _logging
+
+    if getattr(Extractor.generate_execution_plan, "_mc_fault_tolerant", False):
+        return
+
+    _ext_logger = _logging.getLogger("ragas.testset.transforms.base")
+
+    _original_gen_plan = Extractor.generate_execution_plan
+
+    def _fault_tolerant_generate_execution_plan(self, kg):
+        async def safe_apply_extract(node):
+            try:
+                property_name, property_value = await self.extract(node)
+                if node.get_property(property_name) is None:
+                    node.add_property(property_name, property_value)
+                else:
+                    _ext_logger.warning(
+                        "Property '%s' already exists in node '%.6s'. Skipping!",
+                        property_name,
+                        node.id,
+                    )
+            except Exception as exc:
+                _ext_logger.warning(
+                    "[%s] Extraction failed for node '%.6s', skipping. "
+                    "%s: %s",
+                    self.__class__.__name__,
+                    node.id,
+                    type(exc).__name__,
+                    str(exc)[:300],
+                )
+
+        filtered = self.filter(kg)
+        plan = [safe_apply_extract(node) for node in filtered.nodes]
+        _ext_logger.debug(
+            "Created %d coroutines for %s (fault-tolerant)",
+            len(plan),
+            self.__class__.__name__,
+        )
+        return plan
+
+    _fault_tolerant_generate_execution_plan._mc_fault_tolerant = True
+    Extractor.generate_execution_plan = _fault_tolerant_generate_execution_plan
+
+    _ext_logger.info("Patched Extractor.generate_execution_plan for fault tolerance")
+
+
 def _patch_ragas_safe_generate() -> None:
     import ragas.testset.synthesizers.generate as ragas_generate
 
@@ -627,6 +679,7 @@ def _write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
 def main():
     _configure_logging()
     _preflight_check_model_endpoint()
+    _patch_ragas_transforms_error_handling()
     _patch_ragas_safe_generate()
 
     chunks = _load_chunks(CHUNKS_FILE)
