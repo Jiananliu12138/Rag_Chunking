@@ -65,8 +65,8 @@ EMBEDDING_DEVICE = "cuda"
 # Custom prompts  (override ragas defaults to prevent repetitive output)
 # ---------------------------------------------------------------------------
 
-SUMMARY_PROMPT = SummaryExtractorPrompt(
-    instruction=(
+class _StrictSummaryPrompt(SummaryExtractorPrompt):
+    instruction: str = (
         "Summarize the given text in at most 3 sentences.\n"
         "Rules:\n"
         "- Capture only the most important points. Be concise.\n"
@@ -74,8 +74,8 @@ SUMMARY_PROMPT = SummaryExtractorPrompt(
         "- If the text is very short, a single sentence is acceptable.\n"
         "- Output ONLY the summary text, nothing else.\n"
         "- Your entire output must be under 200 tokens."
-    ),
-    examples=[
+    )
+    examples: t.List[t.Tuple[StringIO, StringIO]] = [
         (
             StringIO(
                 text=(
@@ -121,11 +121,11 @@ SUMMARY_PROMPT = SummaryExtractorPrompt(
                 )
             ),
         ),
-    ],
-)
+    ]
 
-NER_PROMPT = NERPrompt(
-    instruction=(
+
+class _StrictNERPrompt(NERPrompt):
+    instruction: str = (
         "Extract the most important named entities from the given text.\n"
         "Rules:\n"
         "- Return AT MOST max_num entities. Fewer is fine if the text has fewer.\n"
@@ -139,11 +139,11 @@ NER_PROMPT = NERPrompt(
         '  {"entities": ["taxable income", "taxable income", "taxable income"]}\n'
         "GOOD output (unique, concise):\n"
         '  {"entities": ["taxable income", "IRS", "Form 1040"]}'
-    ),
-)
+    )
 
-THEMES_PROMPT = ThemesAndConceptsExtractorPrompt(
-    instruction=(
+
+class _StrictThemesPrompt(ThemesAndConceptsExtractorPrompt):
+    instruction: str = (
         "Extract the main themes and concepts from the given text.\n"
         "Rules:\n"
         "- Return AT MOST max_num themes. Fewer is fine if the text covers fewer topics.\n"
@@ -156,8 +156,12 @@ THEMES_PROMPT = ThemesAndConceptsExtractorPrompt(
         '  {"output": ["machine learning", "ML techniques", "machine learning methods"]}\n'
         "GOOD output (distinct, specific):\n"
         '  {"output": ["machine learning", "neural networks", "data preprocessing"]}'
-    ),
-)
+    )
+
+
+SUMMARY_PROMPT = _StrictSummaryPrompt()
+NER_PROMPT = _StrictNERPrompt()
+THEMES_PROMPT = _StrictThemesPrompt()
 
 MULTIHOP_QA_INSTRUCTION = (
     "Generate a multi-hop query and answer based on the specified conditions "
