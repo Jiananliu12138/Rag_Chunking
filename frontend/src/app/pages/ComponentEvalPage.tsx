@@ -1265,7 +1265,7 @@ export default function ComponentEvalPage() {
                       <Slider
                         value={scoreTemperature}
                         onValueChange={setScoreTemperature}
-                        min={1}
+                        min={0}
                         max={12}
                         step={0.5}
                         disabled={loading}
@@ -1582,7 +1582,7 @@ export default function ComponentEvalPage() {
                       <Slider
                         value={scoreTemperature}
                         onValueChange={setScoreTemperature}
-                        min={1}
+                        min={0}
                         max={12}
                         step={0.5}
                         disabled={loading}

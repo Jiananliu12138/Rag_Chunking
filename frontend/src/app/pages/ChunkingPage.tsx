@@ -285,8 +285,9 @@ export default function ChunkingPage() {
               <Label>Temperature</Label>
               <Input
                 type="number"
+                min="0"
                 step="0.1"
-                value={params.temperature || 0.2}
+                value={params.temperature ?? 0.2}
                 onChange={(e) => setParams({ ...params, temperature: parseFloat(e.target.value) })}
               />
             </div>

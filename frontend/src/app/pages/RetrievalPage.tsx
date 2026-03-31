@@ -598,6 +598,7 @@ export default function RetrievalPage() {
                           <Label className="text-sm">Temperature</Label>
                           <Input
                             type="number"
+                            min="0"
                             step="0.1"
                             value={temperature}
                             onChange={(e) => setTemperature(parseFloatInput(e.target.value, DEFAULT_TEMPERATURE))}
@@ -904,7 +905,7 @@ export default function RetrievalPage() {
                 </div>
                 <div>
                   <Label>Temperature</Label>
-                  <Input type="number" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloatInput(e.target.value, DEFAULT_TEMPERATURE))} />
+                  <Input type="number" min="0" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloatInput(e.target.value, DEFAULT_TEMPERATURE))} />
                 </div>
                 <div>
                   <Label>Max New Tokens</Label>

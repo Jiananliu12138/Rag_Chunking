@@ -936,6 +936,7 @@ export default function Home() {
                     <Label className="text-xs">Temperature</Label>
                     <Input
                       type="number"
+                      min="0"
                       step="0.1"
                       value={temperature}
                       onChange={(e) => setTemperature(parseFloat(e.target.value))}
