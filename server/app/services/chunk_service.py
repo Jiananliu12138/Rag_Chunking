@@ -43,7 +43,9 @@ class ChunkService:
                 kwargs.update(
                     chunk_token_size=p.chunk_token_size,
                     chunk_overlap_token_size=p.chunk_overlap_token_size,
+                    min_chunk_tokens=p.min_chunk_tokens,
                     split_by_character=p.split_by_character,
+                    split_use_regex=p.split_use_regex,
                     split_by_character_only=p.split_by_character_only,
                 )
             raw = _chunk_text(**kwargs)
@@ -150,7 +152,9 @@ class ChunkService:
                 kwargs.update(
                     chunk_token_size=p.chunk_token_size,
                     chunk_overlap_token_size=p.chunk_overlap_token_size,
+                    min_chunk_tokens=p.min_chunk_tokens,
                     split_by_character=p.split_by_character,
+                    split_use_regex=p.split_use_regex,
                     split_by_character_only=p.split_by_character_only,
                 )
             raw = _chunk_file(**kwargs)

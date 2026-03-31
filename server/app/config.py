@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     MILVUS_DATA_DIR: str = "/data/h50056789/Rag_Chunking/test_database"
     MILVUS_URI: str = ""
     TIKTOKEN_CACHE_DIR: str = "/data/h50056789/Rag_Chunking/tiktoken_cache"
-    CHUNK_NUM_WORKERS: int = 1
+    CHUNK_NUM_WORKERS: int = 4
 
     # Embedding defaults
     DEFAULT_EMBEDDING_MODEL: str = "/data/h50056789/Rag_Chunking/model/BAAI/bge-m3"

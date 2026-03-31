@@ -14,7 +14,9 @@ class ChunkMethod(str, Enum):
 class TokenChunkParams(BaseModel):
     chunk_token_size: int = Field(1200, ge=64, description="Max tokens per chunk")
     chunk_overlap_token_size: int = Field(100, ge=0, description="Overlap tokens between chunks")
-    split_by_character: Optional[str] = Field("\n\n", description="Preferred split delimiter")
+    min_chunk_tokens: int = Field(0, ge=0, description="Merge chunks shorter than this token count into a neighboring chunk")
+    split_by_character: Optional[str] = Field("\n\n", description="Preferred split delimiter or regex pattern")
+    split_use_regex: bool = Field(False, description="Treat split_by_character as a regex pattern")
     split_by_character_only: bool = Field(False, description="Only split by the delimiter")
 
 
@@ -80,7 +82,9 @@ class ChunkTextRequest(BaseModel):
                         "token_params": {
                             "chunk_token_size": 1200,
                             "chunk_overlap_token_size": 100,
+                            "min_chunk_tokens": 0,
                             "split_by_character": "\n\n",
+                            "split_use_regex": False,
                         },
                     },
                 },

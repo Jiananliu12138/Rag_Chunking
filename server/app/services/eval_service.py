@@ -2,8 +2,10 @@
 端到端评估服务层。
 封装传统指标（F1/ROUGE/BLEU/BERTScore）和 RAGAS 评估两条路径。
 """
-import numpy as np
+import math
+from datetime import datetime, timezone
 from threading import Lock
+from typing import Any
 
 from app.config import get_settings
 from app.core.exceptions import EvaluationException
@@ -25,7 +27,7 @@ from app.schemas.eval_schema import (
     TraditionalEvalResult,
 )
 
-_RAGAS_EVALUATOR_CACHE: dict[tuple[str, str, str, str, str, bool, str], object] = {}
+_RAGAS_EVALUATOR_CACHE: dict[tuple[str, str, str, str, str, str, str, bool, str], object] = {}
 _RAGAS_EVALUATOR_CACHE_LOCK = Lock()
 
 
@@ -173,6 +175,379 @@ class EvalService:
             )
         return None
 
+    @staticmethod
+    def _timestamp_utc() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _safe_number(value: Any) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if math.isnan(number) or math.isinf(number):
+            return None
+        return number
+
+    @staticmethod
+    def _mean(values: list[float], digits: int = 4) -> float:
+        if not values:
+            return 0.0
+        return round(sum(values) / len(values), digits)
+
+    @staticmethod
+    def _preview_text(value: Any, limit: int = 200) -> str | None:
+        if value is None:
+            return None
+        text = " ".join(str(value).split())
+        if not text:
+            return None
+        if len(text) <= limit:
+            return text
+        return f"{text[: limit - 3]}..."
+
+    @staticmethod
+    def _resolve_query_id(row: dict[str, Any], index: int) -> str:
+        raw = row.get("_id")
+        if raw is None:
+            return str(index)
+        if isinstance(raw, str) and not raw.strip():
+            return str(index)
+        return str(raw)
+
+    @classmethod
+    def _extract_nested_value(cls, payload: dict[str, Any], path: tuple[str, ...]) -> float | None:
+        current: Any = payload
+        for key in path:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(key)
+        return cls._safe_number(current)
+
+    @classmethod
+    def _rank_items(
+        cls,
+        items: list[dict[str, Any]],
+        *,
+        value_path: tuple[str, ...],
+        reverse: bool,
+        limit: int = 3,
+        index_key: str = "index",
+        question_key: str = "question",
+    ) -> list[dict[str, Any]]:
+        ranked: list[tuple[float, int, dict[str, Any]]] = []
+        for item in items:
+            value = cls._extract_nested_value(item, value_path)
+            if value is None:
+                continue
+            raw_index = item.get(index_key)
+            order = raw_index if isinstance(raw_index, int) else 0
+            ranked.append((value, order, item))
+
+        ranked.sort(key=lambda entry: (-entry[0], entry[1]) if reverse else (entry[0], entry[1]))
+        highlights: list[dict[str, Any]] = []
+        for value, _, item in ranked[:limit]:
+            highlight = {
+                index_key: item.get(index_key),
+                question_key: item.get(question_key),
+                "value": round(value, 4),
+            }
+            if "ragas_score" in item:
+                highlight["ragas_score"] = item.get("ragas_score")
+            if "metrics" in item:
+                highlight["metrics"] = item.get("metrics")
+            if "num_overlap" in item:
+                highlight["num_overlap"] = item.get("num_overlap")
+            if "num_retrieved" in item:
+                highlight["num_retrieved"] = item.get("num_retrieved")
+            if "num_gold" in item:
+                highlight["num_gold"] = item.get("num_gold")
+            highlights.append(highlight)
+        return highlights
+
+    def _resolve_traditional_runtime_metadata(
+        self,
+        *,
+        rows: list[dict[str, Any]],
+        request: TraditionalEvalRequest | TraditionalEvalFileRequest,
+    ) -> dict[str, Any]:
+        settings = get_settings()
+        enable_bert_score = (
+            request.enable_bert_score
+            if request.enable_bert_score is not None
+            else settings.DEFAULT_ENABLE_BERT_SCORE
+        )
+        bert_score_model = (
+            request.bert_score_model if request.bert_score_model else settings.DEFAULT_BERT_SCORE_MODEL
+        )
+        bert_score_device = (
+            request.bert_score_device if request.bert_score_device else settings.DEFAULT_BERT_SCORE_DEVICE
+        )
+
+        enable_llm_judge = (
+            request.enable_llm_judge
+            if request.enable_llm_judge is not None
+            else settings.DEFAULT_ENABLE_LLM_JUDGE
+        )
+        generation_api_base = self._pick_single_runtime_value(rows, "generation_api_base")
+        generation_model_name = self._pick_single_runtime_value(rows, "generation_model_name")
+        judge_api_base = request.vllm_api_base or generation_api_base or settings.DEFAULT_LLM_API_BASE
+        judge_model_name = request.vllm_model_name or generation_model_name or settings.DEFAULT_LLM_MODEL
+
+        return {
+            "bert_score_enabled": bool(enable_bert_score),
+            "bert_score_model": bert_score_model if enable_bert_score else None,
+            "bert_score_device": bert_score_device if enable_bert_score else None,
+            "llm_judge_enabled": bool(enable_llm_judge),
+            "llm_judge_api_base": judge_api_base if enable_llm_judge else None,
+            "llm_judge_model": judge_model_name if enable_llm_judge else None,
+        }
+
+    def _build_traditional_file_report(
+        self,
+        *,
+        rows: list[dict[str, Any]],
+        result: TraditionalEvalResult,
+        request: TraditionalEvalFileRequest,
+    ) -> dict[str, Any]:
+        payload = result.model_dump(mode="json")
+        summary = {key: value for key, value in payload.items() if key != "judge_details"}
+        judge_details = payload.get("judge_details", [])
+        judge_by_row = {
+            int(detail["row_index"]): detail
+            for detail in judge_details
+            if isinstance(detail, dict) and self._safe_number(detail.get("row_index")) is not None
+        }
+
+        prediction_lengths = [len(row["prediction"]) for row in rows]
+        reference_counts = [len(row["references"]) for row in rows]
+        reference_lengths = [len(reference) for row in rows for reference in row["references"]]
+        samples: list[dict[str, Any]] = []
+        for row in rows:
+            row_index = int(row["row_index"])
+            samples.append(
+                {
+                    "row_index": row_index,
+                    "question_id": row.get("question_id"),
+                    "record_id": row.get("record_id"),
+                    "question": row.get("question"),
+                    "prediction": row["prediction"],
+                    "references": list(row["references"]),
+                    "prediction_length_chars": len(row["prediction"]),
+                    "reference_count": len(row["references"]),
+                    "reference_lengths_chars": [len(reference) for reference in row["references"]],
+                    "llm_judge": judge_by_row.get(row_index),
+                }
+            )
+
+        failed_judgements = [
+            {
+                "row_index": detail.get("row_index"),
+                "question_id": detail.get("question_id"),
+                "record_id": detail.get("record_id"),
+                "question": detail.get("question"),
+                "reason": detail.get("reason"),
+            }
+            for detail in judge_details
+            if isinstance(detail, dict) and int(detail.get("score", 0)) == 0
+        ]
+
+        runtime = self._resolve_traditional_runtime_metadata(rows=rows, request=request)
+        return {
+            "report_meta": {
+                "report_type": "traditional_eval_report",
+                "generated_at": self._timestamp_utc(),
+                "input_path": request.input_path,
+                "output_path": request.output_path,
+            },
+            "runtime": {
+                **runtime,
+                "llm_judge_prompt_version": result.llm_judge_prompt_version,
+            },
+            "dataset_overview": {
+                "sample_count": len(rows),
+                "questions_with_text": sum(1 for row in rows if row.get("question")),
+                "questions_with_question_id": sum(1 for row in rows if row.get("question_id") is not None),
+                "questions_with_record_id": sum(1 for row in rows if row.get("record_id") is not None),
+                "avg_prediction_length_chars": self._mean(prediction_lengths, digits=2),
+                "avg_reference_count": self._mean(reference_counts, digits=2),
+                "avg_reference_length_chars": self._mean(reference_lengths, digits=2),
+            },
+            "summary": summary,
+            "metric_breakdown": {
+                "lexical_overlap": {
+                    "f1": result.f1,
+                    "rouge_l": result.rouge_l,
+                    "bleu_family": {
+                        "bleu_1": result.bleu_1,
+                        "bleu_2": result.bleu_2,
+                        "bleu_3": result.bleu_3,
+                        "bleu_4": result.bleu_4,
+                    },
+                },
+                "semantic_similarity": {
+                    "bert_score_f1": result.bert_score_f1,
+                },
+                "llm_judge": {
+                    "success_rate": result.llm_judge_success_rate,
+                    "correct_count": result.llm_judge_correct_count,
+                    "incorrect_count": result.llm_judge_incorrect_count,
+                    "model": result.llm_judge_model,
+                    "prompt_version": result.llm_judge_prompt_version,
+                },
+            },
+            "judge_overview": {
+                "enabled": bool(runtime["llm_judge_enabled"]),
+                "evaluated_count": len(judge_details),
+                "correct_count": result.llm_judge_correct_count,
+                "incorrect_count": result.llm_judge_incorrect_count,
+                "failed_cases": failed_judgements,
+            },
+            "samples": samples,
+            "judge_details": judge_details,
+        }
+
+    def _build_ragas_file_report(
+        self,
+        *,
+        dataset: dict[str, list[Any]],
+        result: RAGASEvalResult,
+        request: RAGASEvalFileRequest,
+        runtime: dict[str, Any],
+    ) -> dict[str, Any]:
+        context_counts = [len(contexts) for contexts in dataset["contexts"]]
+        question_lengths = [len(str(question)) for question in dataset["question"]]
+        answer_lengths = [len(str(answer)) for answer in dataset["answer"]]
+        ground_truth_lengths = [len(str(ground_truth)) for ground_truth in dataset["ground_truth"]]
+        samples = result.model_dump(mode="json").get("samples", [])
+
+        return {
+            "report_meta": {
+                "report_type": "ragas_eval_report",
+                "generated_at": self._timestamp_utc(),
+                "input_path": request.input_path,
+                "output_path": request.output_path,
+            },
+            "runtime": runtime,
+            "dataset_overview": {
+                "sample_count": len(dataset["question"]),
+                "total_contexts": sum(context_counts),
+                "avg_contexts_per_sample": self._mean(context_counts, digits=2),
+                "max_contexts_per_sample": max(context_counts) if context_counts else 0,
+                "min_contexts_per_sample": min(context_counts) if context_counts else 0,
+                "avg_question_length_chars": self._mean(question_lengths, digits=2),
+                "avg_answer_length_chars": self._mean(answer_lengths, digits=2),
+                "avg_ground_truth_length_chars": self._mean(ground_truth_lengths, digits=2),
+            },
+            "summary": result.summary.model_dump(mode="json"),
+            "sample_count": result.sample_count,
+            "samples": samples,
+            "sample_highlights": {
+                "best_ragas_score": self._rank_items(samples, value_path=("ragas_score",), reverse=True),
+                "lowest_ragas_score": self._rank_items(samples, value_path=("ragas_score",), reverse=False),
+                "lowest_faithfulness": self._rank_items(
+                    samples,
+                    value_path=("metrics", "faithfulness"),
+                    reverse=False,
+                ),
+                "highest_noise_sensitivity_relevant": self._rank_items(
+                    samples,
+                    value_path=("metrics", "noise_sensitivity_relevant"),
+                    reverse=True,
+                ),
+            },
+        }
+
+    def _build_retrieval_file_report(
+        self,
+        *,
+        rows: list[dict[str, Any]],
+        raw: dict[str, Any],
+        request: RetrievalEvalFileRequest,
+        cuts: tuple[int, ...],
+        skip_empty_gold: bool,
+    ) -> dict[str, Any]:
+        diagnostics = raw.get("diagnostics", [])
+        per_query = raw.get("per_query", {})
+        diagnostics_by_query = {
+            str(item.get("query_id")): item
+            for item in diagnostics
+            if isinstance(item, dict) and item.get("query_id") is not None
+        }
+
+        query_details: list[dict[str, Any]] = []
+        for idx, row in enumerate(rows, start=1):
+            query_id = self._resolve_query_id(row, idx)
+            metrics = per_query.get(query_id)
+            if not isinstance(metrics, dict):
+                continue
+
+            rag_retrieval = row.get("rag_retrieval") if isinstance(row.get("rag_retrieval"), list) else []
+            gold_reference = row.get("gold_reference") if isinstance(row.get("gold_reference"), list) else []
+            diagnostic = diagnostics_by_query.get(query_id, {})
+            query_details.append(
+                {
+                    "query_id": query_id,
+                    "question_id": row.get("question_id"),
+                    "question": row.get("input") or row.get("question") or row.get("query"),
+                    "num_gold": diagnostic.get("num_gold", len(gold_reference)),
+                    "num_retrieved": diagnostic.get("num_retrieved", len(rag_retrieval)),
+                    "num_overlap": diagnostic.get("num_overlap"),
+                    "metrics": metrics,
+                    "retrieved_preview": [
+                        {
+                            "doc_id": item.get("doc_id"),
+                            "chunk_id": item.get("chunk_id"),
+                            "score": self._safe_number(item.get("score")),
+                            "text_preview": self._preview_text(item.get("text")),
+                        }
+                        for item in rag_retrieval[:5]
+                        if isinstance(item, dict)
+                    ],
+                    "gold_preview": [
+                        {
+                            "doc_id": item.get("doc_id"),
+                            "chunk_id": item.get("chunk_id"),
+                            "text_preview": self._preview_text(item.get("text")),
+                        }
+                        for item in gold_reference[:5]
+                        if isinstance(item, dict)
+                    ],
+                }
+            )
+
+        max_cut = max(cuts) if cuts else None
+        report = {
+            "report_meta": {
+                "report_type": "retrieval_eval_report",
+                "generated_at": self._timestamp_utc(),
+                "input_path": request.input_path,
+                "output_path": request.output_path,
+            },
+            "runtime": {
+                "cuts": list(cuts),
+                "skip_empty_gold": skip_empty_gold,
+            },
+            "meta": raw.get("meta", {}),
+            "aggregated": raw.get("aggregated", {}),
+            "per_query": per_query,
+            "diagnostics": diagnostics,
+            "query_details": query_details,
+            "query_highlights": {
+                "best_map": self._rank_items(query_details, value_path=("metrics", "map"), reverse=True, index_key="query_id"),
+                "lowest_map": self._rank_items(query_details, value_path=("metrics", "map"), reverse=False, index_key="query_id"),
+                "best_ndcg": self._rank_items(query_details, value_path=("metrics", "ndcg"), reverse=True, index_key="query_id"),
+            },
+        }
+        if max_cut is not None:
+            report["query_highlights"][f"lowest_recall_{max_cut}"] = self._rank_items(
+                query_details,
+                value_path=("metrics", f"recall_{max_cut}"),
+                reverse=False,
+                index_key="query_id",
+            )
+        return report
+
     def _run_llm_judge(
         self,
         *,
@@ -304,13 +679,9 @@ class EvalService:
             rows = FileRepository.parse_traditional_eval_rows_from_json(data)
             result = self._evaluate_traditional_core(rows=rows, request=request)
             if request.output_path:
-                payload = result.model_dump()
                 FileRepository.write_json(
                     request.output_path,
-                    {
-                        "summary": {k: v for k, v in payload.items() if k != "judge_details"},
-                        "judge_details": payload.get("judge_details", []),
-                    },
+                    self._build_traditional_file_report(rows=rows, result=result, request=request),
                 )
             return result
         except FileNotFoundError as exc:
@@ -477,12 +848,24 @@ class EvalService:
                 samples=raw.get("samples", []),
             )
             if request.output_path:
+                runtime = {
+                    "vllm_api_base": vllm_api_base,
+                    "vllm_model_name": vllm_model_name,
+                    "embedding_model_path": embedding_model_path,
+                    "embedding_device": embedding_device,
+                    "embedding_max_tokens": embedding_max_tokens,
+                    "device": device,
+                    "enable_cache": enable_cache,
+                    "cache_dir": cache_dir,
+                }
                 FileRepository.write_json(
                     request.output_path,
-                    {
-                        "summary": result.summary.model_dump(),
-                        "sample_count": result.sample_count,
-                    },
+                    self._build_ragas_file_report(
+                        dataset=dataset,
+                        result=result,
+                        request=request,
+                        runtime=runtime,
+                    ),
                 )
             return result
         except FileNotFoundError as exc:
@@ -540,9 +923,16 @@ class EvalService:
             rows = self._normalize_retrieval_rows(rows)
             raw = evaluator.evaluate_rows(rows)
             if request.output_path:
-                with open(request.output_path, "w", encoding="utf-8") as f:
-                    import json
-                    json.dump(raw, f, ensure_ascii=False, indent=2)
+                FileRepository.write_json(
+                    request.output_path,
+                    self._build_retrieval_file_report(
+                        rows=rows,
+                        raw=raw,
+                        request=request,
+                        cuts=cuts,
+                        skip_empty_gold=skip_empty_gold,
+                    ),
+                )
 
             return RetrievalEvalResult(
                 meta=raw.get("meta", {}),

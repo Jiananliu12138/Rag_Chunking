@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any
 
 import requests
+from tqdm.auto import tqdm
 
 
 PROMPT_VERSION = "answer_equivalence_v1"
@@ -32,8 +34,10 @@ Return score=0 when:
 - the candidate is too vague to verify
 - you are unsure
 
+Keep reason very short, ideally under 30 words.
+
 Output JSON only:
-{"score": 0 or 1, "reason": "brief explanation"}
+{"score": 0 or 1, "reason": "short explanation"}
 """
 
 
@@ -105,6 +109,32 @@ def _extract_first_json_object(text: str) -> dict[str, Any]:
                 break
 
     raise ValueError(f"Judge content does not contain a valid JSON object: {text}")
+
+
+def _extract_partial_json_object(text: str) -> dict[str, Any] | None:
+    text = text.strip()
+    if not text:
+        return None
+
+    score_match = re.search(r'"score"\s*:\s*(true|false|0|1)', text, flags=re.IGNORECASE)
+    if not score_match:
+        return None
+
+    score_raw = score_match.group(1)
+    reason = None
+    reason_match = re.search(r'"reason"\s*:\s*"', text, flags=re.IGNORECASE)
+    if reason_match:
+        reason = text[reason_match.end() :].strip()
+        if reason.endswith("}"):
+            reason = reason[:-1].rstrip()
+        if reason.endswith('"'):
+            reason = reason[:-1].rstrip()
+        reason = reason.replace('\\"', '"').strip()
+
+    return {
+        "score": score_raw,
+        "reason": reason or "Partial JSON recovered from truncated judge output.",
+    }
 
 
 def _build_user_prompt(sample: JudgeSample) -> str:
@@ -182,7 +212,7 @@ def _post_chat_completion(
             {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.0,
-        "max_tokens": 128,
+        "max_tokens": 256,
     }
     if use_json_mode:
         payload["response_format"] = {"type": "json_object"}
@@ -248,7 +278,12 @@ def _judge_one_sample(
                 timeout=timeout,
             )
             response_text = _extract_message_content(raw)
-            parsed = _extract_first_json_object(response_text)
+            try:
+                parsed = _extract_first_json_object(response_text)
+            except ValueError:
+                parsed = _extract_partial_json_object(response_text)
+                if parsed is None:
+                    raise
             score = _normalize_score(parsed.get("score"))
             result = {
                 "row_index": sample.row_index,
@@ -278,22 +313,35 @@ def evaluate_answer_equivalence(
     api_key: str | None,
     model_name: str,
     timeout: int = 120,
+    show_progress: bool = True,
 ) -> dict[str, Any]:
     if not api_base or not str(api_base).strip():
         raise ValueError("api_base is required for LLM judge evaluation")
     if not model_name or not str(model_name).strip():
         raise ValueError("model_name is required for LLM judge evaluation")
 
-    details = [
-        _judge_one_sample(
+    iterator = samples
+    progress = None
+    if show_progress:
+        progress = tqdm(samples, desc="LLM judge", unit="sample")
+        iterator = progress
+
+    details: list[dict[str, Any]] = []
+    for sample in iterator:
+        if progress is not None:
+            progress.set_postfix(row=sample.row_index)
+        details.append(
+            _judge_one_sample(
             sample=sample,
             api_base=api_base,
             api_key=api_key,
             model_name=model_name,
             timeout=timeout,
         )
-        for sample in samples
-    ]
+        )
+    if progress is not None:
+        progress.close()
+
     correct_count = sum(int(item["score"]) for item in details)
     evaluated_count = len(details)
     incorrect_count = max(evaluated_count - correct_count, 0)

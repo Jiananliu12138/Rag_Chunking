@@ -7,6 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Badge } from '../components/ui/badge';
+import { Switch } from '../components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -168,12 +169,38 @@ export default function ChunkingPage() {
               />
             </div>
             <div>
+              <Label>Min Chunk Tokens</Label>
+              <Input
+                type="number"
+                value={params.min_chunk_tokens || 0}
+                onChange={(e) => setParams({ ...params, min_chunk_tokens: parseInt(e.target.value) || 0 })}
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Chunks shorter than this will be merged into the next chunk; a trailing short chunk merges back into the previous one.
+              </p>
+            </div>
+            <div>
               <Label>Split by Character (Optional)</Label>
               <Input
                 value={params.split_by_character || '\\n\\n'}
                 onChange={(e) => setParams({ ...params, split_by_character: e.target.value })}
                 onKeyDown={tabFill((value) => setParams({ ...params, split_by_character: value }))}
                 placeholder="\\n\\n"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                2wikimqa / hotpotqa: <code>(?=Passage\s+\d+:)</code> + turn on Regex. narrativeqa: <code>\n\n\n\n</code> + keep Regex off.
+              </p>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+              <div>
+                <Label>Use Regex</Label>
+                <p className="text-xs text-slate-500 mt-1">
+                  Turn this on for 2wikimqa / hotpotqa, and leave it off for narrativeqa.
+                </p>
+              </div>
+              <Switch
+                checked={!!params.split_use_regex}
+                onCheckedChange={(checked) => setParams({ ...params, split_use_regex: checked })}
               />
             </div>
           </>
