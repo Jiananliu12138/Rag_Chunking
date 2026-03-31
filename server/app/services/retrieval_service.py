@@ -518,7 +518,7 @@ class RetrievalService:
         """
         仿照 eval/LongBench/retrieval_lite.py：从 jsonl 读入问题，逐条检索+生成，结果写入 JSON。
         每行 JSON 需含 user_input/input/query，gold 参考可来自 reference_contexts + meta.reference_contexts。
-        输出列表元素为 {_id, question_id, input, llm_ans, reference, rag_retrieval, gold_reference, generation_api_base, generation_model_name}。
+        输出列表元素为 {_id, question_id, input, llm_ans, answer, rag_retrieval, gold_reference, generation_api_base, generation_model_name}。
         """
         settings = get_settings()
         embed_model_path = request.embed_model_path or settings.DEFAULT_EMBEDDING_MODEL
@@ -623,6 +623,13 @@ class RetrievalService:
                 )
             return items
 
+        def _normalize_answer_field(row: dict[str, Any]) -> Any:
+            if "answers" in row and row.get("answers") is not None:
+                return row.get("answers")
+            if "reference" in row and row.get("reference") is not None:
+                return row.get("reference")
+            return row.get("answer")
+
         with tqdm(total=len(lines), desc="检索+生成", unit="问题") as pbar:
             for row_idx, line in enumerate(lines, start=1):
                 line = line.strip()
@@ -719,7 +726,7 @@ class RetrievalService:
                         "question_id": source_question_id if source_question_id is not None else auto_id,
                         "input": query,
                         "llm_ans": llm_ans,
-                        "reference": data.get("reference"),
+                        "answer": _normalize_answer_field(data),
                         "rag_retrieval": rag_retrieval,
                         "gold_reference": gold_reference,
                         "generation_api_base": llm_api_base,

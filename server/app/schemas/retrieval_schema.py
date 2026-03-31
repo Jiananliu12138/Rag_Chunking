@@ -197,7 +197,13 @@ class RAGResult(BaseModel):
 class RAGGenerateFileRequest(BaseModel):
     """文件输入输出的 RAG 生成：读 jsonl，逐条检索+生成，结果写 json。"""
     input_path: str = Field(..., description="输入 jsonl 路径，每行 JSON 含 input（查询）及 _id、answers 等")
-    output_path: str = Field(..., description="输出 JSON 文件路径，保存列表 [{_id, input, llm_ans, answers, retrieval_list}, ...]")
+    output_path: str = Field(
+        ...,
+        description=(
+            "输出 JSON 文件路径，保存列表 "
+            "[{_id, question_id, input, llm_ans, answer, rag_retrieval, gold_reference, ...}, ...]"
+        ),
+    )
     collection_name: str = Field(..., description="目标 collection 名称")
     embed_model_path: Optional[str] = Field(None, description="嵌入模型路径，空则从配置读取")
     embed_dim: Optional[int] = Field(None, ge=64, description="嵌入维度，空则从配置读取")
