@@ -55,10 +55,10 @@ LLM_API_KEY = "EMPTY"
 LLM_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8"
 LLM_PROVIDER = "openai"
 LLM_ADAPTER = "auto"
-LLM_TIMEOUT_SECONDS = 120
-LLM_MAX_TOKENS = 4096
+LLM_TIMEOUT_SECONDS = 3600
+LLM_MAX_TOKENS = 2048
 
-EMBEDDING_MODEL_PATH = Path(r"/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5")
+EMBEDDING_MODEL_PATH = Path(r"/data/h50056789/Rag_Chunking/model/BAAI/bge-m3")
 EMBEDDING_DEVICE = "cuda"
 
 # ---------------------------------------------------------------------------

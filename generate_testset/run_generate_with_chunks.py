@@ -23,21 +23,21 @@ os.environ["TIKTOKEN_CACHE_DIR"] = "/data/h50056789/Rag_Chunking/tiktoken_cache"
 Chunk = Union[str, Document]
 
 # ===== Static config (edit directly) =====
-CHUNKS_FILE = Path("/data/h50056789/Rag_Chunking/test_database/2wikimqa_llamaindex_chunk.json")
-OUTPUT_FILE = Path("/data/h50056789/Rag_Chunking/test_database/rag_testset.jsonl")
+CHUNKS_FILE = Path("/data/h50056789/Rag_Chunking/Chunk_Result/Llamaindex_Chunk/qasper_llamaindex_chunk.json")
+OUTPUT_FILE = Path("/data/h50056789/Rag_Chunking/gov_report_llamaindex_QA_pairs.json")
 TESTSET_SIZE = 10
 WITH_DEBUGGING_LOGS = True
 
-MAX_WORKERS = 4
+MAX_WORKERS = 18
 MAX_RETRIES = 3
-MAX_WAIT_SECONDS = 20
-RUN_TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 3600
+RUN_TIMEOUT_SECONDS = 3600
 FAIL_FAST = False
 
 SKIP_CUSTOM_NODE_FILTER = True
 QUIET_FILTER_WARNINGS = True
 
-LLM_PREFLIGHT_TIMEOUT_SECONDS = 8
+LLM_PREFLIGHT_TIMEOUT_SECONDS = 3600
 
 CHUNK_META_PREFIX = "<<<MC_META>>>"
 CHUNK_META_SUFFIX = "<<<END_MC_META>>>"

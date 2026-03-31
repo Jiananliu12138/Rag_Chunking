@@ -8,6 +8,9 @@ python -m vllm.entrypoints.openai.api_server \
     --served-model-name Qwen2.5-7B-Instruct \
     --trust-remote-code \
     --port 8005 \
-    --gpu-memory-utilization 0.70 \
-    --max-model-len 32768 \
+    --gpu-memory-utilization 0.83 \
+    --max-model-len 65536 \
+    --enable-chunked-prefill \
+    --enable-prefix-caching \
+    --enforce-eager \
     --dtype bfloat16
