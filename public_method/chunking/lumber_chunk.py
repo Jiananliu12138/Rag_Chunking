@@ -144,7 +144,7 @@ def qw_prompt_with_params(user_prompt, model_type=MODEL_TYPE, ds_base_url=DS_BAS
 def build_prompt(chunk_number, id_chunks_without_title):
     word_count = 0
     i = 0
-    while word_count < 550 and i + chunk_number < len(id_chunks_without_title) - 1:
+    while word_count < 1200 and i + chunk_number < len(id_chunks_without_title) - 1:
         i += 1
         final_document = "\n".join(map(lambda k: id_chunks_without_title[k], range(chunk_number, i + chunk_number)))
         word_count = count_words(final_document)

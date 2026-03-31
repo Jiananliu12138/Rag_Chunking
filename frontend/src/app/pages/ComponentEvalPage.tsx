@@ -22,6 +22,7 @@ import { Loader2, Cpu, Activity, FileText, Network, Grid3x3, Settings, Plus, X, 
 import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
+import { DEFAULT_EMBEDDING_MODEL_PATH, DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL_NAME } from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
 import ForceGraph2D from 'react-force-graph-2d';
 import { PathPickerButton } from '../components/PathPickerButton';
@@ -106,7 +107,7 @@ function QualityConfigDialog({
               value={simModelPath}
               onChange={(e) => setSimModelPath(e.target.value)}
               onKeyDown={(e) => fillPlaceholderOnTab(e, simModelPath, e.currentTarget.placeholder, setSimModelPath)}
-              placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+              placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
               className="mt-1.5"
             />
             <p className="text-xs text-slate-500 mt-1">Embedding model for Semantic Dissimilarity</p>
@@ -121,7 +122,7 @@ function QualityConfigDialog({
                 value={vllmApiBase}
                 onChange={(e) => setVllmApiBase(e.target.value)}
                 onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
-                placeholder="http://localhost:8005/v1"
+                placeholder={DEFAULT_LLM_API_BASE}
                 className="mt-1.5"
               />
             </div>
@@ -131,7 +132,7 @@ function QualityConfigDialog({
                 value={vllmModelName}
                 onChange={(e) => setVllmModelName(e.target.value)}
                 onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
-                placeholder="Qwen2.5-7B-Instruct"
+                placeholder={DEFAULT_LLM_MODEL_NAME}
                 className="mt-1.5"
               />
             </div>
@@ -184,7 +185,7 @@ function StickinessConfigDialog({
                 value={vllmApiBase}
                 onChange={(e) => setVllmApiBase(e.target.value)}
                 onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
-                placeholder="http://localhost:8005/v1"
+                placeholder={DEFAULT_LLM_API_BASE}
                 className="mt-1.5"
               />
             </div>
@@ -194,7 +195,7 @@ function StickinessConfigDialog({
                 value={vllmModelName}
                 onChange={(e) => setVllmModelName(e.target.value)}
                 onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
-                placeholder="Qwen2.5-7B-Instruct"
+                placeholder={DEFAULT_LLM_MODEL_NAME}
                 className="mt-1.5"
               />
             </div>
@@ -441,7 +442,7 @@ export default function ComponentEvalPage() {
   // ── Chunk Quality – Model Config (shared) ──────────────────────────────────
   const [qualityConfigOpen, setQualityConfigOpen] = useState(false);
   const [simModelPath, setSimModelPath] = useState('');
-  const [qualityVllmApiBase, setQualityVllmApiBase] = useState('http://localhost:8005/v1');
+  const [qualityVllmApiBase, setQualityVllmApiBase] = useState(DEFAULT_LLM_API_BASE);
   const [qualityVllmModelName, setQualityVllmModelName] = useState('');
 
   // ── Chunk Stickiness – Direct Input ────────────────────────────────────────
@@ -461,7 +462,7 @@ export default function ComponentEvalPage() {
 
   // ── Chunk Stickiness – Model Config (shared) ───────────────────────────────
   const [stickinessConfigOpen, setStickinessConfigOpen] = useState(false);
-  const [stickinessVllmApiBase, setStickinessVllmApiBase] = useState('http://localhost:8005/v1');
+  const [stickinessVllmApiBase, setStickinessVllmApiBase] = useState(DEFAULT_LLM_API_BASE);
   const [stickinessVllmModelName, setStickinessVllmModelName] = useState('');
 
   // ── Retrieval Eval ─────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { DEFAULT_EMBEDDING_MODEL_PATH } from '../utils/runtimeDefaults';
 import { Loader2, Plus, Trash2, Database, Eye, RefreshCw, FileText, X, AlertCircle } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
@@ -384,7 +385,7 @@ export default function IndexPage() {
                   value={embedModelPath}
                   onChange={(e) => setEmbedModelPath(e.target.value)}
                   onKeyDown={tabFill(setEmbedModelPath)}
-                  placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+                  placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
                 />
               </div>
               <div>
@@ -523,7 +524,7 @@ export default function IndexPage() {
                   value={addEmbedModelPath}
                   onChange={(e) => setAddEmbedModelPath(e.target.value)}
                   onKeyDown={tabFill(setAddEmbedModelPath)}
-                  placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+                  placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
                 />
                 <div className="mt-2 space-y-1">
                   <p className="text-xs text-slate-500 flex items-center gap-1">

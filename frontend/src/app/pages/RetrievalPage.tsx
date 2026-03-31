@@ -22,6 +22,13 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Loader2, Search, Sparkles, FileText, ChevronDown, Settings2, Filter, X, ChevronsUpDown } from 'lucide-react';
 import { api } from '../utils/api';
+import {
+  DEFAULT_EMBEDDING_MODEL_PATH,
+  DEFAULT_LLM_API_BASE,
+  DEFAULT_LLM_MODEL_NAME,
+  DEFAULT_RERANK_DEVICE,
+  DEFAULT_RERANK_MODEL_PATH,
+} from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
 import { PathPickerButton } from '../components/PathPickerButton';
 
@@ -342,7 +349,7 @@ export default function RetrievalPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Embedding model path</Label>
-                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} onKeyDown={tabFill(setEmbedModelPath)} placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5" />
+                <Input value={embedModelPath} onChange={(e) => setEmbedModelPath(e.target.value)} onKeyDown={tabFill(setEmbedModelPath)} placeholder={DEFAULT_EMBEDDING_MODEL_PATH} />
               </div>
               <div>
                 <Label>Embed Dim</Label>
@@ -350,19 +357,19 @@ export default function RetrievalPage() {
               </div>
               <div>
                 <Label>LLM API Base</Label>
-                <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder="http://localhost:8005/v1" />
+                <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder={DEFAULT_LLM_API_BASE} />
               </div>
               <div>
                 <Label>LLM Model</Label>
-                <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} onKeyDown={tabFill(setLlmModelName)} placeholder="Qwen2.5-7B-Instruct" />
+                <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} onKeyDown={tabFill(setLlmModelName)} placeholder={DEFAULT_LLM_MODEL_NAME} />
               </div>
               <div>
                 <Label>CrossEncoder model path</Label>
-                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3" />
+                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder={DEFAULT_RERANK_MODEL_PATH} />
               </div>
               <div>
                 <Label>Rerank Device</Label>
-                <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder="cuda:1" />
+                <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder={DEFAULT_RERANK_DEVICE} />
               </div>
             </div>
           </DialogContent>
@@ -410,7 +417,7 @@ export default function RetrievalPage() {
                       value={embedModelPath}
                       onChange={(e) => setEmbedModelPath(e.target.value)}
                       onKeyDown={tabFill(setEmbedModelPath)}
-                      placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+                      placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
                     />
                   </div>
 
@@ -574,7 +581,7 @@ export default function RetrievalPage() {
                           value={llmApiBase}
                           onChange={(e) => setLlmApiBase(e.target.value)}
                           onKeyDown={tabFill(setLlmApiBase)}
-                          placeholder="http://localhost:8005/v1"
+                          placeholder={DEFAULT_LLM_API_BASE}
                         />
                       </div>
                       <div>
@@ -583,7 +590,7 @@ export default function RetrievalPage() {
                           value={llmModelName}
                           onChange={(e) => setLlmModelName(e.target.value)}
                           onKeyDown={tabFill(setLlmModelName)}
-                          placeholder="Qwen2.5-7B-Instruct"
+                          placeholder={DEFAULT_LLM_MODEL_NAME}
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -832,7 +839,7 @@ export default function RetrievalPage() {
                   value={embedModelPath}
                   onChange={(e) => setEmbedModelPath(e.target.value)}
                   onKeyDown={tabFill(setEmbedModelPath)}
-                  placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+                  placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
                 />
               </div>
 
@@ -867,7 +874,7 @@ export default function RetrievalPage() {
                       </div>
                       <div>
                         <Label className="text-xs">Rerank Device</Label>
-                        <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder="cuda:1" />
+                        <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder={DEFAULT_RERANK_DEVICE} />
                       </div>
                       <div>
                         <Label className="text-xs">Rerank Top K</Label>
@@ -879,7 +886,7 @@ export default function RetrievalPage() {
                       </div>
                       <div className="col-span-2">
                         <Label className="text-xs">CrossEncoder model path (optional)</Label>
-                        <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder="/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3" />
+                        <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder={DEFAULT_RERANK_MODEL_PATH} />
                       </div>
                     </div>
                   )}
@@ -889,11 +896,11 @@ export default function RetrievalPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
                 <div>
                   <Label>LLM API Base (optional)</Label>
-                  <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder="http://localhost:8005/v1" />
+                  <Input value={llmApiBase} onChange={(e) => setLlmApiBase(e.target.value)} onKeyDown={tabFill(setLlmApiBase)} placeholder={DEFAULT_LLM_API_BASE} />
                 </div>
                 <div>
                   <Label>LLM Model Name (optional)</Label>
-                  <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} onKeyDown={tabFill(setLlmModelName)} placeholder="Qwen2.5-7B-Instruct" />
+                  <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} onKeyDown={tabFill(setLlmModelName)} placeholder={DEFAULT_LLM_MODEL_NAME} />
                 </div>
                 <div>
                   <Label>Temperature</Label>

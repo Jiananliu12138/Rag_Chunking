@@ -47,6 +47,13 @@ import {
   CommandList,
 } from '../components/ui/command';
 import { api } from '../utils/api';
+import {
+  DEFAULT_EMBEDDING_MODEL_PATH,
+  DEFAULT_LLM_API_BASE,
+  DEFAULT_LLM_MODEL_NAME,
+  DEFAULT_RERANK_DEVICE,
+  DEFAULT_RERANK_MODEL_PATH,
+} from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
 
 interface Message {
@@ -103,7 +110,7 @@ export default function Home() {
   const [rerankDevice, setRerankDevice] = useState('cpu');
   const [rerankCandidateK, setRerankCandidateK] = useState(20);
   const [rerankTopK, setRerankTopK] = useState(5);
-  const [llmApiBase, setLlmApiBase] = useState('http://localhost:8005/v1');
+  const [llmApiBase, setLlmApiBase] = useState(DEFAULT_LLM_API_BASE);
   const [llmModelName, setLlmModelName] = useState('');
   const [temperature, setTemperature] = useState(0.1);
   const [maxNewTokens, setMaxNewTokens] = useState(1280);
@@ -623,7 +630,7 @@ export default function Home() {
                       value={embedModelPath}
                       onChange={(e) => setEmbedModelPath(e.target.value)}
                       onKeyDown={tabFill(setEmbedModelPath)}
-                      placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+                      placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
                       className="mt-1"
                     />
                   </div>
@@ -855,7 +862,7 @@ export default function Home() {
                               value={rerankDevice}
                               onChange={(e) => setRerankDevice(e.target.value)}
                               onKeyDown={tabFill(setRerankDevice)}
-                              placeholder="cuda:1"
+                              placeholder={DEFAULT_RERANK_DEVICE}
                               className="mt-1 h-8 text-xs"
                             />
                           </div>
@@ -883,7 +890,7 @@ export default function Home() {
                               value={rerankModelPath}
                               onChange={(e) => setRerankModelPath(e.target.value)}
                               onKeyDown={tabFill(setRerankModelPath)}
-                              placeholder="/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3"
+                              placeholder={DEFAULT_RERANK_MODEL_PATH}
                               className="mt-1 h-8 text-xs"
                             />
                           </div>
@@ -908,7 +915,7 @@ export default function Home() {
                     value={llmApiBase}
                     onChange={(e) => setLlmApiBase(e.target.value)}
                     onKeyDown={tabFill(setLlmApiBase)}
-                    placeholder="http://localhost:8005/v1"
+                    placeholder={DEFAULT_LLM_API_BASE}
                     className="mt-1"
                   />
                 </div>
@@ -920,7 +927,7 @@ export default function Home() {
                     value={llmModelName}
                     onChange={(e) => setLlmModelName(e.target.value)}
                     onKeyDown={tabFill(setLlmModelName)}
-                    placeholder="Qwen2.5-7B-Instruct"
+                    placeholder={DEFAULT_LLM_MODEL_NAME}
                     className="mt-1"
                   />
                 </div>

@@ -27,6 +27,7 @@ import { Loader2, BarChart3, FileText, Sparkles, Settings, Plus, X, FlaskConical
 import { BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 import { api } from '../utils/api';
+import { DEFAULT_EMBEDDING_MODEL_PATH, DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL_NAME } from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
 import { PathPickerButton } from '../components/PathPickerButton';
 
@@ -404,9 +405,9 @@ Format 2 - Current Eval Format:
 
   // RAGAS Configuration (shared between direct input and file input)
   const [ragasConfigOpen, setRagasConfigOpen] = useState(false);
-  const [vllmApiBase, setVllmApiBase] = useState('http://localhost:8005/v1');
-  const [vllmModelName, setVllmModelName] = useState('Qwen2.5-7B-Instruct');
-  const [embeddingModelPath, setEmbeddingModelPath] = useState('/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5');
+  const [vllmApiBase, setVllmApiBase] = useState(DEFAULT_LLM_API_BASE);
+  const [vllmModelName, setVllmModelName] = useState(DEFAULT_LLM_MODEL_NAME);
+  const [embeddingModelPath, setEmbeddingModelPath] = useState(DEFAULT_EMBEDDING_MODEL_PATH);
 
   const handleTraditionalEval = async () => {
     if (!testDataJson.trim()) {
@@ -630,7 +631,7 @@ Format 2 - Current Eval Format:
     );
   };
 
-  const renderRagasConfigDialog = (embeddingPlaceholder = '/path/to/bge-large-en-v1.5') => (
+  const renderRagasConfigDialog = (embeddingPlaceholder = DEFAULT_EMBEDDING_MODEL_PATH) => (
     <Dialog open={ragasConfigOpen} onOpenChange={setRagasConfigOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -652,7 +653,7 @@ Format 2 - Current Eval Format:
               value={vllmApiBase}
               onChange={(e) => setVllmApiBase(e.target.value)}
               onKeyDown={(e) => fillPlaceholderOnTab(e, vllmApiBase, e.currentTarget.placeholder, setVllmApiBase)}
-              placeholder="http://localhost:8005/v1"
+              placeholder={DEFAULT_LLM_API_BASE}
               className="mt-1.5"
             />
             <p className="mt-1 text-xs text-slate-500">The base URL for the VLLM API endpoint</p>
@@ -664,7 +665,7 @@ Format 2 - Current Eval Format:
               value={vllmModelName}
               onChange={(e) => setVllmModelName(e.target.value)}
               onKeyDown={(e) => fillPlaceholderOnTab(e, vllmModelName, e.currentTarget.placeholder, setVllmModelName)}
-              placeholder="Qwen2.5-7B-Instruct"
+              placeholder={DEFAULT_LLM_MODEL_NAME}
               className="mt-1.5"
             />
             <p className="mt-1 text-xs text-slate-500">Path to the VLLM model for evaluation</p>
@@ -1232,7 +1233,7 @@ Format 2 - Current Eval Format:
                       <FileText className="w-5 h-5 text-purple-600" />
                       File Evaluation
                     </h2>
-                    {renderRagasConfigDialog('/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5')}
+                    {renderRagasConfigDialog(DEFAULT_EMBEDDING_MODEL_PATH)}
                   </div>
                   <div className="space-y-4">
                     <div>

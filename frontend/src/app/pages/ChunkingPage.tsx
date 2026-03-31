@@ -17,6 +17,7 @@ import {
 } from '../components/ui/select';
 import { Loader2, FileText, Type, Scissors, X, Eraser } from 'lucide-react';
 import { api } from '../utils/api';
+import { DEFAULT_EMBEDDING_MODEL_PATH, DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL_NAME } from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
 import { PathPickerButton } from '../components/PathPickerButton';
 
@@ -215,7 +216,7 @@ export default function ChunkingPage() {
                 value={params.embed_model_path || ''}
                 onChange={(e) => setParams({ ...params, embed_model_path: e.target.value })}
                 onKeyDown={tabFill((value) => setParams({ ...params, embed_model_path: value }))}
-                placeholder="/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+                placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
               />
             </div>
             <div>
@@ -268,7 +269,7 @@ export default function ChunkingPage() {
                 value={params.llm_api_base || ''}
                 onChange={(e) => setParams({ ...params, llm_api_base: e.target.value })}
                 onKeyDown={tabFill((value) => setParams({ ...params, llm_api_base: value }))}
-                placeholder="http://localhost:8005/v1"
+                placeholder={DEFAULT_LLM_API_BASE}
               />
             </div>
             <div>
@@ -277,7 +278,7 @@ export default function ChunkingPage() {
                 value={params.model_type || ''}
                 onChange={(e) => setParams({ ...params, model_type: e.target.value })}
                 onKeyDown={tabFill((value) => setParams({ ...params, model_type: value }))}
-                placeholder="Qwen2.5-7B-Instruct"
+                placeholder={DEFAULT_LLM_MODEL_NAME}
               />
             </div>
             <div>

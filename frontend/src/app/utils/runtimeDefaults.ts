@@ -1,0 +1,5 @@
+export const DEFAULT_LLM_API_BASE = 'http://localhost:8001/v1';
+export const DEFAULT_LLM_MODEL_NAME = 'Qwen/Qwen3-VL-30B-A3B-Instruct-FP8';
+export const DEFAULT_EMBEDDING_MODEL_PATH = '/data/h50056789/Rag_Chunking/model/BAAI/bge-m3';
+export const DEFAULT_RERANK_MODEL_PATH = '/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3';
+export const DEFAULT_RERANK_DEVICE = 'cuda:0';
