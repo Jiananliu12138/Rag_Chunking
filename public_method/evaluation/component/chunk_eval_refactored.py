@@ -19,6 +19,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from sentence_transformers import SentenceTransformer
 import requests
 
+from public_method.evaluation._parallel import parallel_map
+
 
 # ============================================================================
 # 配置类
@@ -49,7 +51,11 @@ class EvaluatorConfig:
 
     # 最多评估多少个文本块（-1 表示使用全部）
     max_eval_chunks: int = -1
-    
+
+    # 并发与超时（仅在 use_vllm=True 时生效）
+    max_workers: int = 16
+    request_timeout: int = 600
+
     # 日志配置（仅控制台）
     log_level: str = 'INFO'
     
@@ -106,7 +112,7 @@ class VLLMPerplexityClient:
       - ppl(target | context) 通过分别计算 context+target 与 context 的 token 数来截取 target 段 logprob
     """
 
-    def __init__(self, api_base: str, model_name: str, timeout: int = 120):
+    def __init__(self, api_base: str, model_name: str, timeout: int = 600):
         self.api_base = api_base
         self.model_name = model_name
         self.timeout = timeout
@@ -205,8 +211,11 @@ class ChunkEvaluator:
                 self.vllm_client = VLLMPerplexityClient(
                     api_base=self.config.vllm_api_base.rstrip("/"),
                     model_name=self.config.vllm_model_name,
+                    timeout=self.config.request_timeout,
                 )
-                self.logger.info("✓ vLLM 困惑度客户端初始化完成")
+                self.logger.info(
+                    f"✓ vLLM 困惑度客户端初始化完成 (max_workers={self.config.max_workers}, timeout={self.config.request_timeout}s)"
+                )
             else:
                 self.logger.info(f"加载困惑度模型: {self.config.ppl_model_name}")
                 self.ppl_tokenizer = AutoTokenizer.from_pretrained(
@@ -406,57 +415,87 @@ class ChunkEvaluator:
     ) -> AggregatedResults:
         """
         评估文本块列表
-        
+
+        优化点：
+        - 语义相似度：一次性 batch encode 所有 chunks，比逐对 encode 快得多
+        - 边界清晰度：所有 (text1, text2) 对的 vLLM 调用通过 ThreadPoolExecutor 并发
+
         Args:
             chunks: 文本块列表
             show_progress: 是否显示进度条
-        
+
         Returns:
             聚合的评估结果
         """
         if len(chunks) < 2:
             raise ValueError(f"至少需要2个文本块，当前只有 {len(chunks)} 个")
-        
-        self.logger.info(f"开始评估 {len(chunks)} 个文本块 ({len(chunks)-1} 对)")
-        
-        results = []
-        sem_scores = []
-        bc_scores = []
-        
-        # 遍历所有相邻对
-        iterator = range(len(chunks) - 1)
-        if show_progress:
-            iterator = tqdm(iterator, desc="评估进度")
-        
-        for i in iterator:
-            try:
-                text1 = chunks[i]
-                text2 = chunks[i + 1]
-                
-                # 评估当前对
-                result = self.evaluate_pair(text1, text2)
-                results.append(result)
-                
-                if self.config.enable_semantic_similarity and math.isfinite(result.semantic_dissimilarity):
-                    sem_scores.append(result.semantic_dissimilarity)
-                if self.config.enable_boundary_clarity and math.isfinite(result.boundary_clarity):
-                    bc_scores.append(result.boundary_clarity)
-                
-            except Exception as e:
-                self.logger.error(f"评估第 {i} 对时出错: {e}")
-                continue
-        
-        # 计算平均值
+
+        num_pairs = len(chunks) - 1
+        self.logger.info(f"开始评估 {len(chunks)} 个文本块 ({num_pairs} 对)")
+
+        # ── 语义不相似度：一次性 batch encode ───────────────────────────
+        sem_dissimilarities: List[float] = [float('nan')] * num_pairs
+        if self.config.enable_semantic_similarity:
+            if self.sim_model is None:
+                raise RuntimeError("语义模型未加载，请先调用 load_models()")
+            embeddings = self.sim_model.encode(
+                chunks,
+                normalize_embeddings=True,
+                show_progress_bar=show_progress,
+            )
+            # 相邻余弦相似度 → 不相似度
+            for i in range(num_pairs):
+                similarity = float(embeddings[i] @ embeddings[i + 1].T)
+                sem_dissimilarities[i] = 1.0 - similarity
+
+        # ── 边界清晰度：并发计算所有相邻对 ──────────────────────────────
+        bc_values: List[float] = [float('nan')] * num_pairs
+        if self.config.enable_boundary_clarity:
+            # 仅 vLLM 模式启用并发；本地 GPU 推理不适合多线程争抢同一模型
+            workers = self.config.max_workers if self.config.use_vllm else 1
+
+            def _bc(idx: int) -> tuple[int, float]:
+                try:
+                    return idx, self.calculate_boundary_clarity(chunks[idx], chunks[idx + 1])
+                except Exception as exc:
+                    self.logger.error(f"评估第 {idx} 对边界清晰度时出错: {exc}")
+                    return idx, float('nan')
+
+            bc_results = parallel_map(
+                _bc,
+                range(num_pairs),
+                max_workers=workers,
+                desc="边界清晰度",
+                show_progress=show_progress,
+            )
+            for idx, value in bc_results:
+                bc_values[idx] = value
+
+        # ── 聚合 ───────────────────────────────────────────────────────
+        results: List[EvaluationResult] = []
+        sem_scores: List[float] = []
+        bc_scores: List[float] = []
+        for i in range(num_pairs):
+            r = EvaluationResult(
+                semantic_dissimilarity=sem_dissimilarities[i],
+                boundary_clarity=bc_values[i],
+            )
+            results.append(r)
+            if self.config.enable_semantic_similarity and math.isfinite(r.semantic_dissimilarity):
+                sem_scores.append(r.semantic_dissimilarity)
+            if self.config.enable_boundary_clarity and math.isfinite(r.boundary_clarity):
+                bc_scores.append(r.boundary_clarity)
+
         aggregated = AggregatedResults(
             semantic_dissimilarity_avg=sum(sem_scores) / len(sem_scores) if sem_scores else 0.0,
             boundary_clarity_avg=sum(bc_scores) / len(bc_scores) if bc_scores else 0.0,
             num_pairs=len(results),
             individual_results=results
         )
-        
+
         self.logger.info("评估完成")
         self.logger.info(str(aggregated))
-        
+
         return aggregated
     
     def evaluate_from_file(

@@ -24,6 +24,7 @@ from ragas.metrics._context_entities_recall import ContextEntityRecall
 from ragas.metrics._noise_sensitivity import NoiseSensitivity
 from ragas.llms import llm_factory
 from ragas.cache import DiskCacheBackend
+from ragas.run_config import RunConfig
 
 from public_method.models.factory import get_ragas_embeddings
 
@@ -53,6 +54,8 @@ class RAGASEvaluator:
         device: str = "cuda:0",
         enable_cache: bool = True,
         cache_dir: str = "./ragas_cache",
+        max_workers: int = 16,
+        request_timeout: int = 600,
     ):
         """
         初始化 RAGAS 评估器
@@ -69,7 +72,14 @@ class RAGASEvaluator:
         print(f"\n{'='*70}")
         print(f"初始化 RAGAS 评估器")
         print(f"{'='*70}")
-        
+
+        # RunConfig：并发度 + 单次 LLM/embedding 调用超时（防止 vLLM 排队时被早早 timeout）
+        self.run_config = RunConfig(
+            max_workers=int(max_workers),
+            timeout=int(request_timeout),
+        )
+        print(f"  并发: max_workers={max_workers}, timeout={request_timeout}s")
+
         # 创建缓存（可选但强烈推荐）
         cache = DiskCacheBackend(cache_dir=cache_dir) if enable_cache else None
         
@@ -171,6 +181,7 @@ class RAGASEvaluator:
             metrics=metrics,
             llm=self.eval_llm,
             embeddings=self.eval_embeddings,
+            run_config=self.run_config,
         )
         
         # 转换为 DataFrame

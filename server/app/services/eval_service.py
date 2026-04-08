@@ -27,7 +27,7 @@ from app.schemas.eval_schema import (
     TraditionalEvalResult,
 )
 
-_RAGAS_EVALUATOR_CACHE: dict[tuple[str, str, str, str, str, str, str, bool, str], object] = {}
+_RAGAS_EVALUATOR_CACHE: dict[tuple, object] = {}
 _RAGAS_EVALUATOR_CACHE_LOCK = Lock()
 
 
@@ -45,6 +45,8 @@ class EvalService:
         device: str,
         enable_cache: bool,
         cache_dir: str,
+        max_workers: int,
+        request_timeout: int,
     ):
         cache_key = (
             str(vllm_api_base).strip(),
@@ -56,6 +58,8 @@ class EvalService:
             str(device).strip(),
             bool(enable_cache),
             str(cache_dir).strip(),
+            int(max_workers),
+            int(request_timeout),
         )
         with _RAGAS_EVALUATOR_CACHE_LOCK:
             cached = _RAGAS_EVALUATOR_CACHE.get(cache_key)
@@ -79,6 +83,8 @@ class EvalService:
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,
+                max_workers=max_workers,
+                request_timeout=request_timeout,
             )
             _RAGAS_EVALUATOR_CACHE[cache_key] = evaluator
             return evaluator
@@ -594,6 +600,8 @@ class EvalService:
                 api_base=vllm_api_base,
                 api_key=vllm_api_key,
                 model_name=vllm_model_name,
+                timeout=settings.EVAL_HTTP_TIMEOUT,
+                max_workers=settings.EVAL_PARALLEL_WORKERS,
             )
         except Exception as exc:
             logger.exception("LLM judge evaluation failed: %s", exc)
@@ -734,6 +742,8 @@ class EvalService:
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,
+                max_workers=settings.RAGAS_MAX_WORKERS,
+                request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
 
             # 仅支持一种输入方式：request.test
@@ -820,6 +830,8 @@ class EvalService:
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,
+                max_workers=settings.RAGAS_MAX_WORKERS,
+                request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
 
             raw = evaluator.evaluate(dataset)

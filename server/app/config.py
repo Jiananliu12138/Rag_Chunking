@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     STICKINESS_DELTA: float = 0.05
     STICKINESS_SCORE_TEMPERATURE: float = 6.0
 
+    # Evaluation parallelism (vLLM 默认 max-num-seqs=256，并发空间充足)
+    EVAL_PARALLEL_WORKERS: int = 16
+    EVAL_HTTP_TIMEOUT: int = 600
+    RAGAS_MAX_WORKERS: int = 16
+
     @property
     def python_paths(self) -> list[str]:
         return [str(BASE_DIR)]

@@ -9,6 +9,8 @@ from typing import Any
 import requests
 from tqdm.auto import tqdm
 
+from public_method.evaluation._parallel import parallel_map
+
 
 PROMPT_VERSION = "answer_equivalence_v1"
 
@@ -312,35 +314,31 @@ def evaluate_answer_equivalence(
     api_base: str,
     api_key: str | None,
     model_name: str,
-    timeout: int = 120,
+    timeout: int = 600,
     show_progress: bool = True,
+    max_workers: int = 16,
 ) -> dict[str, Any]:
     if not api_base or not str(api_base).strip():
         raise ValueError("api_base is required for LLM judge evaluation")
     if not model_name or not str(model_name).strip():
         raise ValueError("model_name is required for LLM judge evaluation")
 
-    iterator = samples
-    progress = None
-    if show_progress:
-        progress = tqdm(samples, desc="LLM judge", unit="sample")
-        iterator = progress
-
-    details: list[dict[str, Any]] = []
-    for sample in iterator:
-        if progress is not None:
-            progress.set_postfix(row=sample.row_index)
-        details.append(
-            _judge_one_sample(
+    def _run(sample: JudgeSample) -> dict[str, Any]:
+        return _judge_one_sample(
             sample=sample,
             api_base=api_base,
             api_key=api_key,
             model_name=model_name,
             timeout=timeout,
         )
-        )
-    if progress is not None:
-        progress.close()
+
+    details = parallel_map(
+        _run,
+        samples,
+        max_workers=max_workers,
+        desc="LLM judge",
+        show_progress=show_progress,
+    )
 
     correct_count = sum(int(item["score"]) for item in details)
     evaluated_count = len(details)

@@ -86,6 +86,8 @@ class ComponentEvalService:
                 use_vllm=True,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,
+                max_workers=settings.EVAL_PARALLEL_WORKERS,
+                request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
             evaluator = ChunkEvaluator(config)
             evaluator.load_models()
@@ -251,6 +253,8 @@ class ComponentEvalService:
                 use_vllm=True,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,
+                max_workers=settings.EVAL_PARALLEL_WORKERS,
+                request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
             evaluator = StickinessEvaluator(config)
             evaluator.load_model()

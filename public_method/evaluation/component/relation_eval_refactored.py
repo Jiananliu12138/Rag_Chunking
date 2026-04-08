@@ -18,6 +18,8 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import requests
 
+from public_method.evaluation._parallel import parallel_map
+
 
 @dataclass
 class StickinessConfig:
@@ -38,6 +40,10 @@ class StickinessConfig:
 
     # 每个文档最多评估多少个文本块（-1 表示使用该文档的全部文本块）
     max_eval_chunks: int = -1
+
+    # 并发与超时（仅在 use_vllm=True 时生效）
+    max_workers: int = 16
+    request_timeout: int = 600
 
 
 @dataclass
@@ -64,7 +70,7 @@ class VLLMPerplexityClient:
     通过 vLLM OpenAI-compatible /completions 接口近似计算困惑度。
     """
 
-    def __init__(self, api_base: str, model_name: str, timeout: int = 120):
+    def __init__(self, api_base: str, model_name: str, timeout: int = 600):
         self.api_base = api_base
         self.model_name = model_name
         self.timeout = timeout
@@ -171,30 +177,47 @@ class PerplexityCalculator:
 
 class GraphBuilder:
     """图构建器"""
-    
-    def __init__(self, ppl_calculator: PerplexityCalculator):
+
+    def __init__(self, ppl_calculator: PerplexityCalculator, max_workers: int = 1):
         self.ppl_calc = ppl_calculator
-    
+        self.max_workers = max(1, int(max_workers))
+
     def create_complete_graph(self, chunks: List[str]) -> Dict[int, Dict[int, float]]:
         """
         创建完全图 (Graph_1)
         节点i到节点j的边权重 = 给定chunks[i]预测chunks[j]的困惑度
+
+        所有 (context, target) 对都通过 vLLM 调用，I/O bound，
+        通过 ThreadPoolExecutor 并发以加速。
         """
         n = len(chunks)
-        graph = {i: {} for i in range(n)}
-        
-        # 计算每个节点的自环权重（无context预测自己）
+        graph: Dict[int, Dict[int, float]] = {i: {} for i in range(n)}
+
+        # 一次性收集所有需要计算的 (context, target, i, j) 对
+        # 自环：i==j 时上下文为 ' '
+        tasks: List[tuple[int, int, str, str]] = []
         for i in range(n):
-            sum_ppl, ppl_len = self.ppl_calc.get_ppl_for_next(' ', chunks[i])
-            graph[i][i] = sum_ppl
-        
-        # 计算所有节点对之间的边权重
+            tasks.append((i, i, ' ', chunks[i]))
         for i in range(n):
             for j in range(n):
                 if i != j:
-                    sum_ppl, ppl_len = self.ppl_calc.get_ppl_for_next(chunks[i], chunks[j])
-                    graph[i][j] = sum_ppl
-        
+                    tasks.append((i, j, chunks[i], chunks[j]))
+
+        def _compute(task: tuple[int, int, str, str]) -> tuple[int, int, float]:
+            i, j, ctx, tgt = task
+            sum_ppl, _ = self.ppl_calc.get_ppl_for_next(ctx, tgt)
+            return i, j, sum_ppl
+
+        results = parallel_map(
+            _compute,
+            tasks,
+            max_workers=self.max_workers,
+            desc=f"完全图 ppl ({n}x{n})",
+        )
+
+        for i, j, value in results:
+            graph[i][j] = value
+
         return graph
     
     def create_incomplete_graph(self, complete_graph: Dict) -> Dict[int, Dict[int, float]]:
@@ -334,6 +357,7 @@ class StickinessEvaluator:
             vllm_client = VLLMPerplexityClient(
                 api_base=self.config.vllm_api_base.rstrip("/"),
                 model_name=self.config.vllm_model_name,
+                timeout=self.config.request_timeout,
             )
             self.ppl_calc = PerplexityCalculator(
                 model=None,
@@ -341,8 +365,11 @@ class StickinessEvaluator:
                 vllm_client=vllm_client,
                 use_vllm=True,
             )
-            self.graph_builder = GraphBuilder(self.ppl_calc)
-            self.logger.info("✓ vLLM 困惑度客户端初始化完成")
+            # 仅 vLLM 模式启用并发，本地 GPU 推理不适合多线程争抢同一模型
+            self.graph_builder = GraphBuilder(self.ppl_calc, max_workers=self.config.max_workers)
+            self.logger.info(
+                f"✓ vLLM 困惑度客户端初始化完成 (max_workers={self.config.max_workers}, timeout={self.config.request_timeout}s)"
+            )
         else:
             self.logger.info(f"加载模型: {self.config.model_path}")
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -362,7 +389,7 @@ class StickinessEvaluator:
                 vllm_client=None,
                 use_vllm=False,
             )
-            self.graph_builder = GraphBuilder(self.ppl_calc)
+            self.graph_builder = GraphBuilder(self.ppl_calc, max_workers=1)
 
             self.logger.info("✓ 模型加载完成")
     
@@ -372,7 +399,14 @@ class StickinessEvaluator:
         self.logger.info(f"评估 {n} 个文本块的黏连度")
         
         # Step 1: 计算token数量（通过 PerplexityCalculator 封装，兼容 vLLM / 本地两种模式）
-        token_nums = [self.ppl_calc.get_token_num(chunk) for chunk in chunks]
+        # vLLM 模式下 get_token_num 也是 HTTP 调用，并发以加速；本地模式 max_workers=1 退化为串行
+        token_nums = parallel_map(
+            self.ppl_calc.get_token_num,
+            chunks,
+            max_workers=self.config.max_workers if self.config.use_vllm else 1,
+            desc="token 计数",
+            show_progress=False,
+        )
         
         # Step 2: 构建完全图
         self.logger.info("构建完全图...")
