@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from threading import Lock
@@ -10,6 +11,8 @@ import requests
 from tqdm.auto import tqdm
 
 from public_method.evaluation._parallel import parallel_map
+
+_LOGGER = logging.getLogger("llm_judge")
 
 
 PROMPT_VERSION = "answer_equivalence_v1"
@@ -338,6 +341,7 @@ def evaluate_answer_equivalence(
         max_workers=max_workers,
         desc="LLM judge",
         show_progress=show_progress,
+        logger=_LOGGER,
     )
 
     correct_count = sum(int(item["score"]) for item in details)

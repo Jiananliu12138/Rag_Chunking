@@ -158,29 +158,19 @@ class PerplexityCalculator:
 
         return perplexity, shift_labels.shape[1]
 
-    def get_token_num(self, text: str) -> int:
-        """
-        获取文本的 token 数：
-        - use_vllm=True 时，使用 vLLM 的 tokenizer（通过 logprobs 的长度间接获得）
-        - 否则使用本地 tokenizer.encode
-        """
-        if self.use_vllm:
-            if self.vllm_client is None:
-                raise RuntimeError("vLLM 客户端未初始化")
-            logprobs = self.vllm_client._get_token_logprobs(text)
-            return len(logprobs)
-
-        if self.tokenizer is None:
-            raise RuntimeError("本地 tokenizer 未初始化")
-        return int(self.tokenizer.encode(text, return_tensors='pt').shape[1])
-
 
 class GraphBuilder:
     """图构建器"""
 
-    def __init__(self, ppl_calculator: PerplexityCalculator, max_workers: int = 1):
+    def __init__(
+        self,
+        ppl_calculator: PerplexityCalculator,
+        max_workers: int = 1,
+        logger: Optional[logging.Logger] = None,
+    ):
         self.ppl_calc = ppl_calculator
         self.max_workers = max(1, int(max_workers))
+        self.logger = logger
 
     def create_complete_graph(self, chunks: List[str]) -> Dict[int, Dict[int, float]]:
         """
@@ -213,6 +203,7 @@ class GraphBuilder:
             tasks,
             max_workers=self.max_workers,
             desc=f"完全图 ppl ({n}x{n})",
+            logger=self.logger,
         )
 
         for i, j, value in results:
@@ -237,13 +228,12 @@ class GraphBuilder:
     def create_normalized_graph(
         self,
         complete_graph: Dict,
-        token_nums: List[int],
         delta: float = 0.0,
         score_temperature: float = 6.0
     ) -> Dict[int, Dict[int, float]]:
         """
         创建归一化图 (Graph_3)
-        边权重考虑token长度归一化和位置距离惩罚
+        边权重考虑 BC 分数和位置距离惩罚
         """
         n = len(complete_graph)
         graph = {i: {} for i in range(n)}
@@ -366,7 +356,11 @@ class StickinessEvaluator:
                 use_vllm=True,
             )
             # 仅 vLLM 模式启用并发，本地 GPU 推理不适合多线程争抢同一模型
-            self.graph_builder = GraphBuilder(self.ppl_calc, max_workers=self.config.max_workers)
+            self.graph_builder = GraphBuilder(
+                self.ppl_calc,
+                max_workers=self.config.max_workers,
+                logger=self.logger,
+            )
             self.logger.info(
                 f"✓ vLLM 困惑度客户端初始化完成 (max_workers={self.config.max_workers}, timeout={self.config.request_timeout}s)"
             )
@@ -389,7 +383,7 @@ class StickinessEvaluator:
                 vllm_client=None,
                 use_vllm=False,
             )
-            self.graph_builder = GraphBuilder(self.ppl_calc, max_workers=1)
+            self.graph_builder = GraphBuilder(self.ppl_calc, max_workers=1, logger=self.logger)
 
             self.logger.info("✓ 模型加载完成")
     
@@ -397,26 +391,15 @@ class StickinessEvaluator:
         """评估文本块列表的黏连度"""
         n = len(chunks)
         self.logger.info(f"评估 {n} 个文本块的黏连度")
-        
-        # Step 1: 计算token数量（通过 PerplexityCalculator 封装，兼容 vLLM / 本地两种模式）
-        # vLLM 模式下 get_token_num 也是 HTTP 调用，并发以加速；本地模式 max_workers=1 退化为串行
-        token_nums = parallel_map(
-            self.ppl_calc.get_token_num,
-            chunks,
-            max_workers=self.config.max_workers if self.config.use_vllm else 1,
-            desc="token 计数",
-            show_progress=False,
-        )
-        
-        # Step 2: 构建完全图
+
+        # Step 1: 构建完全图
         self.logger.info("构建完全图...")
         graph_complete = self.graph_builder.create_complete_graph(chunks)
-        
-        # Step 3: 构建归一化图
+
+        # Step 2: 构建归一化图
         self.logger.info("构建归一化图...")
         graph_normalized = self.graph_builder.create_normalized_graph(
             graph_complete,
-            token_nums,
             self.config.delta,
             self.config.score_temperature,
         )

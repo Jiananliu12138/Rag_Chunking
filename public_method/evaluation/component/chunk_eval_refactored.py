@@ -467,6 +467,7 @@ class ChunkEvaluator:
                 max_workers=workers,
                 desc="边界清晰度",
                 show_progress=show_progress,
+                logger=self.logger,
             )
             for idx, value in bc_results:
                 bc_values[idx] = value
