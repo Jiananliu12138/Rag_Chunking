@@ -7,7 +7,9 @@ RAGAS 端到端评估器 (简化版)
 """
 
 import json
+import logging
 import os
+import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -28,6 +30,41 @@ from ragas.run_config import RunConfig
 
 from public_method.models.factory import get_ragas_embeddings
 
+_LOGGER = logging.getLogger("ragas_eval")
+
+
+def _ensure_logger_visible(logger: logging.Logger) -> None:
+    """确保 ``logger`` 的 INFO 至少能落到一个 handler。
+
+    场景区分：
+    - 在 server 进程里跑：root logger 已经被 ``setup_logging`` 配过 stdout
+      handler，这里向上找祖先就会命中，什么都不做。
+    - 直接 ``python eval_ragas.py`` 或在未初始化 logging 的脚本里跑：root
+      默认 WARNING + 无 handler，``_LOGGER.info`` 会被吞掉。这种情况给
+      ``logger`` 自己挂一个 stdout StreamHandler，并把 propagate 关掉避
+      免双倍输出。
+    """
+    cur: Optional[logging.Logger] = logger
+    has_handler = False
+    while cur is not None:
+        if cur.handlers:
+            has_handler = True
+            break
+        if not cur.propagate:
+            break
+        cur = cur.parent
+
+    if not has_handler:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s - %(message)s")
+        )
+        logger.addHandler(handler)
+        logger.propagate = False
+
+    if logger.level == logging.NOTSET or logger.level > logging.INFO:
+        logger.setLevel(logging.INFO)
+
 
 def _is_nan(value):
     """检查值是否为 NaN"""
@@ -36,6 +73,65 @@ def _is_nan(value):
         return math.isnan(value)
     except (TypeError, ValueError):
         return False
+
+
+class _LoggerProgressBar:
+    """伪装成 tqdm 的进度对象，把 update() 转成 logger 输出。
+
+    用途：注入到 ``ragas.evaluate(_pbar=...)``，让 RAGAS 内部 Executor
+    在每个 (metric, sample) 任务完成时调用 ``self.update(1)``。在没有 tty
+    的 server 进程里 tqdm 写到 stderr 是看不到的，这里改成走 logger 走
+    stdout，每 ~5% 打一行 ``[RAGAS] 进度 X/total``，和 CS 的格式对齐。
+    """
+
+    def __init__(
+        self,
+        total: int,
+        logger: logging.Logger,
+        label: str = "RAGAS",
+        log_every: Optional[int] = None,
+    ) -> None:
+        self.total = max(int(total), 0)
+        self.n = 0
+        self._logger = logger
+        self._label = label
+        self._log_every = int(log_every) if log_every else max(1, self.total // 20)
+        _ensure_logger_visible(self._logger)
+        self._logger.info("%s 启动: total=%d", self._label, self.total)
+
+    def update(self, n: int = 1) -> None:
+        if n <= 0:
+            return
+        self.n += int(n)
+        if self.total and (self.n >= self.total or self.n % self._log_every == 0):
+            done = min(self.n, self.total)
+            self._logger.info("%s 进度 %d/%d", self._label, done, self.total)
+
+    def close(self) -> None:
+        if self.total and self.n < self.total:
+            self._logger.info(
+                "%s 收尾 %d/%d", self._label, self.n, self.total
+            )
+
+    def refresh(self) -> None:  # noqa: D401 - tqdm 兼容方法
+        pass
+
+    def reset(self, total: Optional[int] = None) -> None:
+        if total is not None:
+            self.total = int(total)
+        self.n = 0
+
+    def set_description(self, *args, **kwargs) -> None:  # noqa: D401
+        pass
+
+    def set_postfix(self, *args, **kwargs) -> None:  # noqa: D401
+        pass
+
+    def __enter__(self) -> "_LoggerProgressBar":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
 
 
 class RAGASEvaluator:
@@ -152,16 +248,7 @@ class RAGASEvaluator:
             raise ValueError(f"数据集各字段长度不一致: {dict(zip(required_keys, lengths))}")
         
         n_samples = lengths[0]
-        print(f"\n{'='*70}")
-        print(f"🚀 RAGAS 评估")
-        print(f"{'='*70}")
-        print(f"样本数: {n_samples}")
-        print(f"评估指标: Faithfulness, Answer Relevancy, Context Recall, Context Precision, Context Entity Recall, Noise Sensitivity (Relevant), Noise Sensitivity (Irrelevant)")
-        print(f"{'='*70}\n")
-        
-        # 创建 HuggingFace Dataset
-        eval_dataset = Dataset.from_dict(dataset)
-        
+
         # 默认使用全部指标
         if metrics is None:
             metrics = [
@@ -173,7 +260,26 @@ class RAGASEvaluator:
                 NoiseSensitivity(mode="relevant"),    # 噪声敏感性（相关模式）
                 NoiseSensitivity(mode="irrelevant"),  # 噪声敏感性（不相关模式）
             ]
-        
+
+        print(f"\n{'='*70}")
+        print(f"🚀 RAGAS 评估")
+        print(f"{'='*70}")
+        print(f"样本数: {n_samples}")
+        print(f"评估指标: Faithfulness, Answer Relevancy, Context Recall, Context Precision, Context Entity Recall, Noise Sensitivity (Relevant), Noise Sensitivity (Irrelevant)")
+        print(f"{'='*70}\n")
+
+        # 创建 HuggingFace Dataset
+        eval_dataset = Dataset.from_dict(dataset)
+
+        # 注入伪 tqdm，让 RAGAS Executor 的进度走 logger（server 环境下 stderr 上的真 tqdm 看不见）
+        # RAGAS 每个 (metric, sample) 是一个 executor.submit，因此 total = n_samples * len(metrics)
+        total_units = n_samples * len(metrics)
+        progress_bar = _LoggerProgressBar(
+            total=total_units,
+            logger=_LOGGER,
+            label="RAGAS",
+        )
+
         # 执行评估
         print("开始评估...")
         eval_results = evaluate(
@@ -182,6 +288,7 @@ class RAGASEvaluator:
             llm=self.eval_llm,
             embeddings=self.eval_embeddings,
             run_config=self.run_config,
+            _pbar=progress_bar,
         )
         
         # 转换为 DataFrame
