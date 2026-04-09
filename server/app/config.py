@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     MILVUS_DATA_DIR: str = "/data/h50056789/Rag_Chunking/test_database"
     MILVUS_URI: str = ""
     TIKTOKEN_CACHE_DIR: str = "/data/h50056789/Rag_Chunking/tiktoken_cache"
-    CHUNK_NUM_WORKERS: int = 4
+    CHUNK_NUM_WORKERS: int = 4  # 分块任务的进程池 worker 数（multiprocessing）
 
     # Embedding defaults
     DEFAULT_EMBEDDING_MODEL: str = "/data/h50056789/Rag_Chunking/model/BAAI/bge-m3"
@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     DEFAULT_RERANK_MODEL: str = "/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3"
     DEFAULT_RERANK_DEVICE: str = "cuda:0"
     DEFAULT_RERANK_MAX_LENGTH: int | None = 8192
+
+    # 检索生成（rag_generate_file）的线程池 worker 数（ThreadPoolExecutor, IO 密集型）
+    RETRIEVAL_GENERATION_WORKERS: int = 4
 
     # Milvus / hybrid search
     MILVUS_ENABLE_SPARSE: bool = True
@@ -76,10 +79,10 @@ class Settings(BaseSettings):
     STICKINESS_DELTA: float = 0.05
     STICKINESS_SCORE_TEMPERATURE: float = 6.0
 
-    # Evaluation parallelism (vLLM 默认 max-num-seqs=256，并发空间充足)
-    EVAL_PARALLEL_WORKERS: int = 16
+    # 评估并行（ThreadPoolExecutor, IO 密集型; vLLM 默认 max-num-seqs=256，并发空间充足）
+    EVAL_PARALLEL_WORKERS: int = 16  # 分块评估BC，CS，传统评估（LLM-Judge）线程池 worker 数
     EVAL_HTTP_TIMEOUT: int = 600
-    RAGAS_MAX_WORKERS: int = 16
+    RAGAS_MAX_WORKERS: int = 16  # RAGAS 评估的 asyncio 并发 worker 数 协程
 
     # Testset generation defaults
     TESTSET_LLM_BASE_URL: str = ""
@@ -89,7 +92,7 @@ class Settings(BaseSettings):
     TESTSET_LLM_TIMEOUT: int = 3600
     TESTSET_EMBEDDING_MODEL_PATH: str = ""
     TESTSET_EMBEDDING_DEVICE: str = ""
-    TESTSET_MAX_WORKERS: int = 18
+    TESTSET_MAX_WORKERS: int = 18  # RAGAS testset 生成的 asyncio 并发 worker 数 协程
     TESTSET_MAX_RETRIES: int = 3
     TESTSET_MAX_WAIT_SECONDS: int = 3600
     TESTSET_RUN_TIMEOUT_SECONDS: int = 3600

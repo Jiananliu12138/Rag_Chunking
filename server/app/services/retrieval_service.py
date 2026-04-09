@@ -4,6 +4,7 @@
 """
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
 from tqdm import tqdm
@@ -630,113 +631,139 @@ class RetrievalService:
                 return row.get("reference")
             return row.get("answer")
 
-        with tqdm(total=len(lines), desc="检索+生成", unit="问题") as pbar:
-            for row_idx, line in enumerate(lines, start=1):
-                line = line.strip()
-                if not line:
-                    pbar.update(1)
-                    continue
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError as e:
-                    logger.warning("跳过非法 JSON 行: %s", e)
-                    total_failed += 1
-                    pbar.update(1)
-                    continue
+        # 预解析所有行
+        parsed_items: list[tuple[int, dict]] = []
+        for row_idx, line in enumerate(lines, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError as e:
+                logger.warning("跳过非法 JSON 行: %s", e)
+                total_failed += 1
+                continue
+            query = data.get("user_input") or data.get("input") or data.get("query") or ""
+            if not query:
+                logger.warning("跳过无 input/query 的行 (auto_id=%s)", row_idx)
+                total_failed += 1
+                continue
+            parsed_items.append((row_idx, data))
 
-                query = data.get("user_input") or data.get("input") or data.get("query") or ""
-                if not query:
-                    logger.warning("跳过无 input/query 的行 (auto_id=%s)", row_idx)
-                    total_failed += 1
-                    pbar.update(1)
-                    continue
+        def _process_one(auto_id: int, data: dict) -> dict:
+            """处理单条：search → rerank → LLM，线程安全。"""
+            query = data.get("user_input") or data.get("input") or data.get("query") or ""
+            self._warn_on_overlong_embedding_query(
+                query=query,
+                embed_model=embed_model,
+                embedding_max_tokens=embedding_max_tokens,
+                operation=f"rag_generate_file:auto_id={auto_id}",
+                collection_name=request.collection_name,
+            )
+            raw_results = self._repo.search(
+                collection_name=request.collection_name,
+                query=query,
+                langchain_embed=embed_model,
+                embed_dim=embed_dim,
+                top_k=retrieve_top_k,
+                use_hybrid_search=request.use_hybrid_search,
+            )
+            context_items = self._to_search_result_items(raw_results)
+            if request.rerank_enabled:
+                context_items = self._rerank_items_cross_encoder(
+                    query=query,
+                    context_items=context_items,
+                    model_path=rerank_model_path,
+                    device=rerank_device,
+                    max_length=rerank_max_length,
+                    final_top_k=final_top_k,
+                    operation=f"rag_generate_file:auto_id={auto_id}",
+                    collection_name=request.collection_name,
+                )
+            else:
+                context_items = context_items[:final_top_k]
+            context_texts = [item.text for item in context_items]
+            context_str = "\n\n".join(context_texts)
+            rag_retrieval = [
+                {
+                    "text": item.text,
+                    "retrieval_score": item.retrieval_score,
+                    "rerank_score": item.rerank_score,
+                    "filepath": item.filepath,
+                    "doc_id": item.doc_id,
+                    "chunk_id": item.chunk_id,
+                }
+                for item in context_items
+            ]
+            reference_contexts = data.get("reference_contexts")
+            if isinstance(reference_contexts, list):
+                gold_reference_contexts = [str(x) for x in reference_contexts]
+            elif reference_contexts is None:
+                gold_reference_contexts = []
+            else:
+                gold_reference_contexts = [str(reference_contexts)]
+            gold_reference_meta = _flatten_reference_meta(data.get("meta"))
+            gold_reference = _build_gold_reference_items(
+                gold_reference_contexts,
+                gold_reference_meta,
+            )
+            prompt = self._build_llm_prompt(context_str, query)
+            llm_ans = self._call_vllm(
+                prompt=prompt,
+                api_base=llm_api_base,
+                model_name=llm_model_name,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
+            )
+            source_question_id = data.get("question_id")
+            source_record_id = data.get("_id")
+            return {
+                "_id": source_record_id if source_record_id is not None else (source_question_id if source_question_id is not None else auto_id),
+                "question_id": source_question_id if source_question_id is not None else auto_id,
+                "input": query,
+                "llm_ans": llm_ans,
+                "answer": _normalize_answer_field(data),
+                "rag_retrieval": rag_retrieval,
+                "gold_reference": gold_reference,
+                "generation_api_base": llm_api_base,
+                "generation_model_name": llm_model_name,
+            }
 
-                try:
-                    auto_id = row_idx
-                    pbar.set_postfix(
-                        {"ID": auto_id, "Query": query[:10] + "..." if len(query) > 30 else query}
-                    )
-                    self._warn_on_overlong_embedding_query(
-                        query=query,
-                        embed_model=embed_model,
-                        embedding_max_tokens=embedding_max_tokens,
-                        operation=f"rag_generate_file:auto_id={auto_id}",
-                        collection_name=request.collection_name,
-                    )
-                    raw_results = self._repo.search(
-                        collection_name=request.collection_name,
-                        query=query,
-                        langchain_embed=embed_model,
-                        embed_dim=embed_dim,
-                        top_k=retrieve_top_k,
-                        use_hybrid_search=request.use_hybrid_search,
-                    )
-                    # 与在线 RAG 接口保持一致：既保留纯文本，也保留带 metadata 的完整结果
-                    context_items = self._to_search_result_items(raw_results)
-                    if request.rerank_enabled:
-                        context_items = self._rerank_items_cross_encoder(
-                            query=query,
-                            context_items=context_items,
-                            model_path=rerank_model_path,
-                            device=rerank_device,
-                            max_length=rerank_max_length,
-                            final_top_k=final_top_k,
-                            operation=f"rag_generate_file:auto_id={auto_id}",
-                            collection_name=request.collection_name,
-                        )
-                    else:
-                        context_items = context_items[:final_top_k]
-                    context_texts = [item.text for item in context_items]
-                    context_str = "\n\n".join(context_texts)
-                    rag_retrieval = [
-                        {
-                            "text": item.text,
-                            "retrieval_score": item.retrieval_score,
-                            "rerank_score": item.rerank_score,
-                            "filepath": item.filepath,
-                            "doc_id": item.doc_id,
-                            "chunk_id": item.chunk_id,
-                        }
-                        for item in context_items
-                    ]
-                    reference_contexts = data.get("reference_contexts")
-                    if isinstance(reference_contexts, list):
-                        gold_reference_contexts = [str(x) for x in reference_contexts]
-                    elif reference_contexts is None:
-                        gold_reference_contexts = []
-                    else:
-                        gold_reference_contexts = [str(reference_contexts)]
-                    gold_reference_meta = _flatten_reference_meta(data.get("meta"))
-                    gold_reference = _build_gold_reference_items(
-                        gold_reference_contexts,
-                        gold_reference_meta,
-                    )
-                    prompt = self._build_llm_prompt(context_str, query)
-                    llm_ans = self._call_vllm(
-                        prompt=prompt,
-                        api_base=llm_api_base,
-                        model_name=llm_model_name,
-                        temperature=temperature,
-                        max_new_tokens=max_new_tokens,
-                    )
-                    source_question_id = data.get("question_id")
-                    source_record_id = data.get("_id")
-                    save = {
-                        "_id": source_record_id if source_record_id is not None else (source_question_id if source_question_id is not None else auto_id),
-                        "question_id": source_question_id if source_question_id is not None else auto_id,
-                        "input": query,
-                        "llm_ans": llm_ans,
-                        "answer": _normalize_answer_field(data),
-                        "rag_retrieval": rag_retrieval,
-                        "gold_reference": gold_reference,
-                        "generation_api_base": llm_api_base,
-                        "generation_model_name": llm_model_name,
-                    }
-                    retrieval_save_list.append(save)
-                except Exception as e:
-                    logger.exception("处理单条失败 (auto_id=%s): %s", row_idx, e)
-                    total_failed += 1
-                pbar.update(1)
+        req_workers = getattr(request, "max_workers", None)
+        max_workers = req_workers if req_workers and req_workers > 0 else settings.RETRIEVAL_GENERATION_WORKERS
+        if max_workers > 1:
+            logger.info("并行检索+生成: %d 条, max_workers=%d", len(parsed_items), max_workers)
+
+        with tqdm(total=len(parsed_items), desc="检索+生成", unit="问题") as pbar:
+            if max_workers <= 1:
+                # 串行模式（向后兼容）
+                for auto_id, data in parsed_items:
+                    try:
+                        save = _process_one(auto_id, data)
+                        retrieval_save_list.append(save)
+                    except Exception as e:
+                        logger.exception("处理单条失败 (auto_id=%s): %s", auto_id, e)
+                        total_failed += 1
+                    pbar.update(1)
+            else:
+                # 并行模式
+                futures_map = {}
+                with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="rag") as executor:
+                    for auto_id, data in parsed_items:
+                        fut = executor.submit(_process_one, auto_id, data)
+                        futures_map[fut] = auto_id
+
+                    for fut in as_completed(futures_map):
+                        auto_id = futures_map[fut]
+                        try:
+                            save = fut.result()
+                            retrieval_save_list.append(save)
+                        except Exception as e:
+                            logger.exception("处理单条失败 (auto_id=%s): %s", auto_id, e)
+                            total_failed += 1
+                        pbar.update(1)
+                # 按 question_id 排序保持顺序
+                retrieval_save_list.sort(key=lambda x: x.get("question_id", 0))
 
         out_dir = os.path.dirname(request.output_path)
         if out_dir:

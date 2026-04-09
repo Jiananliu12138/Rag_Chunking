@@ -254,6 +254,12 @@ class RAGGenerateFileRequest(BaseModel):
     llm_model_name: Optional[str] = Field(None, description="LLM 模型名，空则从配置读取")
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0, description="生成温度，空则从配置读取")
     max_new_tokens: Optional[int] = Field(None, ge=64, description="最大生成 token 数，空则从配置读取")
+    max_workers: Optional[int] = Field(
+        None,
+        ge=1,
+        le=32,
+        description="并行工作线程数。未指定时使用 RAG_FILE_MAX_WORKERS 配置（默认 4）。",
+    )
 
 
 class RAGGenerateFileResult(BaseModel):
