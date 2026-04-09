@@ -81,6 +81,19 @@ class Settings(BaseSettings):
     EVAL_HTTP_TIMEOUT: int = 600
     RAGAS_MAX_WORKERS: int = 16
 
+    # Testset generation defaults
+    TESTSET_LLM_BASE_URL: str = ""
+    TESTSET_LLM_API_KEY: str = ""
+    TESTSET_LLM_MODEL: str = ""
+    TESTSET_LLM_MAX_TOKENS: int = 2048
+    TESTSET_LLM_TIMEOUT: int = 3600
+    TESTSET_EMBEDDING_MODEL_PATH: str = ""
+    TESTSET_EMBEDDING_DEVICE: str = ""
+    TESTSET_MAX_WORKERS: int = 18
+    TESTSET_MAX_RETRIES: int = 3
+    TESTSET_MAX_WAIT_SECONDS: int = 3600
+    TESTSET_RUN_TIMEOUT_SECONDS: int = 3600
+
     @property
     def python_paths(self) -> list[str]:
         return [str(BASE_DIR)]

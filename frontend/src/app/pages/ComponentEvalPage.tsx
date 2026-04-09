@@ -1537,76 +1537,74 @@ export default function ComponentEvalPage() {
               </div>
 
               {/* Parameter Control Panel */}
-              {stickinessResult && (
-                <Card className="p-6">
-                  <h2 className="font-bold mb-4">Parameter Control</h2>
-                  <p className="text-sm text-slate-600 mb-4">
-                    Adjust parameters to see their impact on graph structure and entropy
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label>Threshold</Label>
-                        <span className="text-sm font-mono text-slate-600">{threshold[0].toFixed(2)}</span>
-                      </div>
-                      <Slider
-                        value={threshold}
-                        onValueChange={setThreshold}
-                        min={0.5}
-                        max={1}
-                        step={0.01}
-                        disabled={loading}
-                      />
-                      <p className="text-xs text-slate-500">Controls which edges are considered "strong correlation"</p>
+              <Card className="p-6">
+                <h2 className="font-bold mb-4">Parameter Control</h2>
+                <p className="text-sm text-slate-600 mb-4">
+                  Set CS evaluation parameters before running. After results load, the visualization threshold updates the charts immediately.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Threshold</Label>
+                      <span className="text-sm font-mono text-slate-600">{threshold[0].toFixed(2)}</span>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label>Delta (Position Penalty)</Label>
-                        <span className="text-sm font-mono text-slate-600">{delta[0].toFixed(2)}</span>
-                      </div>
-                      <Slider
-                        value={delta}
-                        onValueChange={setDelta}
-                        min={0}
-                        max={0.2}
-                        step={0.01}
-                        disabled={loading}
-                      />
-                      <p className="text-xs text-slate-500">Higher values favor adjacent chunks</p>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label>BC Temperature</Label>
-                        <span className="text-sm font-mono text-slate-600">{scoreTemperature[0].toFixed(1)}</span>
-                      </div>
-                      <Slider
-                        value={scoreTemperature}
-                        onValueChange={setScoreTemperature}
-                        min={0}
-                        max={12}
-                        step={0.5}
-                        disabled={loading}
-                      />
-                      <p className="text-xs text-slate-500">Higher values stretch the high-score region of BC mapping</p>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label>Visualization Threshold</Label>
-                        <span className="text-sm font-mono text-slate-600">{similarityThreshold[0].toFixed(2)}</span>
-                      </div>
-                      <Slider
-                        value={similarityThreshold}
-                        onValueChange={setSimilarityThreshold}
-                        min={0.5}
-                        max={1}
-                        step={0.01}
-                        disabled={loading}
-                      />
-                      <p className="text-xs text-slate-500">Only show graph edges with similarity above this value</p>
-                    </div>
+                    <Slider
+                      value={threshold}
+                      onValueChange={setThreshold}
+                      min={0.5}
+                      max={1}
+                      step={0.01}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-slate-500">Controls which edges are considered "strong correlation"</p>
                   </div>
-                </Card>
-              )}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Delta (Position Penalty)</Label>
+                      <span className="text-sm font-mono text-slate-600">{delta[0].toFixed(2)}</span>
+                    </div>
+                    <Slider
+                      value={delta}
+                      onValueChange={setDelta}
+                      min={0}
+                      max={0.2}
+                      step={0.01}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-slate-500">Higher values favor adjacent chunks</p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>BC Temperature</Label>
+                      <span className="text-sm font-mono text-slate-600">{scoreTemperature[0].toFixed(1)}</span>
+                    </div>
+                    <Slider
+                      value={scoreTemperature}
+                      onValueChange={setScoreTemperature}
+                      min={0}
+                      max={12}
+                      step={0.5}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-slate-500">Higher values stretch the high-score region of BC mapping</p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Visualization Threshold</Label>
+                      <span className="text-sm font-mono text-slate-600">{similarityThreshold[0].toFixed(2)}</span>
+                    </div>
+                    <Slider
+                      value={similarityThreshold}
+                      onValueChange={setSimilarityThreshold}
+                      min={0.5}
+                      max={1}
+                      step={0.01}
+                      disabled={loading}
+                    />
+                    <p className="text-xs text-slate-500">Only show graph edges with similarity above this value</p>
+                  </div>
+                </div>
+              </Card>
 
               {/* Results */}
               {loading ? (
