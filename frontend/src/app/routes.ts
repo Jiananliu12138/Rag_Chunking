@@ -5,6 +5,7 @@ import IndexPage from "./pages/IndexPage";
 import EvalPage from "./pages/EvalPage";
 import ComponentEvalPage from "./pages/ComponentEvalPage";
 import RetrievalPage from "./pages/RetrievalPage";
+import TestsetPage from "./pages/TestsetPage";
 import Layout from "./components/Layout";
 
 export const router = createBrowserRouter([
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "chunking", Component: ChunkingPage },
       { path: "index", Component: IndexPage },
       { path: "retrieval", Component: RetrievalPage },
+      { path: "testset", Component: TestsetPage },
       { path: "eval", Component: EvalPage },
       { path: "component-eval", Component: ComponentEvalPage },
     ],

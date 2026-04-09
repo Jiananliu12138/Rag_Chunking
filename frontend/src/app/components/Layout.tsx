@@ -1,14 +1,15 @@
 import { Outlet, Link, useLocation } from 'react-router';
-import { 
-  FileText, 
-  Database, 
-  Search, 
-  BarChart3, 
+import {
+  FileText,
+  Database,
+  Search,
+  BarChart3,
   Cpu,
   MessageSquare,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FlaskConical
 } from 'lucide-react';
 import { cn } from './ui/utils';
 import { useState } from 'react';
@@ -19,6 +20,7 @@ const navItems = [
   { path: '/chunking', label: 'Chunking', icon: FileText },
   { path: '/index', label: 'Index', icon: Database },
   { path: '/retrieval', label: 'Retrieval', icon: Search },
+  { path: '/testset', label: 'Testset Gen', icon: FlaskConical },
   { path: '/eval', label: 'End-to-End Eval', icon: BarChart3 },
   {
     path: '/component-eval',

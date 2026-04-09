@@ -167,6 +167,17 @@ export const api = {
     body: JSON.stringify(data),
   }),
 
+  // Testset generation
+  generateTestset: (data: any) => fetchApi('/testset/generate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  generateTestsetFile: (data: any) => fetchApi('/testset/generate-file', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  getTestsetTaskStatus: (taskId: string) => fetchApi(`/testset/tasks/${taskId}`),
+
   // Filesystem browser
   browseFiles: (path?: string) => {
     const params = path ? `?path=${encodeURIComponent(path)}` : '';
