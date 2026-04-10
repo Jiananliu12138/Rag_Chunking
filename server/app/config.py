@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     DEFAULT_EMBEDDING_DEVICE: str = "cuda:0"
     DEFAULT_EMBEDDING_DIM: int = 1024
     DEFAULT_EMBEDDING_MAX_TOKENS: int | None = 8192
+    DEFAULT_EMBEDDING_BASE: str = "http://localhost:8003/v1"
+    DEFAULT_EMBEDDING_NAME: str = "BAAI/bge-m3"
 
     # Shared model defaults
     DEFAULT_LLM_API_BASE: str = "http://localhost:8001/v1"
@@ -92,7 +94,7 @@ class Settings(BaseSettings):
     TESTSET_LLM_TIMEOUT: int = 3600
     TESTSET_EMBEDDING_MODEL_PATH: str = ""
     TESTSET_EMBEDDING_DEVICE: str = ""
-    TESTSET_MAX_WORKERS: int = 18  # RAGAS testset 生成的 asyncio 并发 worker 数 协程
+    TESTSET_MAX_WORKERS: int = 18  # RAGAS testset 生成的 asyncio 并发 worker 数协程
     TESTSET_MAX_RETRIES: int = 3
     TESTSET_MAX_WAIT_SECONDS: int = 3600
     TESTSET_RUN_TIMEOUT_SECONDS: int = 3600

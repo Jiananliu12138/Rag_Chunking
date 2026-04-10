@@ -17,7 +17,7 @@ import {
 } from '../components/ui/select';
 import { Loader2, FileText, Type, Scissors, X, Eraser } from 'lucide-react';
 import { api } from '../utils/api';
-import { DEFAULT_EMBEDDING_MODEL_PATH, DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL_NAME } from '../utils/runtimeDefaults';
+import { DEFAULT_EMBEDDING_MODEL_PATH, DEFAULT_EMBEDDING_BASE, DEFAULT_EMBEDDING_NAME, DEFAULT_LLM_API_BASE, DEFAULT_LLM_MODEL_NAME } from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
 import { PathPickerButton } from '../components/PathPickerButton';
 
@@ -36,12 +36,14 @@ export default function ChunkingPage() {
   const [inputText, setInputText] = useState('');
   const [textChunks, setTextChunks] = useState<string[][]>([]);
   const [textParams, setTextParams] = useState<any>({ chunk_size: 512, chunk_overlap: 50 });
+  const [textNumWorkers, setTextNumWorkers] = useState<number>(4);
 
   // File chunking state
   const [inputPath, setInputPath] = useState('');
   const [outputDir, setOutputDir] = useState('');
   const [fileResult, setFileResult] = useState<any>(null);
   const [fileParams, setFileParams] = useState<any>({ chunk_size: 512, chunk_overlap: 50 });
+  const [fileNumWorkers, setFileNumWorkers] = useState<number>(4);
 
   useEffect(() => {
     loadMethods();
@@ -82,6 +84,7 @@ export default function ChunkingPage() {
       const data: any = {
         method: selectedMethod,
         text: inputText,
+        num_workers: textNumWorkers,
       };
 
       // Add method-specific params
@@ -119,6 +122,7 @@ export default function ChunkingPage() {
         method: selectedMethod,
         input_file: inputPath,  // Backend expects input_file, not input_path
         output_dir: outputDir,
+        num_workers: fileNumWorkers,
       };
 
       // Add method-specific params
@@ -146,10 +150,32 @@ export default function ChunkingPage() {
 
   const selectedMethodData = methods.find(m => m.name === selectedMethod);
 
+  const parallelStrategyLabel: Record<string, string> = {
+    token: 'ProcessPool — CPU-bound',
+    semantic: 'ThreadPool — IO-bound (vLLM API)',
+    llamaindex: 'ProcessPool — CPU-bound',
+    lumber: 'ThreadPool — IO-bound (LLM API)',
+  };
+
   // Render params based on selected method
-  const renderParams = (params: any, setParams: (p: any) => void) => {
+  const renderParams = (params: any, setParams: (p: any) => void, numWorkers: number, setNumWorkers: (n: number) => void) => {
     return (
       <>
+        {/* Workers — shared across all methods */}
+        <div>
+          <div className="flex items-center gap-2">
+            <Label>Num Workers</Label>
+            <span className="text-xs text-slate-400">{parallelStrategyLabel[selectedMethod] || 'ProcessPool'}</span>
+          </div>
+          <Input
+            type="number"
+            min={1}
+            max={32}
+            value={numWorkers}
+            onChange={(e) => setNumWorkers(Math.max(1, parseInt(e.target.value) || 1))}
+          />
+        </div>
+
         {/* Token method params */}
         {selectedMethod === 'token' && (
           <>
@@ -211,12 +237,21 @@ export default function ChunkingPage() {
         {selectedMethod === 'semantic' && (
           <>
             <div>
-              <Label>Embed Model Path (Optional)</Label>
+              <Label>Embed API Base (Optional)</Label>
               <Input
-                value={params.embed_model_path || ''}
-                onChange={(e) => setParams({ ...params, embed_model_path: e.target.value })}
-                onKeyDown={tabFill((value) => setParams({ ...params, embed_model_path: value }))}
-                placeholder={DEFAULT_EMBEDDING_MODEL_PATH}
+                value={params.embed_api_base || ''}
+                onChange={(e) => setParams({ ...params, embed_api_base: e.target.value })}
+                onKeyDown={tabFill((value) => setParams({ ...params, embed_api_base: value }))}
+                placeholder={DEFAULT_EMBEDDING_BASE}
+              />
+            </div>
+            <div>
+              <Label>Embed Model Name (Optional)</Label>
+              <Input
+                value={params.embed_model_name || ''}
+                onChange={(e) => setParams({ ...params, embed_model_name: e.target.value })}
+                onKeyDown={tabFill((value) => setParams({ ...params, embed_model_name: value }))}
+                placeholder={DEFAULT_EMBEDDING_NAME}
               />
             </div>
             <div>
@@ -374,7 +409,7 @@ export default function ChunkingPage() {
                     )}
                   </div>
 
-                  {renderParams(textParams, setTextParams)}
+                  {renderParams(textParams, setTextParams, textNumWorkers, setTextNumWorkers)}
                 </div>
 
                 <Button
@@ -509,7 +544,7 @@ export default function ChunkingPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {renderParams(fileParams, setFileParams)}
+                  {renderParams(fileParams, setFileParams, fileNumWorkers, setFileNumWorkers)}
                 </div>
               </div>
 

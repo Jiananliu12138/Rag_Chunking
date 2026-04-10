@@ -387,6 +387,7 @@ Format 2 - Current Eval Format:
   const [enableLlmJudge, setEnableLlmJudge] = useState(true);
   const [traditionalJudgeApiBase, setTraditionalJudgeApiBase] = useState('');
   const [traditionalJudgeModelName, setTraditionalJudgeModelName] = useState('');
+  const [traditionalMaxWorkers, setTraditionalMaxWorkers] = useState<number>(16);
   const [traditionalResult, setTraditionalResult] = useState<any>(null);
 
   // Traditional Eval - File Input
@@ -408,6 +409,7 @@ Format 2 - Current Eval Format:
   const [vllmApiBase, setVllmApiBase] = useState(DEFAULT_LLM_API_BASE);
   const [vllmModelName, setVllmModelName] = useState(DEFAULT_LLM_MODEL_NAME);
   const [embeddingModelPath, setEmbeddingModelPath] = useState(DEFAULT_EMBEDDING_MODEL_PATH);
+  const [ragasMaxWorkers, setRagasMaxWorkers] = useState<number>(16);
 
   const handleTraditionalEval = async () => {
     if (!testDataJson.trim()) {
@@ -423,6 +425,7 @@ Format 2 - Current Eval Format:
         test: testData,
         enable_bert_score: enableBertScore,
         enable_llm_judge: enableLlmJudge,
+        max_workers: traditionalMaxWorkers,
       };
       if (traditionalJudgeApiBase.trim()) {
         data.vllm_api_base = traditionalJudgeApiBase.trim();
@@ -457,6 +460,7 @@ Format 2 - Current Eval Format:
         input_path: traditionalFilePaths[0],
         enable_bert_score: enableBertScore,
         enable_llm_judge: enableLlmJudge,
+        max_workers: traditionalMaxWorkers,
       };
       if (traditionalOutputPath.trim()) {
         data.output_path = traditionalOutputPath.trim();
@@ -498,6 +502,7 @@ Format 2 - Current Eval Format:
         vllm_api_base: vllmApiBase,
         vllm_model_name: vllmModelName,
         embedding_model_path: embeddingModelPath,
+        max_workers: ragasMaxWorkers,
       });
 
       if (response.success) {
@@ -530,6 +535,7 @@ Format 2 - Current Eval Format:
         vllm_api_base: vllmApiBase,
         vllm_model_name: vllmModelName,
         embedding_model_path: embeddingModelPath,
+        max_workers: ragasMaxWorkers,
       };
 
       const response = await api.ragasEval(data);
@@ -682,6 +688,20 @@ Format 2 - Current Eval Format:
             />
             <p className="mt-1 text-xs text-slate-500">Path to the embedding model for semantic evaluation</p>
           </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <Label>Max Workers</Label>
+              <span className="text-xs text-slate-400">asyncio — IO-bound (RAGAS)</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={64}
+              value={ragasMaxWorkers}
+              onChange={(e) => setRagasMaxWorkers(Math.max(1, parseInt(e.target.value) || 1))}
+              className="mt-1.5"
+            />
+          </div>
         </div>
         <div className="flex justify-end">
           <Button onClick={() => setRagasConfigOpen(false)}>Done</Button>
@@ -779,6 +799,20 @@ Format 2 - Current Eval Format:
                         </p>
                       </div>
                     )}
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm">Max Workers</Label>
+                        <span className="text-xs text-slate-400">ThreadPoolExecutor — IO-bound (LLM Judge)</span>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={64}
+                        value={traditionalMaxWorkers}
+                        onChange={(e) => setTraditionalMaxWorkers(Math.max(1, parseInt(e.target.value) || 1))}
+                      />
+                    </div>
 
                     <Button
                       onClick={handleTraditionalEval}
@@ -943,6 +977,20 @@ Format 2 - Current Eval Format:
                         </p>
                       </div>
                     )}
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm">Max Workers</Label>
+                        <span className="text-xs text-slate-400">ThreadPoolExecutor — IO-bound (LLM Judge)</span>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={64}
+                        value={traditionalMaxWorkers}
+                        onChange={(e) => setTraditionalMaxWorkers(Math.max(1, parseInt(e.target.value) || 1))}
+                      />
+                    </div>
 
                     <Button
                       onClick={handleTraditionalFileEval}

@@ -1,19 +1,19 @@
 import json
 import time
 import os
-import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from threading import RLock
 from tqdm import tqdm
 from llama_index.core.node_parser import SemanticSplitterNodeParser
 from llama_index.core import Document
-
-from public_method.models.factory import get_llamaindex_embedding
+from llama_index.embeddings.openai import OpenAIEmbedding
 
 # 配置
 INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/2wikimqa.jsonl"
 OUTPUT_DIR = "/data/h50056789/Rag_Chunking/Chunk_Result/Semantic_Chunk"
-EMBED_MODEL_PATH = "/data/h50056789/Rag_chunk_bench/model/bge-large-en-v1.5"
+DEFAULT_API_BASE = "http://localhost:8001/v1"
+DEFAULT_MODEL_NAME = "BAAI/bge-m3"
 BUFFER_SIZE = 1
 BREAKPOINT_THRESHOLD = 74
 NUM_WORKERS = 1
@@ -27,22 +27,26 @@ def create_directory(path):
         print(f"Created directory: {path}")
 
 
-def _get_embed_model(embed_model_path=EMBED_MODEL_PATH):
-    return get_llamaindex_embedding(model_path=str(embed_model_path).strip())
+def _get_embed_model(api_base=DEFAULT_API_BASE, model_name=DEFAULT_MODEL_NAME):
+    return OpenAIEmbedding(
+        api_base=str(api_base).strip(),
+        api_key="EMPTY",
+        model_name=str(model_name).strip(),
+    )
 
 
 def init_splitter():
     return init_splitter_with_params()
 
 
-def init_splitter_with_params(embed_model_path=EMBED_MODEL_PATH, buffer_size=BUFFER_SIZE, breakpoint_threshold=BREAKPOINT_THRESHOLD):
-    cache_key = (str(embed_model_path).strip(), int(buffer_size), int(breakpoint_threshold))
+def init_splitter_with_params(embed_api_base=DEFAULT_API_BASE, embed_model_name=DEFAULT_MODEL_NAME, buffer_size=BUFFER_SIZE, breakpoint_threshold=BREAKPOINT_THRESHOLD):
+    cache_key = (str(embed_api_base).strip(), str(embed_model_name).strip(), int(buffer_size), int(breakpoint_threshold))
     with _CACHE_LOCK:
         cached = _SPLITTER_CACHE.get(cache_key)
         if cached is not None:
             return cached
 
-        embed_model = _get_embed_model(embed_model_path)
+        embed_model = _get_embed_model(embed_api_base, embed_model_name)
         splitter = SemanticSplitterNodeParser(
             buffer_size=buffer_size,
             breakpoint_percentile_threshold=breakpoint_threshold,
@@ -94,20 +98,18 @@ def process_line(line_data):
         return None
 
 
-def _process_line_with_params(line_data, embed_model_path, buffer_size, breakpoint_threshold):
-    """
-    模块级函数，用于 multiprocessing，避免 pickle 局部函数的问题。
-    """
+def _process_line_with_params(line_data, embed_api_base, embed_model_name, buffer_size, breakpoint_threshold):
     try:
         data = json.loads(line_data)
         doc_id = data.get('_id', '')
         context = data.get('context', '')
-        
+
         if not context:
             return None
-        
+
         splitter = init_splitter_with_params(
-            embed_model_path=embed_model_path,
+            embed_api_base=embed_api_base,
+            embed_model_name=embed_model_name,
             buffer_size=buffer_size,
             breakpoint_threshold=breakpoint_threshold
         )
@@ -117,30 +119,17 @@ def _process_line_with_params(line_data, embed_model_path, buffer_size, breakpoi
         return None
 
 
-def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_MODEL_PATH, buffer_size: int = BUFFER_SIZE, breakpoint_threshold: int = BREAKPOINT_THRESHOLD, num_workers: int = NUM_WORKERS):
-    """
-    对文件进行语义分块处理
-    
-    Args:
-        input_file: 输入文件路径（必填）
-        output_dir: 输出目录路径（必填）
-        embed_model_path: 嵌入模型路径（可选，默认使用全局EMBED_MODEL_PATH）
-        buffer_size: 缓冲区大小（可选，默认使用全局BUFFER_SIZE）
-        breakpoint_threshold: 断点阈值（可选，默认使用全局BREAKPOINT_THRESHOLD）
-        num_workers: 工作进程数（可选，默认使用全局NUM_WORKERS）
-    
-    Returns:
-        dict: {"success": bool, "output_file": str, "message": str}
-    """
+def chunk_file(input_file: str, output_dir: str, embed_api_base: str = DEFAULT_API_BASE, embed_model_name: str = DEFAULT_MODEL_NAME, buffer_size: int = BUFFER_SIZE, breakpoint_threshold: int = BREAKPOINT_THRESHOLD, num_workers: int = NUM_WORKERS):
     try:
         create_directory(output_dir)
-        
+
         with open(input_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-        
+
         process_func = partial(
             _process_line_with_params,
-            embed_model_path=embed_model_path,
+            embed_api_base=embed_api_base,
+            embed_model_name=embed_model_name,
             buffer_size=buffer_size,
             breakpoint_threshold=breakpoint_threshold
         )
@@ -150,7 +139,8 @@ def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_M
         results = []
         if int(num_workers) <= 1:
             splitter = init_splitter_with_params(
-                embed_model_path=embed_model_path,
+                embed_api_base=embed_api_base,
+                embed_model_name=embed_model_name,
                 buffer_size=buffer_size,
                 breakpoint_threshold=breakpoint_threshold
             )
@@ -167,8 +157,8 @@ def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_M
                 except Exception as e:
                     print(f"Error processing line: {e}")
         else:
-            with multiprocessing.Pool(processes=num_workers) as pool:
-                for result in tqdm(pool.imap_unordered(process_func, lines), total=len(lines)):
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                for result in tqdm(executor.map(process_func, lines), total=len(lines)):
                     if result:
                         results.append(result)
         
@@ -207,22 +197,9 @@ def chunk_file(input_file: str, output_dir: str, embed_model_path: str = EMBED_M
         }
 
 
-def chunk_text(text_input: str, embed_model_path: str = EMBED_MODEL_PATH, buffer_size: int = BUFFER_SIZE, breakpoint_threshold: int = BREAKPOINT_THRESHOLD, num_workers: int = NUM_WORKERS):
-    """
-    对文本进行语义分块处理
-    
-    Args:
-        text_input: 输入文本内容（必填）
-        embed_model_path: 嵌入模型路径（可选，默认使用全局EMBED_MODEL_PATH）
-        buffer_size: 缓冲区大小（可选，默认使用全局BUFFER_SIZE）
-        breakpoint_threshold: 断点阈值（可选，默认使用全局BREAKPOINT_THRESHOLD）
-        num_workers: 工作进程数（对单个文本处理不使用，保留参数以保持接口一致性）
-    
-    Returns:
-        dict: {"success": bool, "splits": [[text], ...], "time_cost": float, "message": str}
-    """
+def chunk_text(text_input: str, embed_api_base: str = DEFAULT_API_BASE, embed_model_name: str = DEFAULT_MODEL_NAME, buffer_size: int = BUFFER_SIZE, breakpoint_threshold: int = BREAKPOINT_THRESHOLD, num_workers: int = NUM_WORKERS):
     try:
-        splitter = init_splitter_with_params(embed_model_path=embed_model_path, buffer_size=buffer_size, breakpoint_threshold=breakpoint_threshold)
+        splitter = init_splitter_with_params(embed_api_base=embed_api_base, embed_model_name=embed_model_name, buffer_size=buffer_size, breakpoint_threshold=breakpoint_threshold)
         
         result = process_context(text_input, None, splitter)
         
@@ -253,9 +230,9 @@ def main():
     
     print(f"Total lines: {len(lines)}")
     
-    with multiprocessing.Pool(processes=NUM_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         results = []
-        for result in tqdm(pool.imap_unordered(process_line, lines), total=len(lines)):
+        for result in tqdm(executor.map(process_line, lines), total=len(lines)):
             if result:
                 results.append(result)
     

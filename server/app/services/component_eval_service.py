@@ -38,6 +38,7 @@ class ComponentEvalService:
         sim_model_path: Optional[str],
         vllm_api_base: Optional[str],
         vllm_model_name: Optional[str],
+        max_workers: Optional[int] = None,
     ) -> ChunkQualityResult:
         if len(chunks) < 2:
             raise EvaluationException(f"至少需要 2 个文本块才能评估，当前只有 {len(chunks)} 个")
@@ -86,7 +87,7 @@ class ComponentEvalService:
                 use_vllm=True,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,
-                max_workers=settings.EVAL_PARALLEL_WORKERS,
+                max_workers=max_workers or settings.EVAL_PARALLEL_WORKERS,
                 request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
             evaluator = ChunkEvaluator(config)
@@ -143,6 +144,7 @@ class ComponentEvalService:
             sim_model_path=request.sim_model_path,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
+            max_workers=request.max_workers,
         )
 
     def evaluate_chunk_quality_file(self, request: ChunkQualityFileRequest) -> ChunkQualityResult:
@@ -163,6 +165,7 @@ class ComponentEvalService:
             sim_model_path=request.sim_model_path,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
+            max_workers=request.max_workers,
         )
         if request.output_path:
             FileRepository.write_json(request.output_path, result.model_dump(mode="json"))
@@ -187,6 +190,7 @@ class ComponentEvalService:
             score_temperature=request.score_temperature,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
+            max_workers=request.max_workers,
         )
 
     def evaluate_chunk_stickiness_file(self, request: ChunkStickinessFileRequest) -> ChunkStickinessResult:
@@ -209,6 +213,7 @@ class ComponentEvalService:
             score_temperature=request.score_temperature,
             vllm_api_base=request.vllm_api_base,
             vllm_model_name=request.vllm_model_name,
+            max_workers=request.max_workers,
         )
         if request.output_path:
             FileRepository.write_json(request.output_path, result.model_dump(mode="json"))
@@ -222,6 +227,7 @@ class ComponentEvalService:
         score_temperature: Optional[float],
         vllm_api_base: Optional[str],
         vllm_model_name: Optional[str],
+        max_workers: Optional[int] = None,
     ) -> ChunkStickinessResult:
         try:
             from app.core.path_setup import ensure_paths
@@ -253,7 +259,7 @@ class ComponentEvalService:
                 use_vllm=True,
                 vllm_api_base=vllm_base,
                 vllm_model_name=vllm_model,
-                max_workers=settings.EVAL_PARALLEL_WORKERS,
+                max_workers=max_workers or settings.EVAL_PARALLEL_WORKERS,
                 request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
             evaluator = StickinessEvaluator(config)

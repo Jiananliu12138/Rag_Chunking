@@ -27,7 +27,7 @@ class ChunkService:
         logger.info("开始文本分块，方法=%s，文本长度=%d", request.method, len(request.text))
 
         settings = get_settings()
-        default_workers = settings.CHUNK_NUM_WORKERS
+        default_workers = request.num_workers or settings.CHUNK_NUM_WORKERS
         cache_dir = settings.TIKTOKEN_CACHE_DIR or None
 
         if request.method == ChunkMethod.TOKEN:
@@ -54,12 +54,16 @@ class ChunkService:
             from public_method.chunking.semantic_chunk import chunk_text as _chunk_text
 
             p = request.semantic_params
-            model_path = (
-                (p.embed_model_path if p and p.embed_model_path else None)
-                or settings.DEFAULT_EMBEDDING_MODEL
+            api_base = (
+                (p.embed_api_base if p and p.embed_api_base else None)
+                or settings.DEFAULT_EMBEDDING_BASE
             )
-            if not model_path:
-                raise ChunkingException("DEFAULT_EMBEDDING_MODEL 未配置，无法进行语义分块")
+            model_name = (
+                (p.embed_model_name if p and p.embed_model_name else None)
+                or settings.DEFAULT_EMBEDDING_NAME
+            )
+            if not api_base:
+                raise ChunkingException("DEFAULT_EMBEDDING_BASE 未配置，无法进行语义分块")
 
             buffer_size = p.buffer_size if p else 1
             breakpoint_threshold = (
@@ -67,7 +71,8 @@ class ChunkService:
             )
             kwargs = {
                 "text_input": request.text,
-                "embed_model_path": model_path,
+                "embed_api_base": api_base,
+                "embed_model_name": model_name,
                 "buffer_size": buffer_size,
                 "breakpoint_threshold": breakpoint_threshold,
                 "num_workers": default_workers,
@@ -135,7 +140,7 @@ class ChunkService:
         logger.info("开始文件分块，方法=%s，输入=%s", request.method, request.input_file)
 
         settings = get_settings()
-        default_workers = settings.CHUNK_NUM_WORKERS
+        default_workers = request.num_workers or settings.CHUNK_NUM_WORKERS
         cache_dir = settings.TIKTOKEN_CACHE_DIR or None
 
         if request.method == ChunkMethod.TOKEN:
@@ -163,12 +168,16 @@ class ChunkService:
             from public_method.chunking.semantic_chunk import chunk_file as _chunk_file
 
             p = request.semantic_params
-            model_path = (
-                (p.embed_model_path if p and p.embed_model_path else None)
-                or settings.DEFAULT_EMBEDDING_MODEL
+            api_base = (
+                (p.embed_api_base if p and p.embed_api_base else None)
+                or settings.DEFAULT_EMBEDDING_BASE
             )
-            if not model_path:
-                raise ChunkingException("DEFAULT_EMBEDDING_MODEL 未配置，无法进行语义文件分块")
+            model_name = (
+                (p.embed_model_name if p and p.embed_model_name else None)
+                or settings.DEFAULT_EMBEDDING_NAME
+            )
+            if not api_base:
+                raise ChunkingException("DEFAULT_EMBEDDING_BASE 未配置，无法进行语义文件分块")
 
             buffer_size = p.buffer_size if p else 1
             breakpoint_threshold = (
@@ -177,7 +186,8 @@ class ChunkService:
             kwargs = {
                 "input_file": request.input_file,
                 "output_dir": request.output_dir,
-                "embed_model_path": model_path,
+                "embed_api_base": api_base,
+                "embed_model_name": model_name,
                 "buffer_size": buffer_size,
                 "breakpoint_threshold": breakpoint_threshold,
                 "num_workers": default_workers,

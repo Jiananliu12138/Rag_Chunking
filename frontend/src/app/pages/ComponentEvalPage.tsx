@@ -38,6 +38,8 @@ interface QualityConfigDialogProps {
   setVllmApiBase: (v: string) => void;
   vllmModelName: string;
   setVllmModelName: (v: string) => void;
+  maxWorkers: number;
+  setMaxWorkers: (v: number) => void;
 }
 
 const fillPlaceholderOnTab = (
@@ -85,6 +87,7 @@ function QualityConfigDialog({
   simModelPath, setSimModelPath,
   vllmApiBase, setVllmApiBase,
   vllmModelName, setVllmModelName,
+  maxWorkers, setMaxWorkers,
 }: QualityConfigDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -137,6 +140,20 @@ function QualityConfigDialog({
               />
             </div>
           </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <Label>Max Workers</Label>
+              <span className="text-xs text-slate-400">ThreadPoolExecutor — IO-bound (BC / Similarity)</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={64}
+              value={maxWorkers}
+              onChange={(e) => setMaxWorkers(Math.max(1, parseInt(e.target.value) || 1))}
+              className="mt-1.5"
+            />
+          </div>
         </div>
         <div className="flex justify-end pt-2">
           <Button onClick={() => onOpenChange(false)}>Done</Button>
@@ -153,12 +170,15 @@ interface StickinessConfigDialogProps {
   setVllmApiBase: (v: string) => void;
   vllmModelName: string;
   setVllmModelName: (v: string) => void;
+  maxWorkers: number;
+  setMaxWorkers: (v: number) => void;
 }
 
 function StickinessConfigDialog({
   open, onOpenChange,
   vllmApiBase, setVllmApiBase,
   vllmModelName, setVllmModelName,
+  maxWorkers, setMaxWorkers,
 }: StickinessConfigDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -199,6 +219,20 @@ function StickinessConfigDialog({
                 className="mt-1.5"
               />
             </div>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <Label>Max Workers</Label>
+              <span className="text-xs text-slate-400">ThreadPoolExecutor — IO-bound (Stickiness)</span>
+            </div>
+            <Input
+              type="number"
+              min={1}
+              max={64}
+              value={maxWorkers}
+              onChange={(e) => setMaxWorkers(Math.max(1, parseInt(e.target.value) || 1))}
+              className="mt-1.5"
+            />
           </div>
         </div>
         <div className="flex justify-end pt-2">
@@ -444,6 +478,7 @@ export default function ComponentEvalPage() {
   const [simModelPath, setSimModelPath] = useState('');
   const [qualityVllmApiBase, setQualityVllmApiBase] = useState(DEFAULT_LLM_API_BASE);
   const [qualityVllmModelName, setQualityVllmModelName] = useState('');
+  const [qualityMaxWorkers, setQualityMaxWorkers] = useState<number>(16);
 
   // ── Chunk Stickiness – Direct Input ────────────────────────────────────────
   const [stickinessChunksJson, setStickinessChunksJson] = useState('');
@@ -464,6 +499,7 @@ export default function ComponentEvalPage() {
   const [stickinessConfigOpen, setStickinessConfigOpen] = useState(false);
   const [stickinessVllmApiBase, setStickinessVllmApiBase] = useState(DEFAULT_LLM_API_BASE);
   const [stickinessVllmModelName, setStickinessVllmModelName] = useState('');
+  const [stickinessMaxWorkers, setStickinessMaxWorkers] = useState<number>(16);
 
   // ── Retrieval Eval ─────────────────────────────────────────────────────────
   const [retrievalDataJson, setRetrievalDataJson] = useState('');
@@ -543,22 +579,24 @@ export default function ComponentEvalPage() {
     (base: Record<string, any>) => {
       const data: any = { ...base };
       data.score_temperature = scoreTemperature[0];
+      data.max_workers = qualityMaxWorkers;
       if (simModelPath.trim()) data.sim_model_path = simModelPath.trim();
       if (qualityVllmApiBase.trim()) data.vllm_api_base = qualityVllmApiBase.trim();
       if (qualityVllmModelName.trim()) data.vllm_model_name = qualityVllmModelName.trim();
       return data;
     },
-    [scoreTemperature, simModelPath, qualityVllmApiBase, qualityVllmModelName],
+    [scoreTemperature, simModelPath, qualityVllmApiBase, qualityVllmModelName, qualityMaxWorkers],
   );
 
   const buildStickinessData = useCallback(
     (base: Record<string, any>) => {
       const data: any = { ...base };
+      data.max_workers = stickinessMaxWorkers;
       if (stickinessVllmApiBase.trim()) data.vllm_api_base = stickinessVllmApiBase.trim();
       if (stickinessVllmModelName.trim()) data.vllm_model_name = stickinessVllmModelName.trim();
       return data;
     },
-    [stickinessVllmApiBase, stickinessVllmModelName],
+    [stickinessVllmApiBase, stickinessVllmModelName, stickinessMaxWorkers],
   );
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -1109,6 +1147,8 @@ export default function ComponentEvalPage() {
                       setVllmApiBase={setQualityVllmApiBase}
                       vllmModelName={qualityVllmModelName}
                       setVllmModelName={setQualityVllmModelName}
+                      maxWorkers={qualityMaxWorkers}
+                      setMaxWorkers={setQualityMaxWorkers}
                     />
                   </div>
                   <div className="space-y-4">
@@ -1160,6 +1200,8 @@ export default function ComponentEvalPage() {
                       setVllmApiBase={setQualityVllmApiBase}
                       vllmModelName={qualityVllmModelName}
                       setVllmModelName={setQualityVllmModelName}
+                      maxWorkers={qualityMaxWorkers}
+                      setMaxWorkers={setQualityMaxWorkers}
                     />
                   </div>
                   <div className="space-y-4">
@@ -1415,6 +1457,8 @@ export default function ComponentEvalPage() {
                       setVllmApiBase={setStickinessVllmApiBase}
                       vllmModelName={stickinessVllmModelName}
                       setVllmModelName={setStickinessVllmModelName}
+                      maxWorkers={stickinessMaxWorkers}
+                      setMaxWorkers={setStickinessMaxWorkers}
                     />
                   </div>
                   <div className="space-y-4">
@@ -1448,6 +1492,8 @@ export default function ComponentEvalPage() {
                       setVllmApiBase={setStickinessVllmApiBase}
                       vllmModelName={stickinessVllmModelName}
                       setVllmModelName={setStickinessVllmModelName}
+                      maxWorkers={stickinessMaxWorkers}
+                      setMaxWorkers={setStickinessMaxWorkers}
                     />
                   </div>
                   <div className="space-y-4">

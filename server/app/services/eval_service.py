@@ -601,7 +601,7 @@ class EvalService:
                 api_key=vllm_api_key,
                 model_name=vllm_model_name,
                 timeout=settings.EVAL_HTTP_TIMEOUT,
-                max_workers=settings.EVAL_PARALLEL_WORKERS,
+                max_workers=request.max_workers or settings.EVAL_PARALLEL_WORKERS,
             )
         except Exception as exc:
             logger.exception("LLM judge evaluation failed: %s", exc)
@@ -742,7 +742,7 @@ class EvalService:
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,
-                max_workers=settings.RAGAS_MAX_WORKERS,
+                max_workers=request.max_workers or settings.RAGAS_MAX_WORKERS,
                 request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
 
@@ -830,7 +830,7 @@ class EvalService:
                 device=device,
                 enable_cache=enable_cache,
                 cache_dir=cache_dir,
-                max_workers=settings.RAGAS_MAX_WORKERS,
+                max_workers=request.max_workers or settings.RAGAS_MAX_WORKERS,
                 request_timeout=settings.EVAL_HTTP_TIMEOUT,
             )
 

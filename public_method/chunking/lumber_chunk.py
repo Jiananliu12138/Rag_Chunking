@@ -3,7 +3,7 @@ import time
 import re
 import requests
 import os
-import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from tqdm import tqdm
 
@@ -395,9 +395,9 @@ def chunk_file(input_file: str, output_dir: str, model_type: str = MODEL_TYPE, d
             max_tokens=max_tokens
         )
         
-        with multiprocessing.Pool(processes=num_workers) as pool:
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
             results = []
-            for result in tqdm(pool.imap_unordered(process_func, lines), total=len(lines)):
+            for result in tqdm(executor.map(process_func, lines), total=len(lines)):
                 if result:
                     results.append(result)
         
@@ -482,9 +482,9 @@ def main():
     
     print(f"Total lines: {len(lines)}")
     
-    with multiprocessing.Pool(processes=NUM_WORKERS) as pool:
+    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         results = []
-        for result in tqdm(pool.imap_unordered(process_line, lines), total=len(lines)):
+        for result in tqdm(executor.map(process_line, lines), total=len(lines)):
             if result:
                 results.append(result)
     

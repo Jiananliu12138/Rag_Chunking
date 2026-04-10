@@ -73,6 +73,10 @@ class TraditionalEvalRequest(BaseModel):
     vllm_model_name: Optional[str] = Field(
         None, description="Judge 模型名称。未提供时优先复用生成结果中记录的 generation_model_name，再回退 DEFAULT_LLM_MODEL。"
     )
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="LLM Judge 并行线程数（ThreadPoolExecutor）。未提供时使用 EVAL_PARALLEL_WORKERS。",
+    )
 
 
 class TraditionalJudgeDetail(BaseModel):
@@ -166,6 +170,10 @@ class RAGASEvalRequest(BaseModel):
     cache_dir: Optional[str] = Field(
         None, description="缓存目录（可选，未提供时从配置读取 DEFAULT_RAGAS_CACHE_DIR）"
     )
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="RAGAS 评估并发数（asyncio）。未提供时使用 RAGAS_MAX_WORKERS。",
+    )
 
 
 class RAGASMetricSummary(BaseModel):
@@ -216,6 +224,10 @@ class RAGASEvalFileRequest(BaseModel):
     device: Optional[str] = Field(None, description="评估设备（可选，未提供时从配置读取）")
     enable_cache: Optional[bool] = Field(None, description="是否启用 RAGAS 磁盘缓存（可选，未提供时从配置读取）")
     cache_dir: Optional[str] = Field(None, description="缓存目录（可选，未提供时从配置读取）")
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="RAGAS 评估并发数（asyncio）。未提供时使用 RAGAS_MAX_WORKERS。",
+    )
 
 
 # ── 组件级 Chunk 质量评估 ─────────────────────────────────────────────────────
@@ -279,6 +291,10 @@ class ChunkQualityRequest(BaseModel):
         None,
         description="可选：vLLM 模型名称，未提供时从默认配置读取。",
     )
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="BC/语义不相似度并行线程数（ThreadPoolExecutor）。未提供时使用 EVAL_PARALLEL_WORKERS。",
+    )
 
 
 class ChunkPairResult(BaseModel):
@@ -338,6 +354,10 @@ class ChunkQualityFileRequest(BaseModel):
         None,
         description="可选：vLLM 模型名称，未提供时从默认配置读取。",
     )
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="BC/语义不相似度并行线程数（ThreadPoolExecutor）。未提供时使用 EVAL_PARALLEL_WORKERS。",
+    )
 
 
 # ── 组件级 Chunk 黏连度评估 ───────────────────────────────────────────────────
@@ -379,6 +399,10 @@ class ChunkStickinessRequest(BaseModel):
     vllm_model_name: Optional[str] = Field(
         None,
         description="可选：vLLM 模型名称，未提供时从默认配置读取。",
+    )
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="黏连度评估并行线程数（ThreadPoolExecutor）。未提供时使用 EVAL_PARALLEL_WORKERS。",
     )
 
 
@@ -442,6 +466,10 @@ class ChunkStickinessFileRequest(BaseModel):
         None,
         description="可选：vLLM 模型名称，未提供时从默认配置读取。",
     )
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="黏连度评估并行线程数（ThreadPoolExecutor）。未提供时使用 EVAL_PARALLEL_WORKERS。",
+    )
 
 
 # ── 文件输入的传统指标评估 ─────────────────────────────────────────────────────
@@ -470,6 +498,10 @@ class TraditionalEvalFileRequest(BaseModel):
     )
     vllm_model_name: Optional[str] = Field(
         None, description="Judge 模型名称。未提供时优先复用生成结果中记录的 generation_model_name，再回退 DEFAULT_LLM_MODEL。"
+    )
+    max_workers: Optional[int] = Field(
+        None, ge=1, le=64,
+        description="LLM Judge 并行线程数（ThreadPoolExecutor）。未提供时使用 EVAL_PARALLEL_WORKERS。",
     )
 
 

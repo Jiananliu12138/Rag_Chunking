@@ -21,11 +21,18 @@ class TokenChunkParams(BaseModel):
 
 
 class SemanticChunkParams(BaseModel):
-    embed_model_path: Optional[str] = Field(
+    embed_api_base: Optional[str] = Field(
         None,
         description=(
-            "Optional embedding model path. "
-            "If omitted, the service falls back to DEFAULT_EMBEDDING_MODEL."
+            "OpenAI-compatible embedding API base URL (e.g. vLLM endpoint). "
+            "If omitted, the service falls back to DEFAULT_EMBEDDING_BASE."
+        ),
+    )
+    embed_model_name: Optional[str] = Field(
+        None,
+        description=(
+            "Embedding model name served at the API endpoint. "
+            "If omitted, the service falls back to DEFAULT_EMBEDDING_NAME."
         ),
     )
     buffer_size: int = Field(1, ge=1, description="Sentence buffer size for SemanticSplitter")
@@ -94,7 +101,8 @@ class ChunkTextRequest(BaseModel):
                         "text": "Climate change is one of the greatest challenges...\n\nRenewable energy sources include solar and wind...",
                         "method": "semantic",
                         "semantic_params": {
-                            "embed_model_path": "/path/to/bge-large-en-v1.5",
+                            "embed_api_base": "http://localhost:8001/v1",
+                            "embed_model_name": "BAAI/bge-m3",
                             "buffer_size": 1,
                             "breakpoint_percentile_threshold": 74,
                         },
@@ -127,6 +135,12 @@ class ChunkTextRequest(BaseModel):
 
     text: str = Field(..., min_length=1, description="Source text to chunk")
     method: ChunkMethod = Field(ChunkMethod.TOKEN, description="Chunking method")
+    num_workers: Optional[int] = Field(
+        None,
+        ge=1,
+        le=32,
+        description="Number of parallel workers (multiprocessing.Pool). Falls back to CHUNK_NUM_WORKERS if omitted.",
+    )
     token_params: Optional[TokenChunkParams] = None
     semantic_params: Optional[SemanticChunkParams] = None
     llamaindex_params: Optional[LlamaIndexChunkParams] = None
@@ -144,6 +158,12 @@ class ChunkFileRequest(BaseModel):
     method: ChunkMethod = Field(ChunkMethod.TOKEN, description="Chunking method")
     input_file: str = Field(..., description="Input file path, e.g. .jsonl")
     output_dir: str = Field(..., description="Output directory path")
+    num_workers: Optional[int] = Field(
+        None,
+        ge=1,
+        le=32,
+        description="Number of parallel workers (multiprocessing.Pool). Falls back to CHUNK_NUM_WORKERS if omitted.",
+    )
     token_params: Optional[TokenChunkParams] = None
     semantic_params: Optional[SemanticChunkParams] = None
     llamaindex_params: Optional[LlamaIndexChunkParams] = None
