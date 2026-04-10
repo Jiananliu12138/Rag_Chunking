@@ -90,14 +90,25 @@ class _LoggerProgressBar:
         logger: logging.Logger,
         label: str = "RAGAS",
         log_every: Optional[int] = None,
+        progress_file_path: Optional[str] = None,
     ) -> None:
         self.total = max(int(total), 0)
         self.n = 0
         self._logger = logger
         self._label = label
         self._log_every = int(log_every) if log_every else max(1, self.total // 20)
+        self._file = None
+        if progress_file_path:
+            Path(progress_file_path).parent.mkdir(parents=True, exist_ok=True)
+            self._file = open(progress_file_path, "w", encoding="utf-8")
         _ensure_logger_visible(self._logger)
-        self._logger.info("%s 启动: total=%d", self._label, self.total)
+        self._log(f"{self._label} 启动: total={self.total}")
+
+    def _log(self, msg: str) -> None:
+        self._logger.info(msg)
+        if self._file:
+            self._file.write(msg + "\n")
+            self._file.flush()
 
     def update(self, n: int = 1) -> None:
         if n <= 0:
@@ -105,13 +116,15 @@ class _LoggerProgressBar:
         self.n += int(n)
         if self.total and (self.n >= self.total or self.n % self._log_every == 0):
             done = min(self.n, self.total)
-            self._logger.info("%s 进度 %d/%d", self._label, done, self.total)
+            pct = done * 100 // self.total
+            self._log(f"{self._label} 进度 {done}/{self.total} ({pct}%)")
 
     def close(self) -> None:
         if self.total and self.n < self.total:
-            self._logger.info(
-                "%s 收尾 %d/%d", self._label, self.n, self.total
-            )
+            self._log(f"{self._label} 收尾 {self.n}/{self.total}")
+        if self._file:
+            self._file.close()
+            self._file = None
 
     def refresh(self) -> None:  # noqa: D401 - tqdm 兼容方法
         pass
@@ -165,6 +178,8 @@ class RAGASEvaluator:
             enable_cache: 是否启用缓存
             cache_dir: 缓存目录
         """
+        self.cache_dir = cache_dir
+
         print(f"\n{'='*70}")
         print(f"初始化 RAGAS 评估器")
         print(f"{'='*70}")
@@ -271,14 +286,19 @@ class RAGASEvaluator:
         # 创建 HuggingFace Dataset
         eval_dataset = Dataset.from_dict(dataset)
 
-        # 注入伪 tqdm，让 RAGAS Executor 的进度走 logger（server 环境下 stderr 上的真 tqdm 看不见）
         # RAGAS 每个 (metric, sample) 是一个 executor.submit，因此 total = n_samples * len(metrics)
         total_units = n_samples * len(metrics)
-        progress_bar = _LoggerProgressBar(
-            total=total_units,
-            logger=_LOGGER,
-            label="RAGAS",
-        )
+        if sys.stderr.isatty():
+            from tqdm import tqdm
+            progress_bar = tqdm(total=total_units, desc="RAGAS evaluation")
+        else:
+            pf_path = str(Path(self.cache_dir) / "ragas_progress.log") if self.cache_dir else None
+            progress_bar = _LoggerProgressBar(
+                total=total_units,
+                logger=_LOGGER,
+                label="RAGAS",
+                progress_file_path=pf_path,
+            )
 
         # 执行评估
         print("开始评估...")

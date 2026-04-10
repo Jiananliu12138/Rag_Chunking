@@ -68,7 +68,7 @@ class Settings(BaseSettings):
 
     # RAGAS evaluation runtime defaults
     DEFAULT_RAGAS_DEVICE: str = "cuda:0"
-    DEFAULT_RAGAS_ENABLE_CACHE: bool = True
+    DEFAULT_RAGAS_ENABLE_CACHE: bool = False
     DEFAULT_RAGAS_CACHE_DIR: str = "./ragas_cache"
 
     # Component evaluation defaults

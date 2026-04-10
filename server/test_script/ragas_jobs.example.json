@@ -1,0 +1,12 @@
+[
+  {
+    "name": "job-1",
+    "input_path": "F:/path/to/sample_results_1.json",
+    "output_path": "F:/path/to/sample_results_1.ragas_report.json"
+  },
+  {
+    "name": "job-2",
+    "input_path": "F:/path/to/sample_results_2.json",
+    "output_path": "F:/path/to/sample_results_2.ragas_report.json"
+  }
+]
