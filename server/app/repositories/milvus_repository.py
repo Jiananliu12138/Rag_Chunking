@@ -874,6 +874,64 @@ class MilvusRepository:
             logger.exception("加载 QueryEngine 失败: %s", exc)
             raise RetrievalException(f"加载检索引擎失败: {exc}") from exc
 
+    def build_retriever(
+        self,
+        collection_name: str,
+        langchain_embed,
+        embed_dim: int,
+        top_k: int = 5,
+        use_hybrid_search: Optional[bool] = None,
+    ):
+        """在主线程中预建 retriever，供多线程复用。"""
+        if not self.collection_exists(collection_name):
+            raise CollectionNotFoundException(
+                f"Collection '{collection_name}' 不存在，请先构建索引"
+            )
+        with self._settings_lock:
+            self._make_embed_model(langchain_embed)
+            vector_store = self._build_vector_store_with_dim(
+                collection_name, embed_dim, overwrite=False
+            )
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            vector_index = VectorStoreIndex([], storage_context=storage_context)
+
+        effective_use_hybrid = (
+            use_hybrid_search
+            if use_hybrid_search is not None
+            else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
+        )
+        effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+
+        retriever_kwargs = {"similarity_top_k": top_k}
+        if effective_use_hybrid:
+            retriever_kwargs["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
+
+        return vector_index.as_retriever(**retriever_kwargs)
+
+    @staticmethod
+    def nodes_to_search_results(response_nodes) -> list[dict]:
+        """将 retriever.retrieve() 返回的 NodeWithScore 列表转为标准字典列表。"""
+        results: list[dict] = []
+        for node_with_score in response_nodes:
+            node = node_with_score.node
+            meta = getattr(node, "metadata", {}) or {}
+            results.append(
+                {
+                    "text": node.get_content(),
+                    "score": float(node_with_score.score)
+                    if node_with_score.score is not None
+                    else None,
+                    "filepath": meta.get("file_path"),
+                    "doc_id": str(getattr(node, "ref_doc_id", None))
+                    if getattr(node, "ref_doc_id", None) is not None
+                    else None,
+                    "chunk_id": str(meta.get("chunk_id"))
+                    if meta.get("chunk_id") is not None
+                    else None,
+                }
+            )
+        return results
+
     def search(
         self,
         collection_name: str,

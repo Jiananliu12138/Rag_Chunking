@@ -2,7 +2,6 @@
 检索与生成服务层。
 封装向量检索、RAG 生成两个核心能力。
 """
-import asyncio
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -651,20 +650,19 @@ class RetrievalService:
                 continue
             parsed_items.append((row_idx, data))
 
-        def _ensure_event_loop():
-            """确保当前线程有一个 running 的 event loop（pymilvus AsyncMilvusClient 需要）。"""
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                # 在后台线程里让 loop 保持 running 状态
-                import threading
-                threading.Thread(target=loop.run_forever, daemon=True).start()
+        # 在主线程预建 retriever（MilvusVectorStore 需要 running event loop，子线程没有）
+        import threading
+        _retriever_lock = threading.Lock()
+        _shared_retriever = self._repo.build_retriever(
+            collection_name=request.collection_name,
+            langchain_embed=embed_model,
+            embed_dim=embed_dim,
+            top_k=retrieve_top_k,
+            use_hybrid_search=request.use_hybrid_search,
+        )
 
         def _process_one(auto_id: int, data: dict) -> dict:
             """处理单条：search → rerank → LLM，线程安全。"""
-            _ensure_event_loop()
             query = data.get("user_input") or data.get("input") or data.get("query") or ""
             self._warn_on_overlong_embedding_query(
                 query=query,
@@ -673,14 +671,9 @@ class RetrievalService:
                 operation=f"rag_generate_file:auto_id={auto_id}",
                 collection_name=request.collection_name,
             )
-            raw_results = self._repo.search(
-                collection_name=request.collection_name,
-                query=query,
-                langchain_embed=embed_model,
-                embed_dim=embed_dim,
-                top_k=retrieve_top_k,
-                use_hybrid_search=request.use_hybrid_search,
-            )
+            with _retriever_lock:
+                response_nodes = _shared_retriever.retrieve(query)
+            raw_results = self._repo.nodes_to_search_results(response_nodes)
             context_items = self._to_search_result_items(raw_results)
             if request.rerank_enabled:
                 context_items = self._rerank_items_cross_encoder(
