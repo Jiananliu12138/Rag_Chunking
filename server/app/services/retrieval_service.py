@@ -2,6 +2,7 @@
 检索与生成服务层。
 封装向量检索、RAG 生成两个核心能力。
 """
+import asyncio
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -652,6 +653,11 @@ class RetrievalService:
 
         def _process_one(auto_id: int, data: dict) -> dict:
             """处理单条：search → rerank → LLM，线程安全。"""
+            # pymilvus 内部依赖 event loop，子线程里没有需要手动创建
+            try:
+                asyncio.get_event_loop()
+            except RuntimeError:
+                asyncio.set_event_loop(asyncio.new_event_loop())
             query = data.get("user_input") or data.get("input") or data.get("query") or ""
             self._warn_on_overlong_embedding_query(
                 query=query,
