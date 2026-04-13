@@ -75,6 +75,19 @@ def _is_nan(value):
         return False
 
 
+def _coerce_metric_value(value: Any) -> Optional[float]:
+    """Normalize metric values while preserving real zeroes."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if _is_nan(number) or number in (float("inf"), float("-inf")):
+        return None
+
+    return number
+
+
 class _LoggerProgressBar:
     """伪装成 tqdm 的进度对象，把 update() 转成 logger 输出。
 
@@ -329,20 +342,28 @@ class RAGASEvaluator:
                 "ground_truth": dataset["ground_truth"][idx][:200] + "..." if len(dataset["ground_truth"][idx]) > 200 else dataset["ground_truth"][idx],
                 "contexts_count": len(dataset["contexts"][idx]),
                 "metrics": {
-                    "faithfulness": float(row.get("faithfulness", 0)) if not _is_nan(row.get("faithfulness", 0)) else 0.0,
-                    "answer_relevancy": float(row.get("answer_relevancy", 0)) if not _is_nan(row.get("answer_relevancy", 0)) else 0.0,
-                    "context_recall": float(row.get("context_recall", 0)) if not _is_nan(row.get("context_recall", 0)) else 0.0,
-                    "context_precision": float(row.get("context_precision", 0)) if not _is_nan(row.get("context_precision", 0)) else 0.0,
-                    "context_entity_recall": float(row.get("context_entity_recall", 0)) if not _is_nan(row.get("context_entity_recall", 0)) else 0.0,
-                    "noise_sensitivity_relevant": float(row.get("noise_sensitivity(mode=relevant)", row.get("noise_sensitivity", 0))) if not _is_nan(row.get("noise_sensitivity(mode=relevant)", row.get("noise_sensitivity", 0))) else 0.0,
-                    "noise_sensitivity_irrelevant": float(row.get("noise_sensitivity(mode=irrelevant)", 0)) if not _is_nan(row.get("noise_sensitivity(mode=irrelevant)", 0)) else 0.0,
+                    "faithfulness": _coerce_metric_value(row.get("faithfulness")),
+                    "answer_relevancy": _coerce_metric_value(row.get("answer_relevancy")),
+                    "context_recall": _coerce_metric_value(row.get("context_recall")),
+                    "context_precision": _coerce_metric_value(row.get("context_precision")),
+                    "context_entity_recall": _coerce_metric_value(row.get("context_entity_recall")),
+                    "noise_sensitivity_relevant": _coerce_metric_value(
+                        row.get("noise_sensitivity(mode=relevant)", row.get("noise_sensitivity"))
+                    ),
+                    "noise_sensitivity_irrelevant": _coerce_metric_value(
+                        row.get("noise_sensitivity(mode=irrelevant)")
+                    ),
                 },
             }
             
             # 计算单个样本的平均分（不包含噪声敏感性，因为它是越低越好的指标）
             metrics_for_avg = ["faithfulness", "answer_relevancy", "context_recall", "context_precision", "context_entity_recall"]
-            valid_metrics = [sample_result["metrics"][m] for m in metrics_for_avg if not _is_nan(sample_result["metrics"][m]) and sample_result["metrics"][m] > 0]
-            sample_result["ragas_score"] = round(sum(valid_metrics) / len(valid_metrics), 4) if valid_metrics else 0.0
+            valid_metrics = [
+                sample_result["metrics"][m]
+                for m in metrics_for_avg
+                if sample_result["metrics"][m] is not None
+            ]
+            sample_result["ragas_score"] = round(sum(valid_metrics) / len(valid_metrics), 4) if valid_metrics else None
             
             results["samples"].append(sample_result)
         
@@ -362,17 +383,17 @@ class RAGASEvaluator:
             # 正向指标（越高越好）
             for metric_name in ["faithfulness", "answer_relevancy", "context_recall", "context_precision", "context_entity_recall"]:
                 value = sample["metrics"][metric_name]
-                if not _is_nan(value) and value > 0:
+                if value is not None:
                     metrics_data[metric_name].append(value)
             
             # 反向指标（越低越好） - 包含 0 值
             for metric_name in ["noise_sensitivity_relevant", "noise_sensitivity_irrelevant"]:
                 value = sample["metrics"][metric_name]
-                if not _is_nan(value):
+                if value is not None:
                     metrics_data[metric_name].append(value)
             
             ragas_score = sample["ragas_score"]
-            if not _is_nan(ragas_score) and ragas_score > 0:
+            if ragas_score is not None:
                 metrics_data["ragas_score"].append(ragas_score)
         
         # 计算平均值
