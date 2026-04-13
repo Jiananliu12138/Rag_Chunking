@@ -203,6 +203,7 @@ class RAGASEvaluator:
             timeout=int(request_timeout),
         )
         print(f"  并发: max_workers={max_workers}, timeout={request_timeout}s")
+        print(f"  enable_cache={enable_cache}, cache_dir={cache_dir}")
 
         # 创建缓存（可选但强烈推荐）
         cache = DiskCacheBackend(cache_dir=cache_dir) if enable_cache else None
@@ -402,10 +403,14 @@ class RAGASEvaluator:
                 results["summary"][f"{metric_name}_mean"] = round(sum(values) / len(values), 4)
                 results["summary"][f"{metric_name}_min"] = round(min(values), 4)
                 results["summary"][f"{metric_name}_max"] = round(max(values), 4)
+                results["summary"][f"{metric_name}_valid_count"] = len(values)
+                results["summary"][f"{metric_name}_error_count"] = n_samples - len(values)
             else:
                 results["summary"][f"{metric_name}_mean"] = 0.0
                 results["summary"][f"{metric_name}_min"] = 0.0
                 results["summary"][f"{metric_name}_max"] = 0.0
+                results["summary"][f"{metric_name}_valid_count"] = 0
+                results["summary"][f"{metric_name}_error_count"] = n_samples
         
         # 打印总结
         print(f"\n{'='*70}")

@@ -97,6 +97,9 @@ class TraditionalEvalResult(BaseModel):
     bleu_3: float
     bleu_4: float
     bert_score_f1: Optional[float] = None
+    bert_score_valid_count: Optional[int] = None
+    bert_score_error_count: Optional[int] = None
+    bert_score_error: Optional[str] = None
     sample_count: int
     llm_judge_success_rate: Optional[float] = None
     llm_judge_correct_count: Optional[int] = None
@@ -180,6 +183,8 @@ class RAGASMetricSummary(BaseModel):
     mean: float
     min: float
     max: float
+    valid_count: int = 0
+    error_count: int = 0
 
 
 class RAGASSummary(BaseModel):
@@ -303,8 +308,12 @@ class ChunkPairResult(BaseModel):
 
 
 class ChunkQualityResult(BaseModel):
-    avg_semantic_dissimilarity: float
-    avg_boundary_clarity: float
+    avg_semantic_dissimilarity: Optional[float] = None
+    avg_boundary_clarity: Optional[float] = None
+    semantic_dissimilarity_valid_count: int = 0
+    semantic_dissimilarity_error_count: int = 0
+    boundary_clarity_valid_count: int = 0
+    boundary_clarity_error_count: int = 0
     num_pairs: int
     details: list[ChunkPairResult]
 

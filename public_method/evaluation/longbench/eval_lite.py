@@ -170,11 +170,20 @@ def calculate_traditional_metrics_with_params(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             logger.info("BERTScore memory cleared.")
+            scores["bert_score_valid_count"] = len(predictions)
+            scores["bert_score_error_count"] = 0
+            scores["bert_score_error"] = None
         except Exception as exc:
             logger.warning("BERTScore calculation failed: %s", exc)
-            scores["bert_score_f1"] = 0.0
+            scores["bert_score_f1"] = None
+            scores["bert_score_valid_count"] = 0
+            scores["bert_score_error_count"] = len(predictions)
+            scores["bert_score_error"] = str(exc)
     else:
         scores["bert_score_f1"] = None
+        scores["bert_score_valid_count"] = 0
+        scores["bert_score_error_count"] = 0
+        scores["bert_score_error"] = None
 
     return scores
 

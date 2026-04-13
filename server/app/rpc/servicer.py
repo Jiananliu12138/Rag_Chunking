@@ -291,8 +291,16 @@ class ComponentEvalRpcServicer(pb2_grpc.ComponentEvalRpcServiceServicer):
             )
             result = self._component_eval_service.evaluate_chunk_quality(payload)
             return pb2.ChunkQualityEvalResponse(
-                avg_semantic_dissimilarity=result.avg_semantic_dissimilarity,
-                avg_boundary_clarity=result.avg_boundary_clarity,
+                avg_semantic_dissimilarity=(
+                    result.avg_semantic_dissimilarity
+                    if result.avg_semantic_dissimilarity is not None
+                    else 0.0
+                ),
+                avg_boundary_clarity=(
+                    result.avg_boundary_clarity
+                    if result.avg_boundary_clarity is not None
+                    else 0.0
+                ),
                 num_pairs=result.num_pairs,
                 details=_build_chunk_pair_result(result.details),
             )

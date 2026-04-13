@@ -393,6 +393,9 @@ class EvalService:
                 },
                 "semantic_similarity": {
                     "bert_score_f1": result.bert_score_f1,
+                    "valid_count": result.bert_score_valid_count,
+                    "error_count": result.bert_score_error_count,
+                    "error": result.bert_score_error,
                 },
                 "llm_judge": {
                     "success_rate": result.llm_judge_success_rate,
@@ -651,6 +654,9 @@ class EvalService:
             bleu_3=float(scores["bleu_3"]),
             bleu_4=float(scores["bleu_4"]),
             bert_score_f1=float(scores["bert_score_f1"]) if scores.get("bert_score_f1") is not None else None,
+            bert_score_valid_count=scores.get("bert_score_valid_count"),
+            bert_score_error_count=scores.get("bert_score_error_count"),
+            bert_score_error=scores.get("bert_score_error"),
             sample_count=len(rows),
             llm_judge_success_rate=(
                 float(judge_scores["llm_judge_success_rate"])
@@ -760,6 +766,8 @@ class EvalService:
                     mean=raw["summary"].get(f"{name}_mean", 0.0),
                     min=raw["summary"].get(f"{name}_min", 0.0),
                     max=raw["summary"].get(f"{name}_max", 0.0),
+                    valid_count=int(raw["summary"].get(f"{name}_valid_count", 0) or 0),
+                    error_count=int(raw["summary"].get(f"{name}_error_count", 0) or 0),
                 )
 
             summary = RAGASSummary(
@@ -841,6 +849,8 @@ class EvalService:
                     mean=raw["summary"].get(f"{name}_mean", 0.0),
                     min=raw["summary"].get(f"{name}_min", 0.0),
                     max=raw["summary"].get(f"{name}_max", 0.0),
+                    valid_count=int(raw["summary"].get(f"{name}_valid_count", 0) or 0),
+                    error_count=int(raw["summary"].get(f"{name}_error_count", 0) or 0),
                 )
 
             summary = RAGASSummary(

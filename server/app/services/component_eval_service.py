@@ -111,16 +111,12 @@ class ComponentEvalService:
             ]
 
             return ChunkQualityResult(
-                avg_semantic_dissimilarity=(
-                    agg.semantic_dissimilarity_avg
-                    if math.isfinite(agg.semantic_dissimilarity_avg)
-                    else 0.0
-                ),
-                avg_boundary_clarity=(
-                    agg.boundary_clarity_avg
-                    if math.isfinite(agg.boundary_clarity_avg)
-                    else 0.0
-                ),
+                avg_semantic_dissimilarity=agg.semantic_dissimilarity_avg,
+                avg_boundary_clarity=agg.boundary_clarity_avg,
+                semantic_dissimilarity_valid_count=agg.semantic_dissimilarity_valid_count,
+                semantic_dissimilarity_error_count=agg.semantic_dissimilarity_error_count,
+                boundary_clarity_valid_count=agg.boundary_clarity_valid_count,
+                boundary_clarity_error_count=agg.boundary_clarity_error_count,
                 num_pairs=agg.num_pairs,
                 details=details,
             )

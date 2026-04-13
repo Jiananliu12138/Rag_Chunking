@@ -97,13 +97,14 @@ def _extract_metric(sample: dict[str, Any], metric_name: str) -> float | None:
     return _coerce_number(metrics.get(metric_name))
 
 
-def _summarize(values: list[float]) -> dict[str, Any]:
+def _summarize(values: list[float], total_count: int) -> dict[str, Any]:
     if not values:
         return {
             "mean": 0.0,
             "min": 0.0,
             "max": 0.0,
             "valid_count": 0,
+            "error_count": total_count,
         }
 
     return {
@@ -111,6 +112,7 @@ def _summarize(values: list[float]) -> dict[str, Any]:
         "min": round(min(values), 4),
         "max": round(max(values), 4),
         "valid_count": len(values),
+        "error_count": total_count - len(values),
     }
 
 
@@ -122,7 +124,7 @@ def _recompute_summary(samples: list[dict[str, Any]]) -> dict[str, dict[str, Any
             value = _extract_metric(sample, metric_name)
             if value is not None:
                 values.append(value)
-        summary[metric_name] = _summarize(values)
+        summary[metric_name] = _summarize(values, len(samples))
     return summary
 
 
@@ -138,7 +140,8 @@ def _print_summary(summary: dict[str, dict[str, Any]], sample_count: int) -> Non
             f"mean={item['mean']:.4f} "
             f"min={item['min']:.4f} "
             f"max={item['max']:.4f} "
-            f"valid_count={item['valid_count']}"
+            f"valid_count={item['valid_count']} "
+            f"error_count={item['error_count']}"
         )
     print("=" * 80)
 

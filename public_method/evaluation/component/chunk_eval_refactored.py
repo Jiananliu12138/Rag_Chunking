@@ -86,17 +86,25 @@ class EvaluationResult:
 @dataclass
 class AggregatedResults:
     """聚合的评估结果"""
-    semantic_dissimilarity_avg: float = 0.0
-    boundary_clarity_avg: float = 0.0
+    semantic_dissimilarity_avg: Optional[float] = None
+    boundary_clarity_avg: Optional[float] = None
+    semantic_dissimilarity_valid_count: int = 0
+    semantic_dissimilarity_error_count: int = 0
+    boundary_clarity_valid_count: int = 0
+    boundary_clarity_error_count: int = 0
     num_pairs: int = 0
     individual_results: List[EvaluationResult] = field(default_factory=list)
     
     def __str__(self) -> str:
+        sem_avg = f"{self.semantic_dissimilarity_avg:.4f}" if self.semantic_dissimilarity_avg is not None else "None"
+        bc_avg = f"{self.boundary_clarity_avg:.4f}" if self.boundary_clarity_avg is not None else "None"
         return (
             f"评估结果摘要:\n"
             f"  文本块对数: {self.num_pairs}\n"
-            f"  平均语义不相似度: {self.semantic_dissimilarity_avg:.4f}\n"
-            f"  平均边界清晰度(BC): {self.boundary_clarity_avg:.4f}"
+            f"  平均语义不相似度: {sem_avg} "
+            f"(valid={self.semantic_dissimilarity_valid_count}, error={self.semantic_dissimilarity_error_count})\n"
+            f"  平均边界清晰度(BC): {bc_avg} "
+            f"(valid={self.boundary_clarity_valid_count}, error={self.boundary_clarity_error_count})"
         )
 
 
@@ -488,14 +496,26 @@ class ChunkEvaluator:
                 bc_scores.append(r.boundary_clarity)
 
         aggregated = AggregatedResults(
-            semantic_dissimilarity_avg=sum(sem_scores) / len(sem_scores) if sem_scores else 0.0,
-            boundary_clarity_avg=sum(bc_scores) / len(bc_scores) if bc_scores else 0.0,
+            semantic_dissimilarity_avg=sum(sem_scores) / len(sem_scores) if sem_scores else None,
+            boundary_clarity_avg=sum(bc_scores) / len(bc_scores) if bc_scores else None,
+            semantic_dissimilarity_valid_count=len(sem_scores),
+            semantic_dissimilarity_error_count=(num_pairs - len(sem_scores)) if self.config.enable_semantic_similarity else 0,
+            boundary_clarity_valid_count=len(bc_scores),
+            boundary_clarity_error_count=(num_pairs - len(bc_scores)) if self.config.enable_boundary_clarity else 0,
             num_pairs=len(results),
             individual_results=results
         )
 
         self.logger.info("评估完成")
-        self.logger.info(str(aggregated))
+        self.logger.info(
+            "semantic_dissimilarity_avg=%s (valid=%s, error=%s), boundary_clarity_avg=%s (valid=%s, error=%s)",
+            aggregated.semantic_dissimilarity_avg,
+            aggregated.semantic_dissimilarity_valid_count,
+            aggregated.semantic_dissimilarity_error_count,
+            aggregated.boundary_clarity_avg,
+            aggregated.boundary_clarity_valid_count,
+            aggregated.boundary_clarity_error_count,
+        )
 
         return aggregated
     
@@ -588,8 +608,12 @@ class ChunkEvaluator:
             output_data = {
                 "summary": {
                     "num_pairs": results.num_pairs,
-                    "avg_semantic_dissimilarity": results.semantic_dissimilarity_avg if math.isfinite(results.semantic_dissimilarity_avg) else None,
-                    "avg_boundary_clarity": results.boundary_clarity_avg if math.isfinite(results.boundary_clarity_avg) else None
+                    "avg_semantic_dissimilarity": results.semantic_dissimilarity_avg,
+                    "avg_boundary_clarity": results.boundary_clarity_avg,
+                    "semantic_dissimilarity_valid_count": results.semantic_dissimilarity_valid_count,
+                    "semantic_dissimilarity_error_count": results.semantic_dissimilarity_error_count,
+                    "boundary_clarity_valid_count": results.boundary_clarity_valid_count,
+                    "boundary_clarity_error_count": results.boundary_clarity_error_count,
                 },
                 "details": [r.to_dict() for r in results.individual_results]
             }

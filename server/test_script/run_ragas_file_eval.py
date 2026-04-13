@@ -242,49 +242,65 @@ def _print_summary(result: Any, elapsed_seconds: float, output_path: str | None)
         "ragas_score                "
         f"mean={summary.ragas_score.mean:.4f} "
         f"min={summary.ragas_score.min:.4f} "
-        f"max={summary.ragas_score.max:.4f}"
+        f"max={summary.ragas_score.max:.4f} "
+        f"valid={summary.ragas_score.valid_count} "
+        f"error={summary.ragas_score.error_count}"
     )
     print(
         "faithfulness               "
         f"mean={summary.faithfulness.mean:.4f} "
         f"min={summary.faithfulness.min:.4f} "
-        f"max={summary.faithfulness.max:.4f}"
+        f"max={summary.faithfulness.max:.4f} "
+        f"valid={summary.faithfulness.valid_count} "
+        f"error={summary.faithfulness.error_count}"
     )
     print(
         "answer_relevancy           "
         f"mean={summary.answer_relevancy.mean:.4f} "
         f"min={summary.answer_relevancy.min:.4f} "
-        f"max={summary.answer_relevancy.max:.4f}"
+        f"max={summary.answer_relevancy.max:.4f} "
+        f"valid={summary.answer_relevancy.valid_count} "
+        f"error={summary.answer_relevancy.error_count}"
     )
     print(
         "context_recall             "
         f"mean={summary.context_recall.mean:.4f} "
         f"min={summary.context_recall.min:.4f} "
-        f"max={summary.context_recall.max:.4f}"
+        f"max={summary.context_recall.max:.4f} "
+        f"valid={summary.context_recall.valid_count} "
+        f"error={summary.context_recall.error_count}"
     )
     print(
         "context_precision          "
         f"mean={summary.context_precision.mean:.4f} "
         f"min={summary.context_precision.min:.4f} "
-        f"max={summary.context_precision.max:.4f}"
+        f"max={summary.context_precision.max:.4f} "
+        f"valid={summary.context_precision.valid_count} "
+        f"error={summary.context_precision.error_count}"
     )
     print(
         "context_entity_recall      "
         f"mean={summary.context_entity_recall.mean:.4f} "
         f"min={summary.context_entity_recall.min:.4f} "
-        f"max={summary.context_entity_recall.max:.4f}"
+        f"max={summary.context_entity_recall.max:.4f} "
+        f"valid={summary.context_entity_recall.valid_count} "
+        f"error={summary.context_entity_recall.error_count}"
     )
     print(
         "noise_sensitivity_relevant "
         f"mean={summary.noise_sensitivity_relevant.mean:.4f} "
         f"min={summary.noise_sensitivity_relevant.min:.4f} "
-        f"max={summary.noise_sensitivity_relevant.max:.4f}"
+        f"max={summary.noise_sensitivity_relevant.max:.4f} "
+        f"valid={summary.noise_sensitivity_relevant.valid_count} "
+        f"error={summary.noise_sensitivity_relevant.error_count}"
     )
     print(
         "noise_sensitivity_irrelevant "
         f"mean={summary.noise_sensitivity_irrelevant.mean:.4f} "
         f"min={summary.noise_sensitivity_irrelevant.min:.4f} "
-        f"max={summary.noise_sensitivity_irrelevant.max:.4f}"
+        f"max={summary.noise_sensitivity_irrelevant.max:.4f} "
+        f"valid={summary.noise_sensitivity_irrelevant.valid_count} "
+        f"error={summary.noise_sensitivity_irrelevant.error_count}"
     )
     print("=" * 80)
 
