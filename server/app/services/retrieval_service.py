@@ -651,13 +651,20 @@ class RetrievalService:
                 continue
             parsed_items.append((row_idx, data))
 
+        def _ensure_event_loop():
+            """确保当前线程有一个 running 的 event loop（pymilvus AsyncMilvusClient 需要）。"""
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                # 在后台线程里让 loop 保持 running 状态
+                import threading
+                threading.Thread(target=loop.run_forever, daemon=True).start()
+
         def _process_one(auto_id: int, data: dict) -> dict:
             """处理单条：search → rerank → LLM，线程安全。"""
-            # pymilvus 内部依赖 event loop，子线程里没有需要手动创建
-            try:
-                asyncio.get_event_loop()
-            except RuntimeError:
-                asyncio.set_event_loop(asyncio.new_event_loop())
+            _ensure_event_loop()
             query = data.get("user_input") or data.get("input") or data.get("query") or ""
             self._warn_on_overlong_embedding_query(
                 query=query,
