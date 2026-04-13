@@ -180,4 +180,7 @@ class ArticleSummarySynthesizer(BaseSynthesizer):
             user_input=response.query,
             reference=response.answer,
             reference_contexts=raw_contexts,
+            persona_name=getattr(scenario.persona, "name", None),
+            query_style=getattr(scenario.style, "name", None),
+            query_length=getattr(scenario.length, "name", None),
         )
