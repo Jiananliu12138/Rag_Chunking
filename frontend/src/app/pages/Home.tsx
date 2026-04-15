@@ -51,7 +51,10 @@ import {
   DEFAULT_EMBEDDING_MODEL_PATH,
   DEFAULT_LLM_API_BASE,
   DEFAULT_LLM_MODEL_NAME,
+  DEFAULT_RERANK_API_BASE,
+  DEFAULT_RERANK_API_KEY,
   DEFAULT_RERANK_DEVICE,
+  DEFAULT_RERANK_MODEL_NAME,
   DEFAULT_RERANK_MODEL_PATH,
 } from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
@@ -71,6 +74,7 @@ interface Message {
 }
 
 type MessageContext = NonNullable<Message['contexts']>[number];
+type RerankBackend = 'cross_encoder' | 'vllm';
 
 const HOME_SETTINGS_STORAGE_KEY = 'rag-lab-home-settings';
 
@@ -105,9 +109,12 @@ export default function Home() {
   const [enableRag, setEnableRag] = useState(true);
   const [useHybridSearch, setUseHybridSearch] = useState(false);
   const [rerankEnabled, setRerankEnabled] = useState(false);
-  const [rerankType, setRerankType] = useState<'cross_encoder'>('cross_encoder');
+  const [rerankType, setRerankType] = useState<RerankBackend>('cross_encoder');
   const [rerankModelPath, setRerankModelPath] = useState('');
   const [rerankDevice, setRerankDevice] = useState('cpu');
+  const [rerankApiBase, setRerankApiBase] = useState('');
+  const [rerankApiKey, setRerankApiKey] = useState('');
+  const [rerankModelName, setRerankModelName] = useState('');
   const [rerankCandidateK, setRerankCandidateK] = useState(20);
   const [rerankTopK, setRerankTopK] = useState(5);
   const [llmApiBase, setLlmApiBase] = useState(DEFAULT_LLM_API_BASE);
@@ -140,9 +147,14 @@ export default function Home() {
       if (typeof saved.enableRag === 'boolean') setEnableRag(saved.enableRag);
       if (typeof saved.useHybridSearch === 'boolean') setUseHybridSearch(saved.useHybridSearch);
       if (typeof saved.rerankEnabled === 'boolean') setRerankEnabled(saved.rerankEnabled);
-      if (typeof saved.rerankType === 'string') setRerankType(saved.rerankType as 'cross_encoder');
+      if (saved.rerankType === 'cross_encoder' || saved.rerankType === 'vllm') {
+        setRerankType(saved.rerankType);
+      }
       if (typeof saved.rerankModelPath === 'string') setRerankModelPath(saved.rerankModelPath);
       if (typeof saved.rerankDevice === 'string') setRerankDevice(saved.rerankDevice);
+      if (typeof saved.rerankApiBase === 'string') setRerankApiBase(saved.rerankApiBase);
+      if (typeof saved.rerankApiKey === 'string') setRerankApiKey(saved.rerankApiKey);
+      if (typeof saved.rerankModelName === 'string') setRerankModelName(saved.rerankModelName);
       if (typeof saved.rerankCandidateK === 'number') setRerankCandidateK(saved.rerankCandidateK);
       if (typeof saved.rerankTopK === 'number') setRerankTopK(saved.rerankTopK);
       if (typeof saved.llmApiBase === 'string') setLlmApiBase(saved.llmApiBase);
@@ -169,6 +181,9 @@ export default function Home() {
           rerankType,
           rerankModelPath,
           rerankDevice,
+          rerankApiBase,
+          rerankApiKey,
+          rerankModelName,
           rerankCandidateK,
           rerankTopK,
           llmApiBase,
@@ -191,6 +206,9 @@ export default function Home() {
     rerankType,
     rerankModelPath,
     rerankDevice,
+    rerankApiBase,
+    rerankApiKey,
+    rerankModelName,
     rerankCandidateK,
     rerankTopK,
     llmApiBase,
@@ -274,6 +292,28 @@ export default function Home() {
     }
   };
 
+  const appendRerankPayload = (data: Record<string, unknown>) => {
+    data.rerank_enabled = rerankEnabled;
+    if (!rerankEnabled) {
+      return data;
+    }
+
+    data.rerank_type = rerankType;
+    data.rerank_candidate_k = rerankCandidateK;
+    data.rerank_top_k = rerankTopK;
+
+    if (rerankType === 'vllm') {
+      data.rerank_api_base = rerankApiBase || undefined;
+      data.rerank_api_key = rerankApiKey || undefined;
+      data.rerank_model_name = rerankModelName || undefined;
+      return data;
+    }
+
+    data.rerank_model_path = rerankModelPath || undefined;
+    data.rerank_device = rerankDevice || undefined;
+    return data;
+  };
+
   const handleSend = async () => {
     // Validate required fields
     if (!input.trim()) {
@@ -293,7 +333,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const data: any = {
+      const data: any = appendRerankPayload({
         query: input,
         collection_name: collectionName,
         embed_model_path: embedModelPath,
@@ -301,19 +341,13 @@ export default function Home() {
         top_k: topK,
         enable_rag: enableRag,
         use_hybrid_search: useHybridSearch,
-        rerank_enabled: rerankEnabled,
-        rerank_type: 'cross_encoder',
-        rerank_model_path: rerankEnabled ? (rerankModelPath || undefined) : undefined,
-        rerank_device: rerankDevice,
-        rerank_candidate_k: rerankEnabled ? rerankCandidateK : undefined,
-        rerank_top_k: rerankEnabled ? rerankTopK : undefined,
         filepath: filterFilepath.length > 0 ? filterFilepath : undefined,
         doc_id: filterDocId.length > 0 ? filterDocId : undefined,
         llm_api_base: llmApiBase,
         llm_model_name: llmModelName,
         temperature,
         max_new_tokens: maxNewTokens,
-      };
+      });
 
       const response = await api.generate(data);
       
@@ -374,7 +408,7 @@ export default function Home() {
                   <>
                     {collectionName ? `Collection: ${collectionName}` : 'Configure collection in settings'}
                     {useHybridSearch && <Badge className="ml-1 h-4 text-xs">Hybrid</Badge>}
-                    {rerankEnabled && <Badge className="ml-1 h-4 text-xs bg-emerald-600">CrossEncoder</Badge>}
+                    {rerankEnabled && <Badge className="ml-1 h-4 text-xs bg-emerald-600">{rerankType === 'vllm' ? 'vLLM Rerank' : 'CrossEncoder'}</Badge>}
                   </>
                 ) : (
                   <>
@@ -836,7 +870,7 @@ export default function Home() {
                     <div className="border-t pt-3">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <Label className="text-xs font-medium">CrossEncoder Rerank</Label>
+                          <Label className="text-xs font-medium">Semantic Rerank</Label>
                           <p className="text-xs text-slate-500">Enable semantic rerank for candidates</p>
                         </div>
                         <Switch
@@ -848,23 +882,14 @@ export default function Home() {
                       {rerankEnabled && (
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-xs">Rerank Type</Label>
-                            <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
+                            <Label className="text-xs">Rerank Backend</Label>
+                            <Select value={rerankType} onValueChange={(v) => setRerankType(v as RerankBackend)}>
                               <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                                <SelectItem value="vllm">vLLM API</SelectItem>
                               </SelectContent>
                             </Select>
-                          </div>
-                          <div>
-                            <Label className="text-xs">Rerank Device</Label>
-                            <Input
-                              value={rerankDevice}
-                              onChange={(e) => setRerankDevice(e.target.value)}
-                              onKeyDown={tabFill(setRerankDevice)}
-                              placeholder={DEFAULT_RERANK_DEVICE}
-                              className="mt-1 h-8 text-xs"
-                            />
                           </div>
                           <div>
                             <Label className="text-xs">Rerank Top K</Label>
@@ -884,16 +909,63 @@ export default function Home() {
                               className="mt-1 h-8 text-xs"
                             />
                           </div>
-                          <div className="col-span-2">
-                            <Label className="text-xs">CrossEncoder Model Path</Label>
-                            <Input
-                              value={rerankModelPath}
-                              onChange={(e) => setRerankModelPath(e.target.value)}
-                              onKeyDown={tabFill(setRerankModelPath)}
-                              placeholder={DEFAULT_RERANK_MODEL_PATH}
-                              className="mt-1 h-8 text-xs"
-                            />
-                          </div>
+                          {rerankType === 'vllm' ? (
+                            <>
+                              <div className="col-span-2">
+                                <Label className="text-xs">Rerank API Base</Label>
+                                <Input
+                                  value={rerankApiBase}
+                                  onChange={(e) => setRerankApiBase(e.target.value)}
+                                  onKeyDown={tabFill(setRerankApiBase)}
+                                  placeholder={DEFAULT_RERANK_API_BASE}
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Rerank API Key</Label>
+                                <Input
+                                  value={rerankApiKey}
+                                  onChange={(e) => setRerankApiKey(e.target.value)}
+                                  onKeyDown={tabFill(setRerankApiKey)}
+                                  placeholder={DEFAULT_RERANK_API_KEY}
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Rerank Model Name</Label>
+                                <Input
+                                  value={rerankModelName}
+                                  onChange={(e) => setRerankModelName(e.target.value)}
+                                  onKeyDown={tabFill(setRerankModelName)}
+                                  placeholder={DEFAULT_RERANK_MODEL_NAME}
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <Label className="text-xs">Rerank Device</Label>
+                                <Input
+                                  value={rerankDevice}
+                                  onChange={(e) => setRerankDevice(e.target.value)}
+                                  onKeyDown={tabFill(setRerankDevice)}
+                                  placeholder={DEFAULT_RERANK_DEVICE}
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <Label className="text-xs">CrossEncoder Model Path</Label>
+                                <Input
+                                  value={rerankModelPath}
+                                  onChange={(e) => setRerankModelPath(e.target.value)}
+                                  onKeyDown={tabFill(setRerankModelPath)}
+                                  placeholder={DEFAULT_RERANK_MODEL_PATH}
+                                  className="mt-1 h-8 text-xs"
+                                />
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>

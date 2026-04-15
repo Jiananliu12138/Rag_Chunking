@@ -35,11 +35,11 @@ class SearchRequest(BaseModel):
     )
     rerank_type: str = Field(
         "cross_encoder",
-        description="rerank 类型，当前仅支持 cross_encoder。",
+        description="rerank 类型，支持 cross_encoder（本地）或 vllm（远端 API）。",
     )
     rerank_model_path: Optional[str] = Field(
         None,
-        description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
+        description="本地 cross_encoder 模型路径；在 vllm 模式下也可作为 rerank_model_name 的回退值。",
     )
     rerank_device: Optional[str] = Field(
         None,
@@ -61,6 +61,18 @@ class SearchRequest(BaseModel):
         ge=1,
         le=100,
         description="rerank 后保留条数；为空时使用 top_k。",
+    )
+    rerank_api_base: Optional[str] = Field(
+        None,
+        description="vLLM rerank 服务地址（例如 http://localhost:8002/v1）；仅 rerank_type=vllm 时使用。",
+    )
+    rerank_api_key: Optional[str] = Field(
+        None,
+        description="vLLM rerank 服务 API Key；为空时回退到服务端默认配置。",
+    )
+    rerank_model_name: Optional[str] = Field(
+        None,
+        description="vLLM rerank 模型名；仅 rerank_type=vllm 时使用。",
     )
     filepath: str | list[str] | None = Field(
         None,
@@ -136,11 +148,11 @@ class RAGRequest(BaseModel):
     )
     rerank_type: str = Field(
         "cross_encoder",
-        description="rerank 类型，当前仅支持 cross_encoder。",
+        description="rerank 类型，支持 cross_encoder（本地）或 vllm（远端 API）。",
     )
     rerank_model_path: Optional[str] = Field(
         None,
-        description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
+        description="本地 cross_encoder 模型路径；在 vllm 模式下也可作为 rerank_model_name 的回退值。",
     )
     rerank_device: Optional[str] = Field(
         None,
@@ -162,6 +174,18 @@ class RAGRequest(BaseModel):
         ge=1,
         le=100,
         description="rerank 后保留条数；为空时使用 top_k。",
+    )
+    rerank_api_base: Optional[str] = Field(
+        None,
+        description="vLLM rerank 服务地址（例如 http://localhost:8002/v1）；仅 rerank_type=vllm 时使用。",
+    )
+    rerank_api_key: Optional[str] = Field(
+        None,
+        description="vLLM rerank 服务 API Key；为空时回退到服务端默认配置。",
+    )
+    rerank_model_name: Optional[str] = Field(
+        None,
+        description="vLLM rerank 模型名；仅 rerank_type=vllm 时使用。",
     )
     filepath: str | list[str] | None = Field(
         None,
@@ -223,11 +247,11 @@ class RAGGenerateFileRequest(BaseModel):
     )
     rerank_type: str = Field(
         "cross_encoder",
-        description="rerank 类型，当前仅支持 cross_encoder。",
+        description="rerank 类型，支持 cross_encoder（本地）或 vllm（远端 API）。",
     )
     rerank_model_path: Optional[str] = Field(
         None,
-        description="rerank 模型路径（CrossEncoder）；启用 rerank 时必填或由服务端默认配置提供。",
+        description="本地 cross_encoder 模型路径；在 vllm 模式下也可作为 rerank_model_name 的回退值。",
     )
     rerank_device: Optional[str] = Field(
         None,
@@ -249,6 +273,18 @@ class RAGGenerateFileRequest(BaseModel):
         ge=1,
         le=100,
         description="rerank 后保留条数；为空时使用 top_k。",
+    )
+    rerank_api_base: Optional[str] = Field(
+        None,
+        description="vLLM rerank 服务地址（例如 http://localhost:8002/v1）；仅 rerank_type=vllm 时使用。",
+    )
+    rerank_api_key: Optional[str] = Field(
+        None,
+        description="vLLM rerank 服务 API Key；为空时回退到服务端默认配置。",
+    )
+    rerank_model_name: Optional[str] = Field(
+        None,
+        description="vLLM rerank 模型名；仅 rerank_type=vllm 时使用。",
     )
     llm_api_base: Optional[str] = Field(None, description="vLLM API 地址，空则从配置读取")
     llm_model_name: Optional[str] = Field(None, description="LLM 模型名，空则从配置读取")

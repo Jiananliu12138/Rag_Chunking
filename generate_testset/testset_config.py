@@ -193,15 +193,25 @@ MULTIHOP_QA_INSTRUCTION = (
 # ---------------------------------------------------------------------------
 
 
-def build_llm():
+def build_llm(
+    *,
+    base_url: t.Optional[str] = None,
+    api_key: t.Optional[str] = None,
+    model: t.Optional[str] = None,
+):
+    """Build ragas LLM. Pass ``base_url`` / ``api_key`` / ``model`` to override
+    the module-level defaults (useful when different jobs target different endpoints).
+    """
     client = AsyncOpenAI(
-        api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT_SECONDS
+        api_key=api_key or LLM_API_KEY,
+        base_url=base_url or LLM_BASE_URL,
+        timeout=LLM_TIMEOUT_SECONDS,
     )
     llm_kwargs = {}
     if LLM_MAX_TOKENS is not None:
         llm_kwargs["max_tokens"] = LLM_MAX_TOKENS
     return llm_factory(
-        model=LLM_MODEL,
+        model=model or LLM_MODEL,
         provider=LLM_PROVIDER,
         client=client,
         adapter=LLM_ADAPTER,

@@ -47,12 +47,21 @@ class RetrievalService:
         )
 
     @staticmethod
+    def _build_auth_headers(api_key: str | None = None) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        normalized_api_key = str(api_key).strip() if api_key is not None else ""
+        if normalized_api_key:
+            headers["Authorization"] = f"Bearer {normalized_api_key}"
+        return headers
+
+    @staticmethod
     def _call_vllm(
         prompt: str,
         api_base: str,
         model_name: str,
         temperature: float,
         max_new_tokens: int,
+        api_key: str | None = None,
     ) -> str:
         """
         通过 vLLM/OpenAI-compatible chat.completions 接口调用。
@@ -68,7 +77,13 @@ class RetrievalService:
             "temperature": temperature,
             "max_tokens": max_new_tokens,
         }
-        resp = requests.post(f"{api_base}/chat/completions", json=payload, timeout=120)
+        normalized_api_base = api_base.rstrip("/")
+        resp = requests.post(
+            f"{normalized_api_base}/chat/completions",
+            json=payload,
+            headers=RetrievalService._build_auth_headers(api_key),
+            timeout=120,
+        )
         resp.raise_for_status()
         data = resp.json()
         choices = data.get("choices") if isinstance(data, dict) else None
@@ -114,9 +129,69 @@ class RetrievalService:
     @staticmethod
     def _validate_rerank_type(rerank_type: str) -> str:
         normalized = rerank_type.strip().lower()
-        if normalized != "cross_encoder":
-            raise RetrievalException(f"不支持的 rerank_type: {rerank_type}（当前仅支持 cross_encoder）")
+        if normalized not in {"cross_encoder", "vllm"}:
+            raise RetrievalException(
+                f"不支持的 rerank_type: {rerank_type}（当前支持 cross_encoder / vllm）"
+            )
         return normalized
+
+    @classmethod
+    def _resolve_rerank_runtime(
+        cls,
+        *,
+        request: Any,
+        settings: Any,
+    ) -> dict[str, Any]:
+        rerank_type = cls._validate_rerank_type(request.rerank_type)
+        rerank_max_length = (
+            request.rerank_max_length
+            if request.rerank_max_length is not None
+            else settings.DEFAULT_RERANK_MAX_LENGTH
+        )
+
+        if rerank_type == "cross_encoder":
+            rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL
+            rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
+            if not rerank_model_path:
+                raise RetrievalException(
+                    "已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型"
+                )
+            return {
+                "type": rerank_type,
+                "model_path": rerank_model_path,
+                "device": rerank_device,
+                "max_length": rerank_max_length,
+            }
+
+        rerank_api_base = (
+            getattr(request, "rerank_api_base", None)
+            or getattr(request, "llm_api_base", None)
+            or settings.DEFAULT_LLM_API_BASE
+        )
+        rerank_api_key = (
+            getattr(request, "rerank_api_key", None)
+            or settings.DEFAULT_LLM_API_KEY
+        )
+        rerank_model_name = (
+            getattr(request, "rerank_model_name", None)
+            or getattr(request, "rerank_model_path", None)
+            or settings.DEFAULT_RERANK_MODEL
+        )
+        if not rerank_api_base:
+            raise RetrievalException(
+                "已启用 vllm rerank，但未提供 rerank_api_base，且服务端未配置默认 LLM API 地址"
+            )
+        if not rerank_model_name:
+            raise RetrievalException(
+                "已启用 vllm rerank，但未提供 rerank_model_name，且服务端未配置默认 rerank 模型"
+            )
+        return {
+            "type": rerank_type,
+            "api_base": str(rerank_api_base).strip(),
+            "api_key": rerank_api_key,
+            "model_name": str(rerank_model_name).strip(),
+            "max_length": rerank_max_length,
+        }
 
     @staticmethod
     def _count_tokens(
@@ -243,6 +318,111 @@ class RetrievalService:
         except Exception as exc:
             raise RetrievalException(f"加载 rerank 模型失败: {exc}") from exc
 
+    @staticmethod
+    def _build_vllm_rerank_urls(api_base: str) -> list[str]:
+        normalized_api_base = api_base.rstrip("/")
+        if normalized_api_base.endswith("/v1") or normalized_api_base.endswith("/v2"):
+            parent_api_base = normalized_api_base.rsplit("/", 1)[0]
+            return [
+                f"{normalized_api_base}/rerank",
+                f"{parent_api_base}/rerank",
+            ]
+        return [
+            f"{normalized_api_base}/v1/rerank",
+            f"{normalized_api_base}/rerank",
+        ]
+
+    @staticmethod
+    def _parse_vllm_rerank_results(
+        payload: Any,
+        *,
+        num_documents: int,
+    ) -> list[tuple[float, int]]:
+        if not isinstance(payload, dict):
+            raise RetrievalException(f"vLLM rerank 返回格式异常: {payload}")
+
+        raw_results = payload.get("results")
+        if raw_results is None:
+            raw_results = payload.get("data")
+        if not isinstance(raw_results, list):
+            raise RetrievalException(f"vLLM rerank 返回中缺少 results/data: {payload}")
+
+        parsed_by_index: dict[int, float] = {}
+        for fallback_idx, item in enumerate(raw_results):
+            if not isinstance(item, dict):
+                continue
+
+            raw_index = item.get("index", fallback_idx)
+            try:
+                doc_index = int(raw_index)
+            except Exception:
+                continue
+            if doc_index < 0 or doc_index >= num_documents:
+                continue
+
+            raw_score = item.get("relevance_score")
+            if raw_score is None:
+                raw_score = item.get("score")
+            if raw_score is None:
+                continue
+
+            try:
+                parsed_by_index[doc_index] = float(raw_score)
+            except Exception:
+                continue
+
+        if not parsed_by_index:
+            raise RetrievalException(f"vLLM rerank 未返回可解析的分数: {payload}")
+
+        return [
+            (score, doc_index)
+            for doc_index, score in parsed_by_index.items()
+        ]
+
+    @classmethod
+    def _call_vllm_rerank(
+        cls,
+        *,
+        query: str,
+        documents: list[str],
+        api_base: str,
+        api_key: str | None,
+        model_name: str,
+        final_top_k: int,
+    ) -> list[tuple[float, int]]:
+        import requests
+
+        if not documents:
+            return []
+
+        payload = {
+            "model": model_name,
+            "query": query,
+            "documents": documents,
+            "top_n": min(final_top_k, len(documents)),
+        }
+
+        errors: list[str] = []
+        for url in cls._build_vllm_rerank_urls(api_base):
+            try:
+                resp = requests.post(
+                    url,
+                    json=payload,
+                    headers=cls._build_auth_headers(api_key),
+                    timeout=120,
+                )
+                resp.raise_for_status()
+                return cls._parse_vllm_rerank_results(
+                    resp.json(),
+                    num_documents=len(documents),
+                )
+            except Exception as exc:
+                errors.append(f"{url}: {exc}")
+
+        raise RetrievalException(
+            "调用 vLLM rerank 失败: " + " ; ".join(errors)
+        )
+
     def _rerank_items_cross_encoder(
         self,
         *,
@@ -303,6 +483,84 @@ class RetrievalService:
             )
         return reranked_items
 
+    def _rerank_items_vllm(
+        self,
+        *,
+        query: str,
+        context_items: list[SearchResultItem],
+        api_base: str,
+        api_key: str | None,
+        model_name: str,
+        final_top_k: int,
+    ) -> list[SearchResultItem]:
+        if not context_items:
+            return []
+
+        scored_results = self._call_vllm_rerank(
+            query=query,
+            documents=[item.text for item in context_items],
+            api_base=api_base,
+            api_key=api_key,
+            model_name=model_name,
+            final_top_k=final_top_k,
+        )
+
+        scored: list[tuple[float, float, int, SearchResultItem]] = []
+        for rerank_score, idx in scored_results:
+            item = context_items[idx]
+            retrieval_score = (
+                float(item.retrieval_score)
+                if item.retrieval_score is not None
+                else (float(item.score) if item.score is not None else float("-inf"))
+            )
+            scored.append((rerank_score, retrieval_score, idx, item))
+
+        scored.sort(key=lambda x: (-x[0], -x[1], x[2]))
+        reranked_items: list[SearchResultItem] = []
+        for rerank_score, retrieval_score, _, item in scored[:final_top_k]:
+            reranked_items.append(
+                item.model_copy(
+                    update={
+                        "score": rerank_score,
+                        "rerank_score": rerank_score,
+                        "retrieval_score": retrieval_score if retrieval_score != float("-inf") else None,
+                    }
+                )
+            )
+        return reranked_items
+
+    def _rerank_items(
+        self,
+        *,
+        query: str,
+        context_items: list[SearchResultItem],
+        rerank_config: dict[str, Any],
+        final_top_k: int,
+        operation: str,
+        collection_name: str,
+    ) -> list[SearchResultItem]:
+        rerank_type = rerank_config["type"]
+        if rerank_type == "vllm":
+            return self._rerank_items_vllm(
+                query=query,
+                context_items=context_items,
+                api_base=rerank_config["api_base"],
+                api_key=rerank_config.get("api_key"),
+                model_name=rerank_config["model_name"],
+                final_top_k=final_top_k,
+            )
+
+        return self._rerank_items_cross_encoder(
+            query=query,
+            context_items=context_items,
+            model_path=rerank_config["model_path"],
+            device=rerank_config["device"],
+            max_length=rerank_config.get("max_length"),
+            final_top_k=final_top_k,
+            operation=operation,
+            collection_name=collection_name,
+        )
+
     # ── 公开接口 ──────────────────────────────────────────────────────────────
 
     def search(self, request: SearchRequest) -> SearchResult:
@@ -355,25 +613,17 @@ class RetrievalService:
                 filepath=request.filepath,
                 doc_id=request.doc_id,
                 use_hybrid_search=request.use_hybrid_search,
-            )
+        )
         items = self._to_search_result_items(raw_results)
         if request.rerank_enabled:
-            self._validate_rerank_type(request.rerank_type)
-            rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL
-            rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
-            rerank_max_length = (
-                request.rerank_max_length
-                if request.rerank_max_length is not None
-                else settings.DEFAULT_RERANK_MAX_LENGTH
+            rerank_config = self._resolve_rerank_runtime(
+                request=request,
+                settings=settings,
             )
-            if not rerank_model_path:
-                raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
-            items = self._rerank_items_cross_encoder(
+            items = self._rerank_items(
                 query=request.query,
                 context_items=items,
-                model_path=rerank_model_path,
-                device=rerank_device,
-                max_length=rerank_max_length,
+                rerank_config=rerank_config,
                 final_top_k=final_top_k,
                 operation="search",
                 collection_name=request.collection_name,
@@ -391,6 +641,7 @@ class RetrievalService:
         settings = get_settings()
         llm_api_base = request.llm_api_base or settings.DEFAULT_LLM_API_BASE
         llm_model_name = request.llm_model_name or settings.DEFAULT_LLM_MODEL
+        llm_api_key = getattr(request, "llm_api_key", None) or settings.DEFAULT_LLM_API_KEY
         temperature = (
             request.temperature
             if request.temperature is not None
@@ -459,22 +710,14 @@ class RetrievalService:
 
             context_items = self._to_search_result_items(raw_results)
             if request.rerank_enabled:
-                self._validate_rerank_type(request.rerank_type)
-                rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL
-                rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
-                rerank_max_length = (
-                    request.rerank_max_length
-                    if request.rerank_max_length is not None
-                    else settings.DEFAULT_RERANK_MAX_LENGTH
+                rerank_config = self._resolve_rerank_runtime(
+                    request=request,
+                    settings=settings,
                 )
-                if not rerank_model_path:
-                    raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
-                context_items = self._rerank_items_cross_encoder(
+                context_items = self._rerank_items(
                     query=request.query,
                     context_items=context_items,
-                    model_path=rerank_model_path,
-                    device=rerank_device,
-                    max_length=rerank_max_length,
+                    rerank_config=rerank_config,
                     final_top_k=final_top_k,
                     operation="rag_generate",
                     collection_name=request.collection_name,
@@ -502,6 +745,7 @@ class RetrievalService:
                 model_name=llm_model_name,
                 temperature=temperature,
                 max_new_tokens=max_new_tokens,
+                api_key=llm_api_key,
             )
         except Exception as exc:
             logger.exception("LLM 调用失败: %s", exc)
@@ -531,6 +775,7 @@ class RetrievalService:
         )
         llm_api_base = request.llm_api_base or settings.DEFAULT_LLM_API_BASE
         llm_model_name = request.llm_model_name or settings.DEFAULT_LLM_MODEL
+        llm_api_key = getattr(request, "llm_api_key", None) or settings.DEFAULT_LLM_API_KEY
         temperature = (
             request.temperature
             if request.temperature is not None
@@ -550,17 +795,12 @@ class RetrievalService:
             rerank_candidate_k=request.rerank_candidate_k if request.rerank_enabled else None,
             rerank_top_k=request.rerank_top_k if request.rerank_enabled else None,
         )
-        rerank_model_path = request.rerank_model_path or settings.DEFAULT_RERANK_MODEL
-        rerank_device = request.rerank_device or settings.DEFAULT_RERANK_DEVICE
-        rerank_max_length = (
-            request.rerank_max_length
-            if request.rerank_max_length is not None
-            else settings.DEFAULT_RERANK_MAX_LENGTH
-        )
+        rerank_config = None
         if request.rerank_enabled:
-            self._validate_rerank_type(request.rerank_type)
-            if not rerank_model_path:
-                raise RetrievalException("已启用 rerank，但未提供 rerank_model_path 且服务端未配置默认模型")
+            rerank_config = self._resolve_rerank_runtime(
+                request=request,
+                settings=settings,
+            )
 
         embed_model, _ = IndexService._load_langchain_embed(
             embed_model_path,
@@ -676,12 +916,10 @@ class RetrievalService:
             raw_results = self._repo.nodes_to_search_results(response_nodes)
             context_items = self._to_search_result_items(raw_results)
             if request.rerank_enabled:
-                context_items = self._rerank_items_cross_encoder(
+                context_items = self._rerank_items(
                     query=query,
                     context_items=context_items,
-                    model_path=rerank_model_path,
-                    device=rerank_device,
-                    max_length=rerank_max_length,
+                    rerank_config=rerank_config,
                     final_top_k=final_top_k,
                     operation=f"rag_generate_file:auto_id={auto_id}",
                     collection_name=request.collection_name,
@@ -720,6 +958,7 @@ class RetrievalService:
                 model_name=llm_model_name,
                 temperature=temperature,
                 max_new_tokens=max_new_tokens,
+                api_key=llm_api_key,
             )
             source_question_id = data.get("question_id")
             source_record_id = data.get("_id")

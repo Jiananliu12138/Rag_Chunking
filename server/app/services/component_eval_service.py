@@ -92,7 +92,26 @@ class ComponentEvalService:
             )
             evaluator = ChunkEvaluator(config)
             evaluator.load_models()
-            agg = evaluator.evaluate_chunks(chunks, show_progress=False)
+
+            # 显式提示下一步耗时来源：开启 BC/语义相似度时，下面的 encode 和
+            # vLLM 并发请求都会跑几十秒到几分钟（尤其是端点冷启动），不打 log
+            # 的话日志只有一行 "开始评估" 就静默等待。
+            num_pairs = max(len(chunks) - 1, 0)
+            if use_semantic:
+                logger.info(
+                    "准备对 %d 条 chunks 调用 embedding 模型 (%s) 批量编码...",
+                    len(chunks),
+                    sim_path,
+                )
+            if use_boundary:
+                logger.info(
+                    "准备对 %d 对相邻 chunks 并发调用 vLLM (%s) 计算困惑度 (max_workers=%d)...",
+                    num_pairs,
+                    vllm_model,
+                    config.max_workers,
+                )
+
+            agg = evaluator.evaluate_chunks(chunks, show_progress=True)
 
             details = [
                 ChunkPairResult(

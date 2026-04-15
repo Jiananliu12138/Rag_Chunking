@@ -26,7 +26,10 @@ import {
   DEFAULT_EMBEDDING_MODEL_PATH,
   DEFAULT_LLM_API_BASE,
   DEFAULT_LLM_MODEL_NAME,
+  DEFAULT_RERANK_API_BASE,
+  DEFAULT_RERANK_API_KEY,
   DEFAULT_RERANK_DEVICE,
+  DEFAULT_RERANK_MODEL_NAME,
   DEFAULT_RERANK_MODEL_PATH,
 } from '../utils/runtimeDefaults';
 import { toast } from 'sonner';
@@ -39,6 +42,8 @@ interface SearchResult {
   doc_id?: string;
   chunk_id?: string;
 }
+
+type RerankBackend = 'cross_encoder' | 'vllm';
 
 const DEFAULT_EMBED_DIM = 1024;
 const DEFAULT_TOP_K = 5;
@@ -107,9 +112,12 @@ export default function RetrievalPage() {
 
   // Rerank params
   const [rerankEnabled, setRerankEnabled] = useState(false);
-  const [rerankType, setRerankType] = useState<'cross_encoder'>('cross_encoder');
+  const [rerankType, setRerankType] = useState<RerankBackend>('cross_encoder');
   const [rerankModelPath, setRerankModelPath] = useState('');
   const [rerankDevice, setRerankDevice] = useState('cpu');
+  const [rerankApiBase, setRerankApiBase] = useState('');
+  const [rerankApiKey, setRerankApiKey] = useState('');
+  const [rerankModelName, setRerankModelName] = useState('');
   const [rerankCandidateK, setRerankCandidateK] = useState(DEFAULT_RERANK_CANDIDATE_K);
   const [rerankTopK, setRerankTopK] = useState(DEFAULT_RERANK_TOP_K);
 
@@ -154,6 +162,28 @@ export default function RetrievalPage() {
     if (!current.value?.trim() && current.placeholder?.trim()) {
       setter(current.placeholder);
     }
+  };
+
+  const appendRerankPayload = (data: Record<string, unknown>) => {
+    data.rerank_enabled = rerankEnabled;
+    if (!rerankEnabled) {
+      return data;
+    }
+
+    data.rerank_type = rerankType;
+    data.rerank_candidate_k = rerankCandidateK;
+    data.rerank_top_k = rerankTopK;
+
+    if (rerankType === 'vllm') {
+      data.rerank_api_base = rerankApiBase || undefined;
+      data.rerank_api_key = rerankApiKey || undefined;
+      data.rerank_model_name = rerankModelName || undefined;
+      return data;
+    }
+
+    data.rerank_model_path = rerankModelPath || undefined;
+    data.rerank_device = rerankDevice || undefined;
+    return data;
   };
 
   useEffect(() => {
@@ -202,20 +232,14 @@ export default function RetrievalPage() {
     setLoading(true);
     setSearchResults([]);
     try {
-      const data: any = {
+      const data: any = appendRerankPayload({
         query: normalizedQuery,
         collection_name: normalizedCollectionName,
         embed_model_path: embedModelPath || undefined,
         embed_dim: embedDim,
         top_k: topK,
         use_hybrid_search: useHybridSearch,
-        rerank_enabled: rerankEnabled,
-        rerank_type: 'cross_encoder',
-        rerank_model_path: rerankEnabled ? (rerankModelPath || undefined) : undefined,
-        rerank_device: rerankDevice,
-        rerank_candidate_k: rerankEnabled ? rerankCandidateK : undefined,
-        rerank_top_k: rerankEnabled ? rerankTopK : undefined,
-      };
+      });
 
       if (filepath.length > 0) data.filepath = filepath;
       if (docId.length > 0) data.doc_id = docId;
@@ -245,24 +269,18 @@ export default function RetrievalPage() {
     setRagContexts([]);
     setRagContextItems([]);
     try {
-      const data: any = {
+      const data: any = appendRerankPayload({
         query: normalizedQuery,
         collection_name: normalizedCollectionName,
         embed_model_path: embedModelPath || undefined,
         embed_dim: embedDim,
         top_k: topK,
         use_hybrid_search: useHybridSearch,
-        rerank_enabled: rerankEnabled,
-        rerank_type: 'cross_encoder',
-        rerank_model_path: rerankEnabled ? (rerankModelPath || undefined) : undefined,
-        rerank_device: rerankDevice,
-        rerank_candidate_k: rerankEnabled ? rerankCandidateK : undefined,
-        rerank_top_k: rerankEnabled ? rerankTopK : undefined,
         llm_api_base: llmApiBase || undefined,
         llm_model_name: llmModelName || undefined,
         temperature,
         max_new_tokens: maxNewTokens,
-      };
+      });
 
       if (filepath.length > 0) data.filepath = filepath;
       if (docId.length > 0) data.doc_id = docId;
@@ -296,7 +314,7 @@ export default function RetrievalPage() {
 
     setLoading(true);
     try {
-      const data: any = {
+      const data: any = appendRerankPayload({
         input_path: normalizedInputPath,
         output_path: normalizedOutputPath,
         collection_name: normalizedCollectionName,
@@ -304,17 +322,11 @@ export default function RetrievalPage() {
         embed_dim: embedDim,
         top_k: topK,
         use_hybrid_search: useHybridSearch,
-        rerank_enabled: rerankEnabled,
-        rerank_type: 'cross_encoder',
-        rerank_model_path: rerankEnabled ? (rerankModelPath || undefined) : undefined,
-        rerank_device: rerankDevice,
-        rerank_candidate_k: rerankEnabled ? rerankCandidateK : undefined,
-        rerank_top_k: rerankEnabled ? rerankTopK : undefined,
         llm_api_base: llmApiBase || undefined,
         llm_model_name: llmModelName || undefined,
         temperature,
         max_new_tokens: maxNewTokens,
-      };
+      });
 
       const response = await api.generateFile(data);
       if (response.success) {
@@ -364,13 +376,45 @@ export default function RetrievalPage() {
                 <Input value={llmModelName} onChange={(e) => setLlmModelName(e.target.value)} onKeyDown={tabFill(setLlmModelName)} placeholder={DEFAULT_LLM_MODEL_NAME} />
               </div>
               <div>
-                <Label>CrossEncoder model path</Label>
-                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder={DEFAULT_RERANK_MODEL_PATH} />
+                <Label>Rerank Backend</Label>
+                <Select value={rerankType} onValueChange={(v) => setRerankType(v as RerankBackend)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                    <SelectItem value="vllm">vLLM API</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <Label>Rerank Device</Label>
-                <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} placeholder={DEFAULT_RERANK_DEVICE} />
+                {rerankType === 'vllm' ? (
+                  <>
+                    <Label>Rerank API Base</Label>
+                    <Input value={rerankApiBase} onChange={(e) => setRerankApiBase(e.target.value)} onKeyDown={tabFill(setRerankApiBase)} placeholder={DEFAULT_RERANK_API_BASE} />
+                  </>
+                ) : (
+                  <>
+                    <Label>Rerank Device</Label>
+                    <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder={DEFAULT_RERANK_DEVICE} />
+                  </>
+                )}
               </div>
+              {rerankType === 'vllm' ? (
+                <>
+                  <div>
+                    <Label>Rerank API Key</Label>
+                    <Input value={rerankApiKey} onChange={(e) => setRerankApiKey(e.target.value)} onKeyDown={tabFill(setRerankApiKey)} placeholder={DEFAULT_RERANK_API_KEY} />
+                  </div>
+                  <div>
+                    <Label>Rerank Model Name</Label>
+                    <Input value={rerankModelName} onChange={(e) => setRerankModelName(e.target.value)} onKeyDown={tabFill(setRerankModelName)} placeholder={DEFAULT_RERANK_MODEL_NAME} />
+                  </div>
+                </>
+              ) : (
+                <div className="md:col-span-2">
+                  <Label>CrossEncoder model path</Label>
+                  <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder={DEFAULT_RERANK_MODEL_PATH} />
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -542,7 +586,7 @@ export default function RetrievalPage() {
                       <div className="border-t pt-3">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <Label className="text-sm">CrossEncoder Rerank</Label>
+                          <Label className="text-sm">Semantic Rerank</Label>
                           <p className="text-xs text-slate-500">Semantic rerank for retrieval candidates</p>
                         </div>
                         <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
@@ -551,11 +595,12 @@ export default function RetrievalPage() {
                       {rerankEnabled && (
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-xs">Rerank Type</Label>
-                            <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
+                            <Label className="text-xs">Rerank Backend</Label>
+                            <Select value={rerankType} onValueChange={(v) => setRerankType(v as RerankBackend)}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                                <SelectItem value="vllm">vLLM API</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -567,6 +612,33 @@ export default function RetrievalPage() {
                             <Label className="text-xs">Rerank Candidate K</Label>
                           <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseIntegerInput(e.target.value, DEFAULT_RERANK_CANDIDATE_K))} />
                           </div>
+                          {rerankType === 'vllm' ? (
+                            <>
+                              <div className="col-span-2">
+                                <Label className="text-xs">Rerank API Base</Label>
+                                <Input value={rerankApiBase} onChange={(e) => setRerankApiBase(e.target.value)} onKeyDown={tabFill(setRerankApiBase)} placeholder={DEFAULT_RERANK_API_BASE} />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Rerank API Key</Label>
+                                <Input value={rerankApiKey} onChange={(e) => setRerankApiKey(e.target.value)} onKeyDown={tabFill(setRerankApiKey)} placeholder={DEFAULT_RERANK_API_KEY} />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Rerank Model Name</Label>
+                                <Input value={rerankModelName} onChange={(e) => setRerankModelName(e.target.value)} onKeyDown={tabFill(setRerankModelName)} placeholder={DEFAULT_RERANK_MODEL_NAME} />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <Label className="text-xs">Rerank Device</Label>
+                                <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder={DEFAULT_RERANK_DEVICE} />
+                              </div>
+                              <div className="col-span-2">
+                                <Label className="text-xs">CrossEncoder model path (optional)</Label>
+                                <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder={DEFAULT_RERANK_MODEL_PATH} />
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -649,7 +721,7 @@ export default function RetrievalPage() {
                     <Badge className="bg-blue-600">Hybrid Search</Badge>
                   )}
                   {rerankEnabled && (
-                    <Badge className="bg-emerald-600">CrossEncoder</Badge>
+                    <Badge className="bg-emerald-600">{rerankType === 'vllm' ? 'vLLM Rerank' : 'CrossEncoder'}</Badge>
                   )}
                 </h2>
                 {loading ? (
@@ -856,7 +928,7 @@ export default function RetrievalPage() {
                 <div className="border-t pt-3">
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <Label className="text-sm">CrossEncoder Rerank</Label>
+                      <Label className="text-sm">Semantic Rerank</Label>
                       <p className="text-xs text-slate-500">Semantic rerank for retrieval candidates</p>
                     </div>
                     <Switch checked={rerankEnabled} onCheckedChange={setRerankEnabled} />
@@ -865,17 +937,14 @@ export default function RetrievalPage() {
                   {rerankEnabled && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs">Rerank Type</Label>
-                        <Select value={rerankType} onValueChange={(v: 'cross_encoder') => setRerankType(v)}>
+                        <Label className="text-xs">Rerank Backend</Label>
+                        <Select value={rerankType} onValueChange={(v) => setRerankType(v as RerankBackend)}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="cross_encoder">CrossEncoder</SelectItem>
+                            <SelectItem value="vllm">vLLM API</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Rerank Device</Label>
-                        <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder={DEFAULT_RERANK_DEVICE} />
                       </div>
                       <div>
                         <Label className="text-xs">Rerank Top K</Label>
@@ -885,10 +954,33 @@ export default function RetrievalPage() {
                         <Label className="text-xs">Rerank Candidate K</Label>
                         <Input type="number" value={rerankCandidateK} onChange={(e) => setRerankCandidateK(parseIntegerInput(e.target.value, DEFAULT_RERANK_CANDIDATE_K))} />
                       </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs">CrossEncoder model path (optional)</Label>
-                        <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder={DEFAULT_RERANK_MODEL_PATH} />
-                      </div>
+                      {rerankType === 'vllm' ? (
+                        <>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Rerank API Base</Label>
+                            <Input value={rerankApiBase} onChange={(e) => setRerankApiBase(e.target.value)} onKeyDown={tabFill(setRerankApiBase)} placeholder={DEFAULT_RERANK_API_BASE} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Rerank API Key</Label>
+                            <Input value={rerankApiKey} onChange={(e) => setRerankApiKey(e.target.value)} onKeyDown={tabFill(setRerankApiKey)} placeholder={DEFAULT_RERANK_API_KEY} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Rerank Model Name</Label>
+                            <Input value={rerankModelName} onChange={(e) => setRerankModelName(e.target.value)} onKeyDown={tabFill(setRerankModelName)} placeholder={DEFAULT_RERANK_MODEL_NAME} />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <Label className="text-xs">Rerank Device</Label>
+                            <Input value={rerankDevice} onChange={(e) => setRerankDevice(e.target.value)} onKeyDown={tabFill(setRerankDevice)} placeholder={DEFAULT_RERANK_DEVICE} />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">CrossEncoder model path (optional)</Label>
+                            <Input value={rerankModelPath} onChange={(e) => setRerankModelPath(e.target.value)} onKeyDown={tabFill(setRerankModelPath)} placeholder={DEFAULT_RERANK_MODEL_PATH} />
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

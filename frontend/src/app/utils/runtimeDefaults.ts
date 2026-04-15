@@ -5,3 +5,6 @@ export const DEFAULT_EMBEDDING_BASE = 'http://localhost:8003/v1';
 export const DEFAULT_EMBEDDING_NAME = 'BAAI/bge-m3';
 export const DEFAULT_RERANK_MODEL_PATH = '/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3';
 export const DEFAULT_RERANK_DEVICE = 'cuda:0';
+export const DEFAULT_RERANK_API_BASE = 'http://localhost:8001/v1';
+export const DEFAULT_RERANK_API_KEY = 'EMPTY';
+export const DEFAULT_RERANK_MODEL_NAME = 'BAAI/bge-reranker-v2-m3';

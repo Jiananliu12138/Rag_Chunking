@@ -1,0 +1,24 @@
+[
+  {
+    "name": "qasper-llamaindex",
+    "input_path": "/data/h50056789/Rag_Chunking/Chunk_Result/Llamaindex_Chunk/qasper_llamaindex_chunk.json",
+    "output_path": "/data/h50056789/Rag_Chunking/testsets/qasper_llamaindex.testset.jsonl",
+    "testset_size": 10
+  },
+  {
+    "name": "gov-report-plain",
+    "input_path": "/data/h50056789/Rag_Chunking/Chunk_Result/plain_chunk/gov_report_chunks.json",
+    "output_path": "/data/h50056789/Rag_Chunking/testsets/gov_report_plain.testset.jsonl",
+    "testset_size": 20,
+    "with_debugging_logs": false
+  },
+  {
+    "name": "example-with-custom-llm",
+    "input_path": "/data/h50056789/Rag_Chunking/Chunk_Result/Llamaindex_Chunk/some_other_chunks.json",
+    "output_path": "/data/h50056789/Rag_Chunking/testsets/some_other.testset.jsonl",
+    "testset_size": 15,
+    "llm_base_url": "http://127.0.0.1:8002/v1",
+    "llm_api_key": "EMPTY",
+    "llm_model": "Qwen/Qwen2.5-72B-Instruct"
+  }
+]
