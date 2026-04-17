@@ -104,6 +104,7 @@ class MilvusRepository:
             overwrite=overwrite,
             enable_dense=True,
             enable_sparse=enable_sparse,
+            use_async_client=False,
             **sparse_kwargs,
             **hybrid_kwargs,
         )
@@ -135,6 +136,7 @@ class MilvusRepository:
             overwrite=overwrite,
             enable_dense=True,
             enable_sparse=enable_sparse,
+            use_async_client=False,
             **sparse_kwargs,
             **hybrid_kwargs,
         )
