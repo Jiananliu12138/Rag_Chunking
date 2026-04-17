@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import math
+import random
 import sys
 import time
 import traceback
@@ -822,6 +823,9 @@ def _patch_ragas_safe_generate() -> None:
             [prob for _, prob in query_distribution],
             testset_size,
         )
+        # Shuffle KG nodes so each synthesizer's generate_scenarios picks from
+        # a randomized order, preventing same-document scenarios from clustering.
+        random.shuffle(self.knowledge_graph.nodes)
         for i, (scenario, _) in enumerate(query_distribution):
             exec.submit(
                 scenario.generate_scenarios,
@@ -1058,6 +1062,7 @@ def _run_request(
         failed_rows.extend(getattr(generator, "_mc_last_failed_rows", []))
 
         _extract_reference_contexts_meta(rows)
+        random.shuffle(rows)
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         _write_jsonl(output_file, rows)
