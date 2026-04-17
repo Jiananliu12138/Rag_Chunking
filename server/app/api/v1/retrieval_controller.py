@@ -64,7 +64,7 @@ def _get_retrieval_service() -> RetrievalService:
     ),
     responses={404: _ERR_404, 500: _ERR_500},
 )
-async def search(
+def search(
     request: SearchRequest,
     service: Annotated[RetrievalService, Depends(_get_retrieval_service)],
 ) -> BaseResponse[SearchResult]:
@@ -87,7 +87,7 @@ async def search(
     ),
     responses={404: _ERR_404, 500: _ERR_500},
 )
-async def rag_generate(
+def rag_generate(
     request: RAGRequest,
     service: Annotated[RetrievalService, Depends(_get_retrieval_service)],
 ) -> BaseResponse[RAGResult]:
@@ -110,7 +110,7 @@ async def rag_generate(
     ),
     responses={404: _ERR_404, 500: _ERR_500},
 )
-async def rag_generate_file(
+def rag_generate_file(
     request: RAGGenerateFileRequest,
     service: Annotated[RetrievalService, Depends(_get_retrieval_service)],
 ) -> BaseResponse[RAGGenerateFileResult]:
