@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     MILVUS_ENABLE_HYBRID_SEARCH: bool = True
     MILVUS_HYBRID_RANKER: str = "RRFRanker"
     MILVUS_HYBRID_RANKER_K: int = 60
+    MILVUS_HYBRID_CANDIDATE_LIMIT_MULTIPLIER: int = 4
 
     # Traditional evaluation defaults
     DEFAULT_ENABLE_BERT_SCORE: bool = False

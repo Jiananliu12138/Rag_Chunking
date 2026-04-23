@@ -28,6 +28,22 @@ from app.core.exceptions import (
 from app.core.logging_config import logger
 
 
+class _TopKLimitedRetriever:
+    def __init__(self, retriever, top_k: int):
+        self._retriever = retriever
+        self._top_k = top_k
+
+    def retrieve(self, query):
+        return self._retriever.retrieve(query)[: self._top_k]
+
+    async def aretrieve(self, query):
+        nodes = await self._retriever.aretrieve(query)
+        return nodes[: self._top_k]
+
+    def __getattr__(self, name: str):
+        return getattr(self._retriever, name)
+
+
 class MilvusRepository:
     # Protects LlamaIndex global Settings mutation (_make_embed_model)
     _settings_lock = threading.Lock()
@@ -78,6 +94,23 @@ class MilvusRepository:
             pass
         Settings.tokenizer = lambda text: text.split()
         return wrapped
+
+    def _effective_use_hybrid(self, use_hybrid_search: Optional[bool]) -> bool:
+        effective_use_hybrid = (
+            use_hybrid_search
+            if use_hybrid_search is not None
+            else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
+        )
+        return bool(effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE)
+
+    def _hybrid_candidate_top_k(self, top_k: int, use_hybrid_search: bool) -> int:
+        if not use_hybrid_search:
+            return top_k
+        multiplier = int(
+            getattr(self._settings, "MILVUS_HYBRID_CANDIDATE_LIMIT_MULTIPLIER", 1)
+        )
+        multiplier = max(1, multiplier)
+        return top_k * multiplier
 
     def _build_vector_store(self, collection_name: str, overwrite: bool) -> MilvusVectorStore:
         enable_sparse = self._settings.MILVUS_ENABLE_SPARSE
@@ -851,17 +884,13 @@ class MilvusRepository:
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
             vector_index = VectorStoreIndex([], storage_context=storage_context)
             # 计算本次请求是否启用 Hybrid：请求参数优先，其次全局配置；同时要求全局允许稀疏
-            effective_use_hybrid = (
-                use_hybrid_search
-                if use_hybrid_search is not None
-                else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
-            )
-            effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+            effective_use_hybrid = self._effective_use_hybrid(use_hybrid_search)
+            retrieval_top_k = self._hybrid_candidate_top_k(top_k, effective_use_hybrid)
 
             if effective_use_hybrid:
                 retriever = VectorIndexRetriever(
                     index=vector_index,
-                    similarity_top_k=top_k,
+                    similarity_top_k=retrieval_top_k,
                     vector_store_query_mode=VectorStoreQueryMode.HYBRID,
                 )
             else:
@@ -869,6 +898,8 @@ class MilvusRepository:
                     index=vector_index,
                     similarity_top_k=top_k,
                 )
+            if effective_use_hybrid:
+                retriever = _TopKLimitedRetriever(retriever, top_k)
             return RetrieverQueryEngine(retriever=retriever)
         except CollectionNotFoundException:
             raise
@@ -897,18 +928,20 @@ class MilvusRepository:
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
             vector_index = VectorStoreIndex([], storage_context=storage_context)
 
-        effective_use_hybrid = (
-            use_hybrid_search
-            if use_hybrid_search is not None
-            else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
-        )
-        effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+        effective_use_hybrid = self._effective_use_hybrid(use_hybrid_search)
 
-        retriever_kwargs = {"similarity_top_k": top_k}
+        retriever_kwargs = {
+            "similarity_top_k": self._hybrid_candidate_top_k(
+                top_k, effective_use_hybrid
+            )
+        }
         if effective_use_hybrid:
             retriever_kwargs["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
 
-        return vector_index.as_retriever(**retriever_kwargs)
+        retriever = vector_index.as_retriever(**retriever_kwargs)
+        if effective_use_hybrid:
+            return _TopKLimitedRetriever(retriever, top_k)
+        return retriever
 
     @staticmethod
     def nodes_to_search_results(response_nodes) -> list[dict]:
@@ -965,14 +998,14 @@ class MilvusRepository:
                 storage_context = StorageContext.from_defaults(vector_store=vector_store)
                 vector_index = VectorStoreIndex([], storage_context=storage_context)
 
-            effective_use_hybrid = (
-                use_hybrid_search
-                if use_hybrid_search is not None
-                else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
-            )
-            effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+            effective_use_hybrid = self._effective_use_hybrid(use_hybrid_search)
+            requested_top_k = top_k
 
-            retriever_kwargs = {"similarity_top_k": top_k}
+            retriever_kwargs = {
+                "similarity_top_k": self._hybrid_candidate_top_k(
+                    requested_top_k, effective_use_hybrid
+                )
+            }
             if effective_use_hybrid:
                 retriever_kwargs["vector_store_query_mode"] = VectorStoreQueryMode.HYBRID
 
@@ -997,7 +1030,7 @@ class MilvusRepository:
                         else None,
                     }
                 )
-            return results
+            return results[:requested_top_k]
         except CollectionNotFoundException:
             raise
         except Exception as exc:
@@ -1085,15 +1118,13 @@ class MilvusRepository:
             )
 
             # 计算本次请求是否启用 Hybrid：请求参数优先，其次全局配置；同时要求全局允许稀疏
-            effective_use_hybrid = (
-                use_hybrid_search
-                if use_hybrid_search is not None
-                else self._settings.MILVUS_ENABLE_HYBRID_SEARCH
-            )
-            effective_use_hybrid = effective_use_hybrid and self._settings.MILVUS_ENABLE_SPARSE
+            effective_use_hybrid = self._effective_use_hybrid(use_hybrid_search)
+            requested_top_k = top_k
 
             retriever_kwargs = {
-                "similarity_top_k": top_k,
+                "similarity_top_k": self._hybrid_candidate_top_k(
+                    requested_top_k, effective_use_hybrid
+                ),
                 "filters": filters_obj,
             }
             if effective_use_hybrid:
@@ -1121,7 +1152,7 @@ class MilvusRepository:
                         else None,
                     }
                 )
-            return results
+            return results[:requested_top_k]
         except CollectionNotFoundException:
             raise
         except Exception as exc:
