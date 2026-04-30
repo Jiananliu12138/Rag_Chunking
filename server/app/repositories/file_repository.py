@@ -4,10 +4,19 @@
 """
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
 from app.core.logging_config import logger
+
+# 匹配 LightRAG prompt 在答案末尾追加的引用块，例如：
+#   "...the Christian community.\n\n### References\n\n- [1] /path/to/file.jsonl"
+# 兼容 ##/###/#### 任意级别标题，以及 References / Reference 单复数。
+_LLM_ANS_REFERENCES_PATTERN = re.compile(
+    r"\n+\s*#{1,6}\s*References?\b[\s\S]*$",
+    re.IGNORECASE,
+)
 
 
 class FileRepository:
@@ -66,6 +75,18 @@ class FileRepository:
             "roots": FileRepository.list_roots(),
             "entries": entries,
         }
+
+    @staticmethod
+    def _clean_llm_answer(value: Any) -> str:
+        """
+        去掉 LightRAG 答案尾部的 `### References` 引用块，避免污染评估指标。
+        非字符串或不含引用块时按原样返回字符串形式。
+        """
+        if value is None:
+            return ""
+        text = str(value)
+        cleaned = _LLM_ANS_REFERENCES_PATTERN.sub("", text)
+        return cleaned.rstrip()
 
     @staticmethod
     def _normalize_string_list(value: Any) -> list[str]:
@@ -139,7 +160,9 @@ class FileRepository:
             if not isinstance(item, dict):
                 continue
 
-            llm_ans = item.get("llm_ans") or item.get("prediction") or ""
+            llm_ans = FileRepository._clean_llm_answer(
+                item.get("llm_ans") or item.get("prediction") or ""
+            )
             ans_list = (
                 FileRepository._normalize_string_list(item.get("answers"))
                 or FileRepository._normalize_string_list(item.get("ground_truth"))
@@ -188,7 +211,7 @@ class FileRepository:
             if all(key in data for key in required_keys):
                 return {
                     "question": [str(q) for q in data["question"]],
-                    "answer": [str(a) for a in data["answer"]],
+                    "answer": [FileRepository._clean_llm_answer(a) for a in data["answer"]],
                     "contexts": [
                         [str(ctx) for ctx in ctx_list if isinstance(ctx, str)]
                         for ctx_list in data["contexts"]
@@ -210,7 +233,9 @@ class FileRepository:
                 if not isinstance(item, dict):
                     continue
                 question = item.get("input") or item.get("question") or ""
-                answer = item.get("llm_ans") or item.get("answer") or ""
+                answer = FileRepository._clean_llm_answer(
+                    item.get("llm_ans") or item.get("answer") or ""
+                )
                 contexts = (
                     FileRepository._extract_context_texts(item.get("retrieval_list"))
                     or FileRepository._extract_context_texts(item.get("contexts"))
