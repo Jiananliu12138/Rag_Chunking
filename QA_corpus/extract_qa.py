@@ -1,8 +1,8 @@
 import json
 import os
 
-INPUT_FILE = "f:/thesis/Meta-Chunking/meta-chunking-dataset/meta-chunking/Original_Dataset/LongBench-main/data/2wikimqa.jsonl"
-OUTPUT_DIR = "f:/thesis/Meta-Chunking/QA_corpus"
+INPUT_FILE = "/data/h50056789/Rag_Chunking/Corpus/LongBench/narrativeqa.jsonl"
+OUTPUT_DIR = "/data/h50056789/Rag_Chunking/QA_corpus"
 
 
 def create_directory(path):

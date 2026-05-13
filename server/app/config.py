@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     )
 
     # Storage / runtime
-    MILVUS_DATA_DIR: str = "/data/h50056789/Rag_Chunking/test_database"
+    MILVUS_DATA_DIR: str = "/data/h50056789/Rag_Chunking/milvus_data"
     MILVUS_URI: str = ""
     TIKTOKEN_CACHE_DIR: str = "/data/h50056789/Rag_Chunking/tiktoken_cache"
     CHUNK_NUM_WORKERS: int = 4  # 分块任务的进程池 worker 数（multiprocessing）
@@ -44,15 +44,15 @@ class Settings(BaseSettings):
     DEFAULT_LLM_API_KEY: str = "EMPTY"
     DEFAULT_LLM_MODEL: str = "Qwen/Qwen3-VL-30B-A3B-Instruct-FP8"
     DEFAULT_LLM_TEMPERATURE: float = 0.0
-    DEFAULT_LLM_MAX_TOKENS: int = 8192
+    DEFAULT_LLM_MAX_TOKENS: int = 65536
 
-    DEFAULT_RETRIEVE_TOP_K: int = 5
+    DEFAULT_RETRIEVE_TOP_K: int = 10
     DEFAULT_RERANK_MODEL: str = "/data/h50056789/Rag_Chunking/model/BAAI/bge-reranker-v2-m3"
     DEFAULT_RERANK_DEVICE: str = "cuda:0"
     DEFAULT_RERANK_MAX_LENGTH: int | None = 8192
 
     # 检索生成（rag_generate_file）的线程池 worker 数（ThreadPoolExecutor, IO 密集型）
-    RETRIEVAL_GENERATION_WORKERS: int = 4
+    RETRIEVAL_GENERATION_WORKERS: int = 1
 
     # Milvus / hybrid search
     MILVUS_ENABLE_SPARSE: bool = True
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # RAGAS evaluation runtime defaults
     DEFAULT_RAGAS_DEVICE: str = "cuda:0"
     DEFAULT_RAGAS_ENABLE_CACHE: bool = False
-    DEFAULT_RAGAS_CACHE_DIR: str = "./ragas_cache"
+    DEFAULT_RAGAS_CACHE_DIR: str = ""
 
     # Component evaluation defaults
     COMPONENT_ENABLE_SEMANTIC_SIMILARITY: bool = True
@@ -84,8 +84,8 @@ class Settings(BaseSettings):
 
     # 评估并行（ThreadPoolExecutor, IO 密集型; vLLM 默认 max-num-seqs=256，并发空间充足）
     EVAL_PARALLEL_WORKERS: int = 16  # 分块评估BC，CS，传统评估（LLM-Judge）线程池 worker 数
-    EVAL_HTTP_TIMEOUT: int = 600
-    RAGAS_MAX_WORKERS: int = 16  # RAGAS 评估的 asyncio 并发 worker 数 协程
+    EVAL_HTTP_TIMEOUT: int = 3600
+    RAGAS_MAX_WORKERS: int = 32 # RAGAS 评估的 asyncio 并发 worker 数 协程
 
     # Testset generation defaults
     TESTSET_LLM_BASE_URL: str = ""
